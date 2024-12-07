@@ -7,8 +7,14 @@
             "name": "glib",
             "version>=": "2.82.0#1"
         },
-        "gtk4",
-        "libadwaita",
+        {
+            "name": "gtk4",
+            "version>=": "4.12.4#1"
+        },
+        {
+            "name": "libadwaita",
+            "version>=": "1.4.0#1"
+        },
         "pkgconf"
     ]
 }
