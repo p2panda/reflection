@@ -48,7 +48,17 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for AardvarkWindow {}
+    impl ObjectImpl for AardvarkWindow {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let buffer = self.text_view.buffer();
+            buffer.connect_changed(|buffer| {
+                let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
+                println!("{}", s.as_str());
+            });
+        }
+    }
+
     impl WidgetImpl for AardvarkWindow {}
     impl WindowImpl for AardvarkWindow {}
     impl ApplicationWindowImpl for AardvarkWindow {}
