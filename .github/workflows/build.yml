@@ -81,7 +81,7 @@ jobs:
             # Install x86_64 versions for Intel builds
             arch -x86_64 /usr/local/bin/brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
             arch -x86_64 /usr/local/bin/brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
-            echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig" >> $GITHUB_ENV
+            echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/Cellar/gdk-pixbuf/*/lib/pkgconfig" >> $GITHUB_ENV
           else
             # Install ARM64 versions for Apple Silicon builds
             brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
