@@ -79,7 +79,10 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
 
 pub fn run() -> Result<()> {
     let rt_handle: JoinHandle<Result<()>> = std::thread::spawn(|| {
-        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
+        let runtime = Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("backend runtime ready to spawn tasks");
 
         runtime.block_on(async {
             let network_id = Hash::new(b"aardvark <3");
