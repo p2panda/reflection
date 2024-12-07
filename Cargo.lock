@@ -19,6 +19,7 @@ dependencies = [
  "p2panda-stream",
  "p2panda-sync",
  "serde",
+ "tokio",
 ]
 
 [[package]]
@@ -4680,6 +4681,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",

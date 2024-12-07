@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use std::thread::JoinHandle;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,6 +12,7 @@ use p2panda_store::MemoryStore;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use p2panda_sync::{TopicMap, TopicQuery};
 use serde::{Deserialize, Serialize};
+use tokio::runtime::Builder;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
 struct TextDocument([u8; 32]);
@@ -75,25 +77,33 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
     }
 }
 
-pub async fn run() -> Result<()> {
-    let network_id = Hash::new(b"aardvark <3");
-    let private_key = PrivateKey::new();
+pub fn run() -> Result<()> {
+    let rt_handle: JoinHandle<Result<()>> = std::thread::spawn(|| {
+        let runtime = Builder::new_current_thread().enable_all().build().unwrap();
 
-    let store = MemoryStore::<LogId, AarvdarkExtensions>::new();
+        runtime.block_on(async {
+            let network_id = Hash::new(b"aardvark <3");
+            let private_key = PrivateKey::new();
 
-    let topic_map = TextDocumentStore::new();
-    let sync = LogSyncProtocol::new(topic_map, store);
-    let sync_config = SyncConfiguration::<TextDocument>::new(sync);
+            let store = MemoryStore::<LogId, AarvdarkExtensions>::new();
 
-    let mut network = NetworkBuilder::new(*network_id.as_bytes())
-        .sync(sync_config)
-        .private_key(private_key)
-        .discovery(LocalDiscovery::new()?)
-        .build()
-        .await?;
+            let topic_map = TextDocumentStore::new();
+            let sync = LogSyncProtocol::new(topic_map, store);
+            let sync_config = SyncConfiguration::<TextDocument>::new(sync);
 
-    let test_document = TextDocument(Hash::new(b"my first doc <3").into());
-    let (tx, rx, ready) = network.subscribe(test_document).await?;
+            let mut network = NetworkBuilder::new(*network_id.as_bytes())
+                .sync(sync_config)
+                .private_key(private_key)
+                .discovery(LocalDiscovery::new()?)
+                .build()
+                .await?;
+
+            let test_document = TextDocument(Hash::new(b"my first doc <3").into());
+            let (tx, rx, ready) = network.subscribe(test_document).await?;
+
+            Ok(())
+        })
+    });
 
     Ok(())
 }

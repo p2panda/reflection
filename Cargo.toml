@@ -16,6 +16,7 @@ p2panda-store = "0.1.0"
 p2panda-stream = "0.1.0"
 p2panda-sync = { version = "0.1.0", features = ["log-sync"] }
 serde = { version = "1.0.215", features = ["derive"] }
+tokio = { version = "1.42.0", features = ["full"] }
 
 [dependencies.adw]
 package = "libadwaita"
