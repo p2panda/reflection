@@ -51,7 +51,8 @@ jobs:
       - uses: moonrepo/setup-rust@v1
       - name: Install dependencies
         run: |
-          brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene || brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene
+          brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene || true
+          brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene || true
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
       - name: Add target ${{ matrix.target }}
         run: rustup target add ${{ matrix.target }}
