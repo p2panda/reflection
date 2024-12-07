@@ -22,6 +22,7 @@ use gettextrs::gettext;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
+use automerge::AutoCommit;
 
 use crate::config::VERSION;
 use crate::AardvarkWindow;
@@ -30,13 +31,22 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default)]
-    pub struct AardvarkApplication {}
+    pub struct AardvarkApplication {
+        automerge: AutoCommit,
+    }
 
     #[glib::object_subclass]
     impl ObjectSubclass for AardvarkApplication {
         const NAME: &'static str = "AardvarkApplication";
         type Type = super::AardvarkApplication;
         type ParentType = adw::Application;
+
+        fn new() -> Self {
+            let automerge = AutoCommit::new();
+            AardvarkApplication {
+                automerge,
+            }
+        }
     }
 
     impl ObjectImpl for AardvarkApplication {
