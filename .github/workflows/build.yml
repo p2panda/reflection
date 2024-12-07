@@ -167,18 +167,13 @@ jobs:
           path: |
             C:\vcpkg\installed
             C:\vcpkg\packages
-          key: vcpkg-${{ matrix.arch }}-${{ hashFiles('**/vcpkg.json', '.github/workflows/build.yml') }}
+          key: vcpkg-${{ matrix.arch }}-${{ hashFiles('**/vcpkg.json', '.github/workflows/install_vcpkg.ps1') }}
           restore-keys: |
             vcpkg-${{ matrix.arch }}-
 
       - name: Install GTK4 and dependencies
         run: |
-          Write-Host "Installing GTK4 and dependencies for $env:VCPKG_TRIPLET..."
-          # Only install if not found in cache
-          vcpkg install pkgconf:$env:VCPKG_TRIPLET
-          vcpkg install glib:$env:VCPKG_TRIPLET
-          vcpkg install gtk4:$env:VCPKG_TRIPLET
-          vcpkg install libadwaita:$env:VCPKG_TRIPLET
+          . .\.github\workflows\install_vcpkg.ps1
         shell: pwsh
 
       - name: Configure pkg-config paths
