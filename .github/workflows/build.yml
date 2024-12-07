@@ -170,14 +170,10 @@ jobs:
           restore-keys: |
             vcpkg-${{ matrix.arch }}-
 
-      - name: Install GTK4 and dependencies
+      - name: Install dependencies from manifest
         run: |
-          Write-Host "Installing GTK4 and dependencies for $env:VCPKG_TRIPLET..."
-          # Only install if not found in cache
-          vcpkg install pkgconf:$env:VCPKG_TRIPLET
-          vcpkg install glib:$env:VCPKG_TRIPLET
-          vcpkg install gtk4:$env:VCPKG_TRIPLET
-          vcpkg install libadwaita:$env:VCPKG_TRIPLET
+          Write-Host "Installing dependencies for $env:VCPKG_TRIPLET..."
+          vcpkg install --triplet $env:VCPKG_TRIPLET
         shell: pwsh
 
       - name: Configure pkg-config paths
