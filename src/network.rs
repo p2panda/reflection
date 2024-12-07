@@ -41,6 +41,7 @@ impl TopicMap for Topic2TextDocument {
 }
 
 pub async fn run() -> Result<()> {
+    let network_id = Hash::new(b"aardvark <3");
     let private_key = PrivateKey::new();
 
     let store = MemoryStore::<LogId, AarvdarkExtensions>::new();
@@ -48,14 +49,14 @@ pub async fn run() -> Result<()> {
     let sync = LogSync::new(store, topic_map);
     let sync_config = SyncConfiguration::new(sync);
 
-    let mut network = NetworkBuilder::new(NETWORK_ID)
+    let mut network = NetworkBuilder::new(network_id.as_bytes())
         .sync(sync_config)
         .private_key(private_key)
         .discovery(LocalDiscovery::new()?)
         .build()
         .await?;
 
-    let test_document = TextDocument(Hash::new(b"aardvark <3"));
+    let test_document = TextDocument(Hash::new(b"my first doc <3"));
     let (tx, rx, ready) = network.subscribe(topic).await?;
 
     Ok(())
