@@ -3,6 +3,9 @@ on:
   pull_request:
 name: CI
 
+# Note: Windows ARM64 builds are currently disabled as GTK4 and its dependencies
+# are not yet available for this platform in vcpkg
+
 jobs:
   flatpak:
     name: "Flatpak"
@@ -110,10 +113,11 @@ jobs:
   windows:
     name: "Windows"
     runs-on: windows-latest
+    # Only build for x64 since GTK4 is not available for Windows ARM64 yet
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64, arm64]
+        arch: [x64]
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
