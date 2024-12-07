@@ -50,14 +50,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
       - name: Install dependencies
-        run: brew install pkg-config gtk4 pango cairo gdk-pixbuf atk graphene
+        run: |
+          brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene || brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene
+          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
       - name: Add target ${{ matrix.target }}
         run: rustup target add ${{ matrix.target }}
       - name: Build
         env:
-          PKG_CONFIG_PATH: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/atk/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig"
+          PKG_CONFIG_PATH: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig"
+          PKG_CONFIG_ALLOW_CROSS: "1"
           CFLAGS: "-I/usr/local/include"
           LDFLAGS: "-L/usr/local/lib"
+          PKG_CONFIG_SYSROOT_DIR: ""
+          PKG_CONFIG_PATH_${{ matrix.target }}: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig"
         run: cargo build --release --target ${{ matrix.target }}
       - name: Create App Bundle
         run: |
