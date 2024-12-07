@@ -27,6 +27,7 @@ use gtk::{gio, glib};
 use crate::config::VERSION;
 use crate::network;
 use crate::AardvarkWindow;
+use crate::glib::closure_local;
 
 mod imp {
     use super::*;
@@ -67,6 +68,14 @@ mod imp {
             // Get the current window or create one if necessary
             let window = application.active_window().unwrap_or_else(|| {
                 let window = AardvarkWindow::new(&*application);
+                let app = application.clone();
+                window.connect_closure(
+                    "text-changed",
+                    false,
+                    closure_local!(|_window: AardvarkWindow, text: &str| {
+                        app.update_text(text);
+                    }),
+                );
                 window.upcast()
             });
 
@@ -119,5 +128,9 @@ impl AardvarkApplication {
             .build();
 
         about.present(Some(&window));
+    }
+
+    fn update_text(&self, text: &str) {
+        println!("app: {}", text);
     }
 }
