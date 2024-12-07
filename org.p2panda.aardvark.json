@@ -43,7 +43,8 @@
             "sources" : [
                 {
                     "type" : "git",
-                    "url" : "file:///var/home/tobias/Projects"
+                    "url" : "./",
+		    "branch" : "main"
                 }
             ]
         }
