@@ -44,7 +44,7 @@
                 {
                     "type" : "git",
                     "url" : "./",
-		    "branch" : "main"
+                    "branch" : "main"
                 }
             ]
         }
