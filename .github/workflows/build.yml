@@ -64,36 +64,62 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-brew-
 
-      - name: Install dependencies
+      - name: Setup x86_64 Homebrew
+        if: matrix.arch == 'x86_64'
         run: |
-          if [ "${{ matrix.arch }}" = "x86_64" ]; then
-            # Install x86_64 versions for Intel builds
-            HOMEBREW_PREFIX="/usr/local"
-            # Create /usr/local if it doesn't exist
-            sudo mkdir -p /usr/local
-            sudo chown -R $(whoami) /usr/local
+          HOMEBREW_PREFIX="/usr/local"
+          sudo mkdir -p /usr/local
+          sudo chown -R $(whoami) /usr/local
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          eval "$(/usr/local/bin/brew shellenv)"
+          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libffi/lib/pkgconfig:/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig" >> $GITHUB_ENV
 
-            # Install Homebrew for x86_64
-            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      - name: Install pkg-config (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install pkg-config
 
-            # Add Homebrew to PATH
-            eval "$(/usr/local/bin/brew shellenv)"
+      - name: Install GTK4 (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install gtk4
 
-            # Install dependencies
-            arch -x86_64 /usr/local/bin/brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene
-            arch -x86_64 /usr/local/bin/brew install -v libadwaita
+      - name: Install Pango (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install pango
 
-            # Set pkg-config path for x86_64
-            echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libffi/lib/pkgconfig:/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig" >> $GITHUB_ENV
+      - name: Install Cairo (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install cairo
 
-            # Ensure brew links are correct
-            arch -x86_64 brew link --force pango cairo gdk-pixbuf gtk4 libadwaita
-          else
-            # Install ARM64 versions for Apple Silicon builds
-            brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
-            brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
-            echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig" >> $GITHUB_ENV
-          fi
+      - name: Install GDK-Pixbuf (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install gdk-pixbuf
+
+      - name: Install AT-SPI2-Core (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install at-spi2-core
+
+      - name: Install Graphene (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install graphene
+
+      - name: Install Libadwaita (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install -v libadwaita
+
+      - name: Finalize x86_64 setup
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 brew link --force pango cairo gdk-pixbuf gtk4 libadwaita
+
+      - name: Install ARM64 dependencies
+        if: matrix.arch == 'arm64'
+        run: |
+          brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
+          brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
+
+      - name: Finalize ARM64 setup
+        if: matrix.arch == 'arm64'
+        run: |
+          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
       - name: Add target ${{ matrix.target }}
         run: rustup target add ${{ matrix.target }}
