@@ -99,17 +99,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
+      - name: Install target
+        if: matrix.arch == 'arm64'
+        run: rustup target add aarch64-pc-windows-msvc
       - name: Build
-        run: |
-          cargo build --release --target ${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}
+        run: cargo build --release --target ${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}
       - name: Package
         run: |
           mkdir aardvark-${{ matrix.arch }}
           copy target/${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}/release/aardvark.exe aardvark-${{ matrix.arch }}/
           # Add any additional DLLs or resources here
       - name: Create ZIP
-        run: |
-          Compress-Archive -Path aardvark-${{ matrix.arch }} -DestinationPath aardvark-windows-${{ matrix.arch }}.zip
+        run: Compress-Archive -Path aardvark-${{ matrix.arch }} -DestinationPath aardvark-windows-${{ matrix.arch }}.zip
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
