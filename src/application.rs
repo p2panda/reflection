@@ -27,13 +27,27 @@ use gtk::{gio, glib};
 use crate::config::VERSION;
 use crate::network;
 use crate::AardvarkWindow;
+use crate::glib::closure_local;
+use automerge::transaction::Transactable;
+use automerge::ObjType;
+use std::cell::RefCell;
+use automerge::ObjId;
 
 mod imp {
     use super::*;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug)]
     pub struct AardvarkApplication {
-        automerge: AutoCommit,
+        automerge: RefCell<AutoCommit>,
+        root: ObjId,
+    }
+
+    impl AardvarkApplication {
+        fn update_text(&self, text: &str) {
+            println!("app: {}", text);
+            let mut doc = self.automerge.borrow_mut();
+            doc.update_text(&self.root, text).unwrap();
+        }
     }
 
     #[glib::object_subclass]
@@ -43,8 +57,13 @@ mod imp {
         type ParentType = adw::Application;
 
         fn new() -> Self {
-            let automerge = AutoCommit::new();
-            AardvarkApplication { automerge }
+            let mut am = AutoCommit::new();
+            let root = am.put_object(automerge::ROOT, "root", ObjType::Text).unwrap();
+            let automerge = RefCell::new(am);
+            AardvarkApplication {
+                automerge,
+                root,
+            }
         }
     }
 
@@ -67,6 +86,14 @@ mod imp {
             // Get the current window or create one if necessary
             let window = application.active_window().unwrap_or_else(|| {
                 let window = AardvarkWindow::new(&*application);
+                let app = application.clone();
+                window.connect_closure(
+                    "text-changed",
+                    false,
+                    closure_local!(|_window: AardvarkWindow, text: &str| {
+                        app.imp().update_text(text);
+                    }),
+                );
                 window.upcast()
             });
 

@@ -21,6 +21,8 @@
 use gtk::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
+use glib::subclass::Signal;
+use std::sync::OnceLock;
 
 mod imp {
     use super::*;
@@ -48,7 +50,27 @@ mod imp {
         }
     }
 
-    impl ObjectImpl for AardvarkWindow {}
+    impl ObjectImpl for AardvarkWindow {
+        fn constructed(&self) {
+            self.parent_constructed();
+            let buffer = self.text_view.buffer();
+            let obj = self.obj().clone();
+            buffer.connect_changed(move |buffer| {
+                let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
+                obj.emit_by_name::<()>("text-changed", &[&s.as_str()]);
+            });
+        }
+
+        fn signals() -> &'static [Signal] {
+            static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
+            SIGNALS.get_or_init(|| {
+                vec![Signal::builder("text-changed")
+                    .param_types([str::static_type()])
+                    .build()]
+            })
+        }
+    }
+
     impl WidgetImpl for AardvarkWindow {}
     impl WindowImpl for AardvarkWindow {}
     impl ApplicationWindowImpl for AardvarkWindow {}

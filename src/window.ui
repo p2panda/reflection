@@ -18,6 +18,13 @@
                 <property name="menu-model">primary_menu</property>
               </object>
             </child>
+            <child type="end">
+              <object class="GtkMenuButton" id="ShareButton">
+                <property name="icon-name">folder-publicshare-symbolic</property>
+                <property name="tooltip-text" translatable="yes">Share Document</property>
+                <property name="popover">share_popover</property>
+              </object>
+            </child>
           </object>
         </child>
         <property name="content">
@@ -39,6 +46,59 @@
       </object>
     </property>
   </template>
+  <object class="GtkPopover" id="share_popover">
+    <property name="has-arrow">true</property>
+    <property name="name">share_popover</property>
+    <property name="child">
+      <object class="GtkBox" id="plain-popover-box">
+        <property name="margin-top">18</property>
+        <property name="margin-bottom">18</property>
+        <property name="margin-start">18</property>
+        <property name="margin-end">18</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">12</property>
+        <property name="width-request">100</property>
+        <property name="name">share-popover-box</property>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="true">Share Document</property>
+            <style>
+              <class name="title-2" />
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="true">Give others access to this document by sharing this invite code with them:</property>
+          </object>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="label" translatable="true">sdf032jbn39aw0y23l0nd9dkeb200b21m289he </property>
+            <style>
+              <class name="invite-code" />
+              <class name="monospace" />
+            </style>
+          </object>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="halign">center</property>
+            <property name="margin-top">12</property>
+
+            <child>
+              <object class="GtkButton">
+                <property name="label" translatable="true">Copy to Clipboard</property>
+                <style>
+                  <class name="pill" />
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </property>
+  </object>
   <menu id="primary_menu">
     <section>
       <item>
