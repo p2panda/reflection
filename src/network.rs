@@ -25,7 +25,7 @@ struct AarvdarkExtensions {
 
 impl Extension<PruneFlag> for AarvdarkExtensions {
     fn extract(&self) -> Option<PruneFlag> {
-        Some(self.prune_flag)
+        Some(self.prune_flag.clone())
     }
 }
 
