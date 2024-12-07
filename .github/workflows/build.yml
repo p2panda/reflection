@@ -51,6 +51,8 @@ jobs:
       - uses: moonrepo/setup-rust@v1
       - name: Install dependencies
         run: brew install pkg-config gtk4 pango cairo gdk-pixbuf atk graphene
+      - name: Add target ${{ matrix.target }}
+        run: rustup target add ${{ matrix.target }}
       - name: Build
         env:
           PKG_CONFIG_PATH: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/atk/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig"
