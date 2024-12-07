@@ -156,9 +156,21 @@ jobs:
           echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         shell: pwsh
 
+      # Cache vcpkg packages
+      - name: Cache vcpkg
+        uses: actions/cache@v3
+        with:
+          path: |
+            C:\vcpkg\installed
+            C:\vcpkg\packages
+          key: vcpkg-${{ matrix.arch }}-${{ hashFiles('**/vcpkg.json', '.github/workflows/build.yml') }}
+          restore-keys: |
+            vcpkg-${{ matrix.arch }}-
+
       - name: Install GTK4 and dependencies
         run: |
           Write-Host "Installing GTK4 and dependencies for $env:VCPKG_TRIPLET..."
+          # Only install if not found in cache
           vcpkg install pkgconf:$env:VCPKG_TRIPLET
           vcpkg install glib:$env:VCPKG_TRIPLET
           vcpkg install gtk4:$env:VCPKG_TRIPLET
