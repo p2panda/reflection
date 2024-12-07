@@ -69,9 +69,18 @@ jobs:
           if [ "${{ matrix.arch }}" = "x86_64" ]; then
             # Install x86_64 versions for Intel builds
             HOMEBREW_PREFIX="/usr/local"
-            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
-            arch -x86_64 brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
-            arch -x86_64 brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
+            # Create /usr/local if it doesn't exist
+            sudo mkdir -p /usr/local
+            sudo chown -R $(whoami) /usr/local
+            
+            # Install Homebrew for x86_64
+            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+            
+            # Add Homebrew to PATH
+            eval "$(/usr/local/bin/brew shellenv)"
+            
+            # Install dependencies
+            arch -x86_64 /usr/local/bin/brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita
 
             # Set pkg-config path for x86_64
             echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libffi/lib/pkgconfig:/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig" >> $GITHUB_ENV
