@@ -88,10 +88,10 @@ pub fn run() -> Result<()> {
             let network_id = Hash::new(b"aardvark <3");
             let private_key = PrivateKey::new();
 
-            let store = MemoryStore::<LogId, AarvdarkExtensions>::new();
+            let operations_store = MemoryStore::<LogId, AarvdarkExtensions>::new();
+            let documents_store = TextDocumentStore::new();
 
-            let topic_map = TextDocumentStore::new();
-            let sync = LogSyncProtocol::new(topic_map, store);
+            let sync = LogSyncProtocol::new(documents_store, operations_store);
             let sync_config = SyncConfiguration::<TextDocument>::new(sync);
 
             let mut network = NetworkBuilder::new(*network_id.as_bytes())
