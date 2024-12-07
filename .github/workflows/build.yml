@@ -68,14 +68,16 @@ jobs:
         run: |
           if [ "${{ matrix.arch }}" = "x86_64" ]; then
             # Install x86_64 versions for Intel builds
-            arch -x86_64 /usr/local/bin/brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
-            arch -x86_64 /usr/local/bin/brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
+            HOMEBREW_PREFIX="/usr/local"
+            arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+            arch -x86_64 brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
+            arch -x86_64 brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
 
             # Set pkg-config path for x86_64
             echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libffi/lib/pkgconfig:/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig" >> $GITHUB_ENV
 
             # Ensure brew links are correct
-            arch -x86_64 /usr/local/bin/brew link --force pango cairo gdk-pixbuf gtk4 libadwaita
+            arch -x86_64 brew link --force pango cairo gdk-pixbuf gtk4 libadwaita
           else
             # Install ARM64 versions for Apple Silicon builds
             brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
