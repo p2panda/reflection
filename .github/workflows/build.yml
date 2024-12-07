@@ -35,7 +35,7 @@ jobs:
         with:
           bundle: aardvark.flatpak
           manifest-path: org.p2panda.aardvark.json
-          cache-key: flatpak-builder-${{ github.sha }}
+          cache-key: flatpak-builder-${{ hashFiles('org.p2panda.aardvark.json') }}-${{ matrix.arch }}
           arch: ${{ matrix.arch }}
 
   macos:
@@ -172,8 +172,7 @@ jobs:
             vcpkg-${{ matrix.arch }}-
 
       - name: Install GTK4 and dependencies
-        run: |
-          . .\.github\workflows\install_vcpkg.ps1
+        run: . .\.github\workflows\install_vcpkg.ps1
         shell: pwsh
 
       - name: Configure pkg-config paths
