@@ -52,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
-      
+
       # Cache Rust build artifacts
       - uses: actions/cache@v3
         with:
@@ -63,7 +63,7 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-cargo-
-      
+
       # Cache Homebrew packages
       - uses: actions/cache@v3
         with:
@@ -74,7 +74,7 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('.github/workflows/build.yml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-brew-
-            
+
       - name: Install dependencies
         run: |
           if [ "${{ matrix.arch }}" = "x86_64" ]; then
@@ -93,13 +93,12 @@ jobs:
         run: rustup target add ${{ matrix.target }}
       - name: Build
         env:
-          PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}
           PKG_CONFIG_ALLOW_CROSS: "1"
           CFLAGS: "-I/usr/local/include -I/usr/local/include/gtk-4.0 -I/usr/local/include/glib-2.0 -I/usr/local/lib/glib-2.0/include"
           LDFLAGS: "-L/usr/local/lib -framework Cocoa -framework Security"
           MACOSX_DEPLOYMENT_TARGET: "10.15"
           PKG_CONFIG_SYSROOT_DIR: ""
-          PKG_CONFIG_PATH_${{ matrix.target }}: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig"
+          PKG_CONFIG_PATH: "${{ env.PKG_CONFIG_PATH }}:/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig"
         run: cargo build --release --target ${{ matrix.target }}
       - name: Create App Bundle
         run: |
@@ -167,11 +166,11 @@ jobs:
       - name: Configure pkg-config paths
         run: |
           $installPrefix = "$env:VCPKG_ROOT\installed\$env:VCPKG_TRIPLET"
-          
+
           Write-Host "Setting up PATH..."
           echo "$installPrefix\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "$env:VCPKG_ROOT\downloads\tools\pkgconfig\windows\pkg-config-0.29.2-3\tools\pkg-config-0.29.2\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          
+
           Write-Host "Setting up pkg-config environment..."
           echo "PKG_CONFIG=$env:VCPKG_ROOT\downloads\tools\pkgconfig\windows\pkg-config-0.29.2-3\tools\pkg-config-0.29.2\bin\pkg-config.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "PKG_CONFIG_PATH=$installPrefix\lib\pkgconfig" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
