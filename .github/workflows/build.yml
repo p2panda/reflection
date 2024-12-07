@@ -58,12 +58,13 @@ jobs:
         run: rustup target add ${{ matrix.target }}
       - name: Build
         env:
-          PKG_CONFIG_PATH: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig"
+          PKG_CONFIG_PATH: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig"
           PKG_CONFIG_ALLOW_CROSS: "1"
-          CFLAGS: "-I/usr/local/include"
-          LDFLAGS: "-L/usr/local/lib"
+          CFLAGS: "-I/usr/local/include -I/usr/local/include/gtk-4.0 -I/usr/local/include/glib-2.0 -I/usr/local/lib/glib-2.0/include"
+          LDFLAGS: "-L/usr/local/lib -framework Cocoa -framework Security"
+          MACOSX_DEPLOYMENT_TARGET: "10.15"
           PKG_CONFIG_SYSROOT_DIR: ""
-          PKG_CONFIG_PATH_${{ matrix.target }}: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig"
+          PKG_CONFIG_PATH_${{ matrix.target }}: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig"
         run: cargo build --release --target ${{ matrix.target }}
       - name: Create App Bundle
         run: |
