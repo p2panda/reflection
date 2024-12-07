@@ -21,7 +21,13 @@
           </object>
         </child>
         <property name="content">
-          <object class="GtkTextView" id="textView"></object>
+          <object class="GtkScrolledWindow">
+            <property name="height-request">180</property>
+            <property name="width-request">300</property>
+            <child>
+              <object class="GtkTextView" id="textView"></object>
+            </child>
+        </object>
         </property>
       </object>
     </property>
