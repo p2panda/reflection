@@ -136,6 +136,7 @@ jobs:
         run: |
           Write-Host "Installing GTK4 and dependencies for $env:VCPKG_TRIPLET..."
           vcpkg install pkgconf:$env:VCPKG_TRIPLET
+          vcpkg install glib:$env:VCPKG_TRIPLET
           vcpkg install gtk4:$env:VCPKG_TRIPLET
           vcpkg install libadwaita:$env:VCPKG_TRIPLET
         shell: pwsh
@@ -160,7 +161,8 @@ jobs:
         run: |
           Write-Host "Verifying pkg-config installation..."
           pkg-config --version
-          Write-Host "Checking GTK4 and libadwaita configuration..."
+          Write-Host "Checking library configurations..."
+          pkg-config --debug --print-errors --cflags --libs glib-2.0
           pkg-config --debug --print-errors --cflags --libs gtk4 libadwaita-1
         shell: pwsh
       - name: Build
