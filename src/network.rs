@@ -33,6 +33,7 @@ type LogId = TextDocument;
 
 struct Topic2TextDocument {}
 
+#[async_trait]
 impl TopicMap for Topic2TextDocument {
     async fn get(&self, topic: &TextDocument) -> Option<LogId> {
         Some(topic.clone())
