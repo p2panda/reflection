@@ -52,8 +52,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # Cache Homebrew packages
       - uses: actions/cache@v3
@@ -72,10 +70,10 @@ jobs:
             # Install x86_64 versions for Intel builds
             arch -x86_64 /usr/local/bin/brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
             arch -x86_64 /usr/local/bin/brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
-            
+
             # Set pkg-config path for x86_64
             echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libffi/lib/pkgconfig:/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig" >> $GITHUB_ENV
-            
+
             # Ensure brew links are correct
             arch -x86_64 /usr/local/bin/brew link --force pango cairo gdk-pixbuf gtk4 libadwaita
           else
