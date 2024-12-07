@@ -50,15 +50,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
       - name: Install dependencies
-        run: |
-          brew install pkg-config
-          brew install pango
-          brew install cairo
-          brew install gdk-pixbuf
-          brew install atk
+        run: brew install pkg-config gtk4 pango cairo gdk-pixbuf atk graphene
       - name: Build
-        run: |
-          cargo build --release --target ${{ matrix.target }}
+        env:
+          PKG_CONFIG_PATH: "/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/atk/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig"
+          CFLAGS: "-I/usr/local/include"
+          LDFLAGS: "-L/usr/local/lib"
+        run: cargo build --release --target ${{ matrix.target }}
       - name: Create App Bundle
         run: |
           mkdir -p Aardvark.app/Contents/MacOS
