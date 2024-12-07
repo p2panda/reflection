@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="aardvark">
+	<schema id="org.p2panda.aardvark" path="/org/p2panda/aardvark/">
+	</schema>
+</schemalist>

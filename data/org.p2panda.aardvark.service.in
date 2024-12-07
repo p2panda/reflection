@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.p2panda.aardvark
+Exec=@bindir@/aardvark --gapplication-service
