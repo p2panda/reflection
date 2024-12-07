@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 
@@ -6,8 +7,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
 use p2panda_discovery::mdns::LocalDiscovery;
-use p2panda_net::TopicId;
-use p2panda_net::{NetworkBuilder, SyncConfiguration};
+use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
+use p2panda_net::{ToNetwork, TopicId};
 use p2panda_store::MemoryStore;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use p2panda_sync::{TopicMap, TopicQuery};
@@ -77,7 +78,10 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
     }
 }
 
-pub fn run() -> Result<()> {
+pub fn run() -> Result<(Sender<Vec<u8>>, Receiver<Vec<u8>>)> {
+    let (to_network, from_app) = std::sync::mpsc::channel::<Vec<u8>>();
+    let (to_app, from_network) = std::sync::mpsc::channel();
+
     let rt_handle: JoinHandle<Result<()>> = std::thread::spawn(|| {
         let runtime = Builder::new_current_thread()
             .enable_all()
@@ -102,11 +106,48 @@ pub fn run() -> Result<()> {
                 .await?;
 
             let test_document = TextDocument(Hash::new(b"my first doc <3").into());
-            let (tx, rx, ready) = network.subscribe(test_document).await?;
+            let (topic_tx, mut topic_rx, ready) = network.subscribe(test_document).await?;
+
+            tokio::task::spawn(async move {
+                while let Some(message) = topic_rx.recv().await {
+                    println!("New message from network");
+
+                    let bytes = match message {
+                        FromNetwork::GossipMessage {
+                            bytes,
+                            delivered_from,
+                        } => bytes,
+                        FromNetwork::SyncMessage {
+                            header,
+                            payload,
+                            delivered_from,
+                        } => payload.expect("all messages have a payload"),
+                    };
+
+                    // 1) decode operation
+                    // 2) check who the author is and add them to our TextDocumentStore
+                    // 3) persist the operation
+                    // 4) forward the payload onto the app
+
+                    to_app.send(bytes).expect("can send on channel");
+                }
+            });
+
+            tokio::task::spawn(async move {
+                while let Ok(bytes) = from_app.recv() {
+                    println!("New message from app");
+
+                    // 1) encode operation
+                    // 2) persist operation
+                    // 3) forward operation to the network
+
+                    topic_tx.send(ToNetwork::Message { bytes }).await;
+                }
+            });
 
             Ok(())
         })
     });
 
-    Ok(())
+    Ok((to_network, from_network))
 }
