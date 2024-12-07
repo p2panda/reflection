@@ -1,0 +1,13 @@
+{
+    "name": "aardvark",
+    "version-string": "0.1.0",
+    "dependencies": [
+        {
+            "name": "glib",
+            "version>=": "2.82.0"
+        },
+        "gtk4",
+        "libadwaita",
+        "pkgconf"
+    ]
+}
