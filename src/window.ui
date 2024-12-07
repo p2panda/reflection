@@ -25,7 +25,14 @@
             <property name="height-request">180</property>
             <property name="width-request">300</property>
             <child>
-              <object class="GtkTextView" id="text_view"></object>
+              <object class="GtkTextView" id="text_view">
+                <property name="top-margin">12</property>
+                <property name="bottom-margin">12</property>
+                <property name="left-margin">12</property>
+                <style>
+                  <class name="inline"/>
+                </style>
+              </object>
             </child>
         </object>
         </property>
