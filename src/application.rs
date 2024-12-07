@@ -18,13 +18,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gettextrs::gettext;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use gtk::{gio, glib};
 use automerge::AutoCommit;
+use gettextrs::gettext;
+use gtk::{gio, glib};
 
 use crate::config::VERSION;
+use crate::network;
 use crate::AardvarkWindow;
 
 mod imp {
@@ -43,9 +44,7 @@ mod imp {
 
         fn new() -> Self {
             let automerge = AutoCommit::new();
-            AardvarkApplication {
-                automerge,
-            }
+            AardvarkApplication { automerge }
         }
     }
 
@@ -70,6 +69,8 @@ mod imp {
                 let window = AardvarkWindow::new(&*application);
                 window.upcast()
             });
+
+            glib::spawn_future_local(network::run());
 
             // Ask the window manager/compositor to present the window
             window.present();
