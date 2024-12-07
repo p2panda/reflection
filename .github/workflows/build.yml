@@ -1,8 +1,8 @@
 on:
   push:
-  #    branches: [main]
   pull_request:
 name: CI
+
 jobs:
   flatpak:
     name: "Flatpak"
@@ -13,18 +13,15 @@ jobs:
     strategy:
       matrix:
         arch: [x86_64, aarch64]
-      # Don't fail the whole workflow if one architecture fails
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # Install docker for ARM64 builds
       - name: Install deps
         if: ${{ matrix.arch != 'x86_64' }}
         run: |
           dnf -y install docker
-      # Set up QEMU for ARM64 builds
       - name: Set up QEMU
         if: ${{ matrix.arch != 'x86_64' }}
         id: qemu
@@ -38,9 +35,76 @@ jobs:
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
 
-# The above job will build the application as a flatpack and
-# publish it as an artifact. To test it locally you can download
-# the zip artifact, extract it, install the flatpack and run it.
-# unzip aardvark-x86_64.zip
-# flatpak --user install aardvark.flatpak
-# flatpak run org.p2panda.aardvark
+  macos:
+    name: "macOS"
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            arch: x86_64
+          - target: aarch64-apple-darwin
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: moonrepo/setup-rust@v1
+      - name: Build
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+      - name: Create App Bundle
+        run: |
+          mkdir -p Aardvark.app/Contents/MacOS
+          cp target/${{ matrix.target }}/release/aardvark Aardvark.app/Contents/MacOS/
+          # Create Info.plist - you'll need to customize this
+          cat > Aardvark.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>aardvark</string>
+              <key>CFBundleIdentifier</key>
+              <string>org.p2panda.aardvark</string>
+              <key>CFBundleName</key>
+              <string>Aardvark</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+          </dict>
+          </plist>
+          EOF
+      - name: Create DMG
+        run: |
+          hdiutil create -volname "Aardvark" -srcfolder Aardvark.app -ov -format UDZO aardvark-${{ matrix.arch }}.dmg
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: aardvark-macos-${{ matrix.arch }}
+          path: aardvark-${{ matrix.arch }}.dmg
+
+  windows:
+    name: "Windows"
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: moonrepo/setup-rust@v1
+      - name: Build
+        run: |
+          cargo build --release --target ${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}
+      - name: Package
+        run: |
+          mkdir aardvark-${{ matrix.arch }}
+          copy target/${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}/release/aardvark.exe aardvark-${{ matrix.arch }}/
+          # Add any additional DLLs or resources here
+      - name: Create ZIP
+        run: |
+          Compress-Archive -Path aardvark-${{ matrix.arch }} -DestinationPath aardvark-windows-${{ matrix.arch }}.zip
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: aardvark-windows-${{ matrix.arch }}
+          path: aardvark-windows-${{ matrix.arch }}.zip
