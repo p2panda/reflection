@@ -30,7 +30,7 @@ mod imp {
     pub struct AardvarkWindow {
         // Template widgets
         #[template_child]
-        pub textView: TemplateChild<gtk::TextView>,
+        pub text_view: TemplateChild<gtk::TextView>,
     }
 
     #[glib::object_subclass]

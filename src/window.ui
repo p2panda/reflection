@@ -25,7 +25,7 @@
             <property name="height-request">180</property>
             <property name="width-request">300</property>
             <child>
-              <object class="GtkTextView" id="textView"></object>
+              <object class="GtkTextView" id="text_view"></object>
             </child>
         </object>
         </property>
