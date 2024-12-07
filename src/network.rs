@@ -36,6 +36,7 @@ impl Extension<PruneFlag> for AarvdarkExtensions {
 
 type LogId = TextDocument;
 
+#[derive(Clone, Debug)]
 struct TextDocumentStore {
     inner: Arc<RwLock<TextDocumentStoreInner>>,
 }
@@ -51,7 +52,7 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
         let result = HashMap::new();
 
         for (public_key, text_documents) in authors {
-            if text_documents.contain(topic) {
+            if text_documents.contains(topic) {
                 result
                     .entry(&public_key)
                     .and_modify(|logs| logs.push(text_documents))
