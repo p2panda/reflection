@@ -48,6 +48,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
+      - name: Install dependencies
+        run: |
+          brew install pkg-config
+          brew install pango
+          brew install cairo
+          brew install gdk-pixbuf
+          brew install atk
       - name: Build
         run: |
           cargo build --release --target ${{ matrix.target }}
