@@ -106,9 +106,20 @@ jobs:
         if: matrix.arch == 'x86_64'
         run: arch -x86_64 /usr/local/bin/brew install -v libadwaita
 
-      - name: Finalize x86_64 setup
+      - name: Verify and link x86_64 packages
         if: matrix.arch == 'x86_64'
-        run: arch -x86_64 brew link --force pango cairo gdk-pixbuf gtk4 libadwaita
+        run: |
+          # Verify installations
+          arch -x86_64 /usr/local/bin/brew list pango
+          arch -x86_64 /usr/local/bin/brew list cairo
+          arch -x86_64 /usr/local/bin/brew list gdk-pixbuf
+          arch -x86_64 /usr/local/bin/brew list gtk4
+          arch -x86_64 /usr/local/bin/brew list libadwaita
+          
+          # Link packages individually with error handling
+          for package in pango cairo gdk-pixbuf gtk4 libadwaita; do
+            arch -x86_64 /usr/local/bin/brew link --force $package || true
+          done
 
       - name: Install ARM64 dependencies
         if: matrix.arch == 'arm64'
