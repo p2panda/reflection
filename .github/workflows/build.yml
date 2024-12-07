@@ -240,29 +240,29 @@ jobs:
           "$installPrefix\tools\pkgconf" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
-      - name: Verify pkg-config setup
-        run: |
-          Write-Host "Verifying pkg-config installation..."
-          pkg-config --version
-          Write-Host "Checking library configurations..."
-          pkg-config --debug --print-errors --cflags --libs glib-2.0
-          pkg-config --debug --print-errors --cflags --libs gtk4 libadwaita-1
-        shell: pwsh
-      - name: Build
-        run: |
-          $arch = "${{ matrix.arch }}"
-          $target = if ($arch -eq "x64") { "x86_64-pc-windows-msvc" } else { "aarch64-pc-windows-msvc" }
-          cargo build --release --target $target
-        shell: pwsh
-      - name: Package
-        run: |
-          mkdir aardvark-${{ matrix.arch }}
-          copy target/${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}/release/aardvark.exe aardvark-${{ matrix.arch }}/
-          # Add any additional DLLs or resources here
-      - name: Create ZIP
-        run: Compress-Archive -Path aardvark-${{ matrix.arch }} -DestinationPath aardvark-windows-${{ matrix.arch }}.zip
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: aardvark-windows-${{ matrix.arch }}
-          path: aardvark-windows-${{ matrix.arch }}.zip
+      # - name: Verify pkg-config setup
+      #   run: |
+      #     Write-Host "Verifying pkg-config installation..."
+      #     pkg-config --version
+      #     Write-Host "Checking library configurations..."
+      #     pkg-config --debug --print-errors --cflags --libs glib-2.0
+      #     pkg-config --debug --print-errors --cflags --libs gtk4 libadwaita-1
+      #   shell: pwsh
+      # - name: Build
+      #   run: |
+      #     $arch = "${{ matrix.arch }}"
+      #     $target = if ($arch -eq "x64") { "x86_64-pc-windows-msvc" } else { "aarch64-pc-windows-msvc" }
+      #     cargo build --release --target $target
+      #   shell: pwsh
+      # - name: Package
+      #   run: |
+      #     mkdir aardvark-${{ matrix.arch }}
+      #     copy target/${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}/release/aardvark.exe aardvark-${{ matrix.arch }}/
+      #     # Add any additional DLLs or resources here
+      # - name: Create ZIP
+      #   run: Compress-Archive -Path aardvark-${{ matrix.arch }} -DestinationPath aardvark-windows-${{ matrix.arch }}.zip
+      # - name: Upload Artifact
+      #   uses: actions/upload-artifact@v3
+      #   with:
+      #     name: aardvark-windows-${{ matrix.arch }}
+      #     path: aardvark-windows-${{ matrix.arch }}.zip
