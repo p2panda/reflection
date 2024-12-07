@@ -81,7 +81,7 @@ jobs:
             # Install x86_64 versions for Intel builds
             arch -x86_64 /usr/local/bin/brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
             arch -x86_64 /usr/local/bin/brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
-            echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig" >> $GITHUB_ENV
+            echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig" >> $GITHUB_ENV
           else
             # Install ARM64 versions for Apple Silicon builds
             brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
@@ -98,7 +98,7 @@ jobs:
           LDFLAGS: "-L/usr/local/lib -framework Cocoa -framework Security"
           MACOSX_DEPLOYMENT_TARGET: "10.15"
           PKG_CONFIG_SYSROOT_DIR: ""
-          PKG_CONFIG_PATH: "${{ env.PKG_CONFIG_PATH }}:/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/at-spi2-core/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig"
+          PKG_CONFIG_PATH: "${{ env.PKG_CONFIG_PATH }}"
         run: cargo build --release --target ${{ matrix.target }}
       - name: Create App Bundle
         run: |
