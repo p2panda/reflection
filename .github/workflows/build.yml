@@ -1,0 +1,27 @@
+on:
+  push:
+  #    branches: [main]
+  pull_request:
+name: CI
+jobs:
+  flatpak:
+    name: "Flatpak"
+    runs-on: ubuntu-24.04
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: aardvark.flatpak
+          manifest-path: org.p2panda.aardvark.json
+          cache-key: flatpak-builder-${{ github.sha }}
+# The above job will build the application as a flatpack and
+# publish it as an artifact. To test it locally you can download
+# the zip artifact, extract it, install the flatpack and run it.
+# unzip aardvark-x86_64.zip
+# flatpak --user install aardvark.flatpak
+# flatpak run org.p2panda.aardvark
