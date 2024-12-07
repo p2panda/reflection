@@ -1,10 +1,11 @@
 {
     "name": "aardvark",
     "version-string": "0.1.0",
+    "builtin-baseline": "c8696863d371ab7f46e213d8f5ca923c4aef2a00",
     "dependencies": [
         {
             "name": "glib",
-            "version>=": "2.82.0"
+            "version>=": "2.82.0#1"
         },
         "gtk4",
         "libadwaita",
