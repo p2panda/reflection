@@ -1,4 +1,5 @@
 use anyhow::Result;
+use async_trait::async_trait;
 use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::TopicId;
@@ -9,13 +10,13 @@ use p2panda_sync::{TopicMap, TopicQuery};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
-struct TextDocument(Hash);
+struct TextDocument([u8; 32]);
 
 impl TopicQuery for TextDocument {}
 
 impl TopicId for TextDocument {
     fn id(&self) -> [u8; 32] {
-        self.0.into()
+        self.0
     }
 }
 
@@ -50,7 +51,7 @@ pub async fn run() -> Result<()> {
 
     let topic_map = Topic2TextDocument {};
     let sync = LogSyncProtocol::new(topic_map, store);
-    let sync_config = SyncConfiguration::new(sync);
+    let sync_config = SyncConfiguration::<TextDocument>::new(sync);
 
     let mut network = NetworkBuilder::new(*network_id.as_bytes())
         .sync(sync_config)
@@ -59,7 +60,7 @@ pub async fn run() -> Result<()> {
         .build()
         .await?;
 
-    let test_document = TextDocument(Hash::new(b"my first doc <3"));
+    let test_document = TextDocument(Hash::new(b"my first doc <3").into());
     let (tx, rx, ready) = network.subscribe(test_document).await?;
 
     Ok(())
