@@ -76,31 +76,31 @@ jobs:
 
       - name: Install pkg-config (x86_64)
         if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install pkg-config
-
-      - name: Install GTK4 (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install gtk4
-
-      - name: Install Pango (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install pango
-
-      - name: Install Cairo (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install cairo
+        run: arch -x86_64 /usr/local/bin/brew install pkg-config || echo ERROR
 
       - name: Install GDK-Pixbuf (x86_64)
         if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install gdk-pixbuf
+        run: arch -x86_64 /usr/local/bin/brew install gdk-pixbuf || echo ERROR
+
+      - name: Install Cairo (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install cairo || echo ERROR
+
+      - name: Install Pango (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install pango || echo ERROR
 
       - name: Install AT-SPI2-Core (x86_64)
         if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install at-spi2-core
+        run: arch -x86_64 /usr/local/bin/brew install at-spi2-core || echo ERROR
 
       - name: Install Graphene (x86_64)
         if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install graphene
+        run: arch -x86_64 /usr/local/bin/brew install graphene || echo ERROR
+
+      - name: Install GTK4 (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install gtk4 || echo ERROR
 
       - name: Install Libadwaita (x86_64)
         if: matrix.arch == 'x86_64'
