@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+
 use anyhow::Result;
 use async_trait::async_trait;
 use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
@@ -33,13 +36,30 @@ impl Extension<PruneFlag> for AarvdarkExtensions {
 
 type LogId = TextDocument;
 
-#[derive(Debug)]
-struct Topic2TextDocument {}
+struct TextDocumentStore {
+    inner: Arc<RwLock<TextDocumentStoreInner>>,
+}
+
+struct TextDocumentStoreInner {
+    authors: HashMap<PublicKey, Vec<TextDocument>>,
+}
 
 #[async_trait]
-impl TopicMap<TextDocument, LogId> for Topic2TextDocument {
-    async fn get(&self, topic: &TextDocument) -> Option<LogId> {
-        Some(topic.clone())
+impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStore {
+    async fn get(&self, topic: &TextDocument) -> Option<HashMap<PublicKey, Vec<LogId>>> {
+        let authors = self.inner.read().unwrap().authors;
+        let result = HashMap::new();
+
+        for (public_key, text_documents) in authors {
+            if text_documents.contain(topic) {
+                result
+                    .entry(&public_key)
+                    .and_modify(|logs| logs.push(text_documents))
+                    .or_insert(vec![text_documents]);
+            }
+        }
+
+        Some(result)
     }
 }
 
@@ -49,7 +69,7 @@ pub async fn run() -> Result<()> {
 
     let store = MemoryStore::<LogId, AarvdarkExtensions>::new();
 
-    let topic_map = Topic2TextDocument {};
+    let topic_map = Topic2TextDocument::new(store.clone());
     let sync = LogSyncProtocol::new(topic_map, store);
     let sync_config = SyncConfiguration::<TextDocument>::new(sync);
 
