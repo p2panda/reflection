@@ -39,6 +39,7 @@ jobs:
     name: "macOS"
     runs-on: macos-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-apple-darwin
@@ -94,6 +95,7 @@ jobs:
     name: "Windows"
     runs-on: windows-latest
     strategy:
+      fail-fast: false
       matrix:
         arch: [x64, arm64]
     steps:
