@@ -53,7 +53,9 @@ mod imp {
             println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
             let current_text = doc.text(&self.root).unwrap();
-            if text == current_text { return; }
+            if text == current_text {
+                return;
+            }
 
             doc.update_text(&self.root, text).unwrap();
 
@@ -129,13 +131,13 @@ mod imp {
                     let w = window.clone();
                     let app = application.clone();
                     glib::spawn_future_local(async move {
-                        while let Some(msg) = rx.recv().await {
+                        while let Some(bytes) = rx.recv().await {
                             //println!("got {:?}", msg);
                             let text = {
-                                let mut doc_remote = AutoCommit::load(&msg).unwrap();
-                                let mut new_doc = AutoCommit::new();
-                                new_doc.merge(&mut doc_remote).unwrap();
-                                new_doc.text(&app.imp().root).unwrap()
+                                let mut doc_remote = AutoCommit::load(&bytes).unwrap();
+                                let mut doc_local = app.imp().automerge.borrow_mut();
+                                doc_local.merge(&mut doc_remote).unwrap();
+                                doc_local.text(&app.imp().root).unwrap()
                             };
                             dbg!(&text);
                             w.set_text(&text);
