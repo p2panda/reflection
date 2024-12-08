@@ -1,7 +1,7 @@
 use std::time::SystemTime;
 
 use anyhow::Result;
-use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
+use p2panda_core::{cbor::encode_cbor, Body, Extension, Extensions, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use p2panda_stream::operation::ingest_operation;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -31,11 +31,13 @@ impl Extension<TextDocument> for AardvarkExtensions {
 
 pub fn encode_gossip_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>
 where
-    E: Clone + Serialize,
+    E: Extensions + Serialize,
 {
-    let operation: (Header<E>, Option<Body>) = (header, body);
     let mut bytes = Vec::new();
-    ciborium::into_writer(&operation, &mut bytes)?;
+    ciborium::into_writer(
+        &(header.to_bytes(), body.map(|body| body.to_bytes())),
+        &mut bytes,
+    )?;
     Ok(bytes)
 }
 

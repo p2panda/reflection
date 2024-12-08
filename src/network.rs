@@ -97,7 +97,7 @@ pub fn run() -> Result<(
             .expect("backend runtime ready to spawn tasks");
 
         runtime.block_on(async move {
-            let network_id = Hash::new(b"aardvark <3");
+            let network_id = Hash::new(b"aardvark <3 2");
             let document_id = TextDocument(Hash::new(b"my first doc <3").into());
 
             let private_key = PrivateKey::new();
@@ -120,6 +120,11 @@ pub fn run() -> Result<(
                 .subscribe(document_id.clone())
                 .await
                 .expect("can subscribe to channel");
+
+            tokio::task::spawn(async move {
+                ready.await;
+                println!("network joined!");
+            });
 
             // Task for handling operations arriving from the network.
             let operations_store_clone = operations_store.clone();
