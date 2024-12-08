@@ -20,12 +20,21 @@ vcpkg install libadwaita:$env:VCPKG_TRIPLET
 # Create pkg-config wrapper script to handle Windows paths
 $wrapperContent = @"
 #!/usr/bin/env pwsh
-`$env:PKG_CONFIG_PATH = `$env:PKG_CONFIG_PATH -replace ";",":"
-`$env:PKG_CONFIG_LIBDIR = `$env:PKG_CONFIG_LIBDIR -replace ";",":"
-& "$pkgConfigPath" `$args
+`$env:PKG_CONFIG_PATH = `$env:PKG_CONFIG_PATH -replace ';',':'
+`$env:PKG_CONFIG_LIBDIR = `$env:PKG_CONFIG_LIBDIR -replace ';',':'
+& '$pkgConfigPath' @args
+"@
+
+$batchContent = @"
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""%~dp0pkg-config.ps1"" %*
 "@
 
 $wrapperPath = "$env:VCPKG_ROOT\installed\$env:VCPKG_TRIPLET\tools\pkgconf\pkg-config.ps1"
+$batchPath = "$env:VCPKG_ROOT\installed\$env:VCPKG_TRIPLET\tools\pkgconf\pkg-config.bat"
+
 $wrapperContent | Out-File -FilePath $wrapperPath -Encoding UTF8
+$batchContent | Out-File -FilePath $batchPath -Encoding ASCII
 
 Write-Host "Created pkg-config wrapper at: $wrapperPath"
+Write-Host "Created pkg-config batch wrapper at: $batchPath"
