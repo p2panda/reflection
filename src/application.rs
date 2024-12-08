@@ -19,16 +19,13 @@
  */
 
 use std::cell::RefCell;
-use std::thread::JoinHandle;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use anyhow::Result;
 use automerge::transaction::Transactable;
 use automerge::{AutoCommit, ObjId, ObjType};
 use gettextrs::gettext;
 use gtk::{gio, glib};
-use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::config::VERSION;
@@ -43,6 +40,7 @@ mod imp {
     pub struct AardvarkApplication {
         automerge: RefCell<AutoCommit>,
         root: ObjId,
+        #[allow(dead_code)]
         backend_shutdown_tx: oneshot::Sender<()>,
         tx: mpsc::Sender<Vec<u8>>,
     }

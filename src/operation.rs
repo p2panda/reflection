@@ -1,10 +1,9 @@
 use std::time::SystemTime;
 
 use anyhow::Result;
-use p2panda_core::{cbor::encode_cbor, Body, Extension, Extensions, Header, Operation, PrivateKey, PruneFlag};
+use p2panda_core::{Body, Extension, Extensions, Header, PrivateKey, PruneFlag};
 use p2panda_store::{LogStore, MemoryStore, OperationStore};
-use p2panda_stream::operation::ingest_operation;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::network::TextDocument;
 
@@ -60,7 +59,7 @@ pub async fn create_operation(
     let latest_operation = store.latest_operation(&public_key, &document_id).await?;
 
     let (seq_num, backlink) = match latest_operation {
-        Some((header, body)) => (header.seq_num + 1, Some(header.hash())),
+        Some((header, _)) => (header.seq_num + 1, Some(header.hash())),
         None => (0, None),
     };
 
