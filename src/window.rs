@@ -24,6 +24,7 @@ use gtk::{gio, glib};
 use glib::subclass::Signal;
 use std::sync::OnceLock;
 use adw::prelude::AdwDialogExt;
+use crate::AardvarkTextBuffer;
 
 mod imp {
     use super::*;
@@ -58,7 +59,10 @@ mod imp {
     impl ObjectImpl for AardvarkWindow {
         fn constructed(&self) {
             self.parent_constructed();
-            let buffer = self.text_view.buffer();
+
+            let buffer = AardvarkTextBuffer::new();
+            self.text_view.set_buffer(Some(&buffer));
+
             let obj = self.obj().clone();
             buffer.connect_changed(move |buffer| {
                 let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
@@ -90,7 +94,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct AardvarkWindow(ObjectSubclass<imp::AardvarkWindow>)
-        @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,        @implements gio::ActionGroup, gio::ActionMap;
+        @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
+        @implements gio::ActionGroup, gio::ActionMap;
 }
 
 impl AardvarkWindow {
@@ -100,11 +105,27 @@ impl AardvarkWindow {
             .build()
     }
 
-    pub fn set_text(&self, text: &str) {
+    pub fn splice_text_view(&self, pos: i32, del: i32, text: &str) {
         let window = self.imp();
-        let buffer = window.text_view.buffer();
-        let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
-        if text == s { println!("bailing out on superfluous set_text"); return; }
-        buffer.set_text(text);
+        let buffer: AardvarkTextBuffer = window.text_view.buffer().downcast().unwrap();
+
+        if del != 0 {
+            let mut begin = buffer.iter_at_offset(pos);
+            let mut end = buffer.iter_at_offset(pos + del);
+            buffer.set_inhibit_emit_text_change(true);
+            buffer.delete(&mut begin, &mut end);
+            buffer.set_inhibit_emit_text_change(false);
+            return;
+        }
+
+        let mut pos_iter = buffer.iter_at_offset(pos);
+        buffer.set_inhibit_emit_text_change(true);
+        buffer.insert(&mut pos_iter, text);
+        buffer.set_inhibit_emit_text_change(false);
+    }
+
+    pub fn get_text_buffer(&self) -> AardvarkTextBuffer {
+        let window = self.imp();
+        window.text_view.buffer().downcast().unwrap()
     }
 }

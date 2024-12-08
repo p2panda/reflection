@@ -28,11 +28,13 @@ use automerge::{AutoCommit, ObjType};
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::{mpsc, oneshot};
+use automerge::PatchAction;
 
 use crate::config::VERSION;
 use crate::glib::closure_local;
 use crate::network;
 use crate::AardvarkWindow;
+use crate::AardvarkTextBuffer;
 
 mod imp {
     use super::*;
@@ -48,23 +50,8 @@ mod imp {
     }
 
     impl AardvarkApplication {
-        fn update_text(&self, text: &str) {
+        fn update_text(&self, position: i32, del: i32, text: &str) {
             let mut doc = self.automerge.borrow_mut();
-
-            let current_text = match doc.get(automerge::ROOT, "root").expect("root exists") {
-                Some((_, root)) => doc.text(&root).unwrap(),
-                None => "".to_owned(),
-            };
-
-            println!("CMP '{}' == '{}'", current_text, text);
-
-            if text == "" {
-                return;
-            }
-
-            if text == current_text {
-                return;
-            }
 
             let root = match doc.get(automerge::ROOT, "root").expect("root exists") {
                 Some(root) => root.1,
@@ -74,7 +61,27 @@ mod imp {
             };
             println!("root = {}", root);
 
-            doc.update_text(&root, text).unwrap();
+            doc.splice_text(&root,position as usize, del as isize, text).unwrap();
+
+            // move the diff pointer forward to current position
+            doc.update_diff_cursor();
+/*
+            let patches = doc.diff_incremental();
+            for patch in patches.iter() {
+                println!("{}", patch.action);
+                match &patch.action {
+                    PatchAction::SpliceText { index: _, value: _, marks: _ } => {},
+                    PatchAction::DeleteSeq { index: _, length: _ } => {},
+                    PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
+                    PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
+                    PatchAction::Insert { index: _, values: _ } => {},
+                    PatchAction::Increment { prop: _, value: _ } => {},
+                    PatchAction::Conflict { prop: _ } => {},
+                    PatchAction::DeleteMap { key: _ } => {},
+                    PatchAction::Mark { marks: _ } => {},
+                }
+            }
+*/
 
             {
                 let bytes = doc.save_incremental();
@@ -130,17 +137,9 @@ mod imp {
                 .get_or_init(|| {
                     let window = AardvarkWindow::new(&*application);
                     let app = application.clone();
-                    window.connect_closure(
-                        "text-changed",
-                        false,
-                        closure_local!(|_window: AardvarkWindow, text: &str| {
-                            app.imp().update_text(text);
-                        }),
-                    );
-
                     let mut rx = application.imp().rx.take().unwrap();
                     let w = window.clone();
-                    let app = application.clone();
+
                     glib::spawn_future_local(async move {
                         while let Some(bytes) = rx.recv().await {
                             println!("got {:?}", bytes);
@@ -160,18 +159,46 @@ mod imp {
                                         .expect("inserting map at root"),
                                 };
                                 println!("root = {}", root);
+
+                                // get the latest changes
+                                let patches = doc_local.diff_incremental();
+                                for patch in patches.iter() {
+                                    println!("PATCH RECEIVED: {}", patch.action);
+                                    match &patch.action {
+                                        PatchAction::SpliceText { index, value, marks: _ } => {
+                                            w.splice_text_view(*index as i32, 0, value.make_string().as_str());
+                                        },
+                                        PatchAction::DeleteSeq { index, length } => {
+                                            w.splice_text_view(*index as i32, *length as i32, "");
+                                        },
+                                        PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
+                                        PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
+                                        PatchAction::Insert { index: _, values: _ } => {},
+                                        PatchAction::Increment { prop: _, value: _ } => {},
+                                        PatchAction::Conflict { prop: _ } => {},
+                                        PatchAction::DeleteMap { key: _ } => {},
+                                        PatchAction::Mark { marks: _ } => {},
+                                    }
+                                }
+
                                 doc_local.text(&root).unwrap()
                             };
                             dbg!(&text);
-
-                            println!("SET_TEXT = '{}'", text);
-                            w.set_text(&text);
                         }
                     });
 
                     window
                 })
                 .clone();
+
+                let app = application.clone();
+                window.clone().get_text_buffer().connect_closure(
+                    "text-change",
+                    false,
+                    closure_local!(|_buffer: AardvarkTextBuffer, position: i32, del: i32, text: &str| {
+                        app.imp().update_text(position, del, text);
+                    }),
+                );
 
             // Ask the window manager/compositor to present the window
             window.upcast::<gtk::Window>().present();
