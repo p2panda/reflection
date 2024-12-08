@@ -176,7 +176,6 @@ jobs:
           RUST_BACKTRACE: "full"
           RUST_LOG: "debug"
           G_MESSAGES_DEBUG: "all"
-          GTK_DEBUG: "fatal-warnings"
         run: ./Aardvark.app/Contents/MacOS/aardvark
 
   windows:
