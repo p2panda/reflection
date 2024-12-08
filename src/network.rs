@@ -200,8 +200,9 @@ pub fn run() -> Result<(
                     )
                     .await?;
 
-                    let encoded_gossip_operation = encode_gossip_operation(header, body)?;
+                    println!("Created operation: {header:?}");
 
+                    let encoded_gossip_operation = encode_gossip_operation(header, body)?;
                     // Broadcast operation on gossip overlay.
                     topic_tx
                         .send(ToNetwork::Message {
