@@ -111,9 +111,9 @@ pub fn run() -> Result<(
             let sync_config = SyncConfiguration::<TextDocument>::new(sync);
 
             let network = NetworkBuilder::new(network_id.into())
-                .sync(sync_config)
                 .private_key(private_key.clone())
                 .discovery(LocalDiscovery::new().expect("local discovery service"))
+                .sync(sync_config)
                 .build()
                 .await
                 .expect("network spawning");
