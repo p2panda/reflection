@@ -4,9 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.94"
+async-trait = "0.1.83"
 automerge = "0.5.12"
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
 gtk = { version = "0.9", package = "gtk4", features = ["gnome_47"] }
+p2panda-core = "0.1.0"
+p2panda-discovery = { version = "0.1.0", features = ["mdns"] }
+p2panda-net = "0.1.0"
+p2panda-store = "0.1.0"
+p2panda-stream = "0.1.0"
+p2panda-sync = { version = "0.1.0", features = ["log-sync"] }
+serde = { version = "1.0.215", features = ["derive"] }
+tokio = { version = "1.42.0", features = ["full"] }
 
 [dependencies.adw]
 package = "libadwaita"
