@@ -18,20 +18,23 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+use std::cell::RefCell;
+use std::thread::JoinHandle;
+
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use automerge::AutoCommit;
+use anyhow::Result;
+use automerge::transaction::Transactable;
+use automerge::{AutoCommit, ObjId, ObjType};
 use gettextrs::gettext;
 use gtk::{gio, glib};
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{mpsc, oneshot};
 
 use crate::config::VERSION;
+use crate::glib::closure_local;
 use crate::network;
 use crate::AardvarkWindow;
-use crate::glib::closure_local;
-use automerge::transaction::Transactable;
-use automerge::ObjType;
-use std::cell::RefCell;
-use automerge::ObjId;
 
 mod imp {
     use super::*;
@@ -40,6 +43,8 @@ mod imp {
     pub struct AardvarkApplication {
         automerge: RefCell<AutoCommit>,
         root: ObjId,
+        backend_shutdown_tx: oneshot::Sender<()>,
+        tx: mpsc::Sender<Vec<u8>>,
     }
 
     impl AardvarkApplication {
@@ -47,6 +52,16 @@ mod imp {
             println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
             doc.update_text(&self.root, text).unwrap();
+
+            {
+                let bytes = doc.save();
+                let tx = self.tx.clone();
+                glib::spawn_future_local(async move {
+                    if let Err(e) = tx.send(bytes).await {
+                        println!("{}", e);
+                    }
+                });
+            }
         }
     }
 
@@ -58,11 +73,24 @@ mod imp {
 
         fn new() -> Self {
             let mut am = AutoCommit::new();
-            let root = am.put_object(automerge::ROOT, "root", ObjType::Text).unwrap();
+            let root = am
+                .put_object(automerge::ROOT, "root", ObjType::Text)
+                .unwrap();
             let automerge = RefCell::new(am);
+
+            let (backend_shutdown_tx, tx, mut rx) = network::run().expect("running p2p backend");
+
+            glib::spawn_future_local(async move {
+                while let Some(msg) = rx.recv().await {
+                    println!("got {:?}", msg);
+                }
+            });
+
             AardvarkApplication {
                 automerge,
                 root,
+                backend_shutdown_tx,
+                tx,
             }
         }
     }
@@ -96,8 +124,6 @@ mod imp {
                 );
                 window.upcast()
             });
-
-            network::run().expect("running p2p backend");
 
             // Ask the window manager/compositor to present the window
             window.present();

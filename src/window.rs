@@ -88,4 +88,10 @@ impl AardvarkWindow {
             .property("application", application)
             .build()
     }
+
+    pub fn set_text(&self, text: &str) {
+        let window = self.imp();
+        let buffer = window.text_view.buffer();
+        buffer.set_text(text);
+    }
 }

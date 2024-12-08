@@ -74,14 +74,18 @@
           <object class="GtkLabel">
             <property name="wrap">True</property>
             <property name="justify">GTK_JUSTIFY_CENTER</property>
-            <property name="max-width-chars">30</property>
+            <property name="max-width-chars">25</property>
             <property name="natural-wrap-mode">GTK_NATURAL_WRAP_WORD</property>
             <property name="label" translatable="true">Give others access to this document by sharing this invite code with them:</property>
           </object>
         </child>
         <child>
           <object class="GtkLabel">
-            <property name="label" translatable="true">sdf032jbn39aw0y23l0nd9dkeb200b21m289he </property>
+            <property name="wrap">True</property>
+            <property name="wrap-mode">char</property>
+            <property name="justify">GTK_JUSTIFY_CENTER</property>
+            <property name="max-width-chars">25</property>
+            <property name="label" translatable="true">sdf0398p2jbytc6n4wpq339aw0y23l0nd9dk032jbn39accw0y23bl0n78deb200b21m289he </property>
             <style>
               <class name="invite-code" />
               <class name="monospace" />

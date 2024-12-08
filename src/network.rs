@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 
@@ -14,6 +13,7 @@ use p2panda_sync::log_sync::LogSyncProtocol;
 use p2panda_sync::{TopicMap, TopicQuery};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
 struct TextDocument([u8; 32]);
@@ -78,17 +78,23 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
     }
 }
 
-pub fn run() -> Result<(Sender<Vec<u8>>, Receiver<Vec<u8>>)> {
-    let (to_network, from_app) = std::sync::mpsc::channel::<Vec<u8>>();
-    let (to_app, from_network) = std::sync::mpsc::channel();
+pub fn run() -> Result<(
+    oneshot::Sender<()>,
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+)> {
+    let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
+    let (to_app, from_network) = mpsc::channel(512);
 
-    let rt_handle: JoinHandle<Result<()>> = std::thread::spawn(|| {
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    std::thread::spawn(move || {
         let runtime = Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("backend runtime ready to spawn tasks");
 
-        runtime.block_on(async {
+        runtime.block_on(async move {
             let network_id = Hash::new(b"aardvark <3");
             let private_key = PrivateKey::new();
 
@@ -101,12 +107,13 @@ pub fn run() -> Result<(Sender<Vec<u8>>, Receiver<Vec<u8>>)> {
             let mut network = NetworkBuilder::new(*network_id.as_bytes())
                 .sync(sync_config)
                 .private_key(private_key)
-                .discovery(LocalDiscovery::new()?)
+                .discovery(LocalDiscovery::new().unwrap())
                 .build()
-                .await?;
+                .await
+                .unwrap();
 
             let test_document = TextDocument(Hash::new(b"my first doc <3").into());
-            let (topic_tx, mut topic_rx, ready) = network.subscribe(test_document).await?;
+            let (topic_tx, mut topic_rx, ready) = network.subscribe(test_document).await.unwrap();
 
             tokio::task::spawn(async move {
                 while let Some(message) = topic_rx.recv().await {
@@ -129,12 +136,12 @@ pub fn run() -> Result<(Sender<Vec<u8>>, Receiver<Vec<u8>>)> {
                     // 3) persist the operation
                     // 4) forward the payload onto the app
 
-                    to_app.send(bytes).expect("can send on channel");
+                    to_app.send(bytes).await.expect("can send on channel");
                 }
             });
 
             tokio::task::spawn(async move {
-                while let Ok(bytes) = from_app.recv() {
+                while let Some(bytes) = from_app.recv().await {
                     println!("New message from app");
 
                     // 1) encode operation
@@ -145,9 +152,9 @@ pub fn run() -> Result<(Sender<Vec<u8>>, Receiver<Vec<u8>>)> {
                 }
             });
 
-            Ok(())
-        })
+            shutdown_rx.await.unwrap();
+        });
     });
 
-    Ok((to_network, from_network))
+    Ok((shutdown_tx, to_network, from_network))
 }
