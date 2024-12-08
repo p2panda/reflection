@@ -50,7 +50,12 @@ mod imp {
     impl AardvarkApplication {
         fn update_text(&self, text: &str) {
             let mut doc = self.automerge.borrow_mut();
-            let current_text = doc.text(&root).unwrap();
+
+            let current_text = match doc.get(automerge::ROOT, "root").expect("root exists") {
+                Some((_, root)) => doc.text(&root).unwrap(),
+                None => "".to_owned(),
+            };
+
             println!("CMP '{}' == '{}'", current_text, text);
 
             if text == "" {
