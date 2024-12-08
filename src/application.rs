@@ -42,7 +42,6 @@ mod imp {
         automerge: RefCell<AutoCommit>,
         root: ObjId,
         tx: Sender<Vec<u8>>,
-        rx: Receiver<Vec<u8>>,
     }
 
     impl AardvarkApplication {
@@ -67,12 +66,19 @@ mod imp {
             let mut am = AutoCommit::new();
             let root = am.put_object(automerge::ROOT, "root", ObjType::Text).unwrap();
             let automerge = RefCell::new(am);
-            let (tx, rx) = network::run().expect("running p2p backend");
+
+            let (tx, mut rx) = network::run().expect("running p2p backend");
+
+            glib::spawn_future_local(async move {
+                while let Some(msg) = rx.recv().await {
+                    println!("got {:?}", msg);
+                }
+            });
+
             AardvarkApplication {
                 automerge,
                 root,
                 tx,
-                rx,
             }
         }
     }
