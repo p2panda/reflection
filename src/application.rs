@@ -209,9 +209,9 @@ impl AardvarkApplication {
     fn show_about(&self) {
         let window = self.active_window().unwrap();
         let about = adw::AboutDialog::builder()
-            .application_name("aardvark")
+            .application_name("Aardvark")
             .application_icon("org.p2panda.aardvark")
-            .developer_name("Tobias")
+            .developer_name("The Aardvark Developers")
             .version(VERSION)
             .developers(vec!["Tobias"])
             // Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
