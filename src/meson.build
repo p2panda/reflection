@@ -1,6 +1,7 @@
 gnome = import('gnome')
 
-gresource = gnome.compile_resources('aardvark',
+# Compile resources for both build system and runtime
+resource_file = gnome.compile_resources('aardvark',
   'aardvark.gresource.xml',
   source_dir: meson.current_source_dir(),
   c_name: 'aardvark',
@@ -8,20 +9,6 @@ gresource = gnome.compile_resources('aardvark',
   export: true,
   gresource_bundle: true,
   install: false,
-)
-
-# Ensure resource file is available for Cargo build
-resource_file = custom_target('resource-file',
-  input: 'aardvark.gresource.xml',
-  output: 'aardvark.gresource',
-  command: [
-    find_program('glib-compile-resources'),
-    '--sourcedir=@CURRENT_SOURCE_DIR@',
-    '--target=@OUTPUT@',
-    '@INPUT@'
-  ],
-  install: false,
-  build_by_default: true
 )
 
 conf = configuration_data()
