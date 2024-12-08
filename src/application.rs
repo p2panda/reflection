@@ -128,9 +128,11 @@ mod imp {
                     glib::spawn_future_local(async move {
                         while let Some(msg) = rx.recv().await {
                             println!("got {:?}", msg);
-                            let mut doc = app.imp().automerge.borrow_mut();
-                            doc.load_incremental(&msg).unwrap();
-                            let text = doc.text(&app.imp().root).unwrap();
+                            let text = {
+                                let mut doc = app.imp().automerge.borrow_mut();
+                                doc.load_incremental(&msg).unwrap();
+                                doc.text(&app.imp().root).unwrap()
+                            };
                             w.set_text(&text);
                         }
                     });
