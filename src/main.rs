@@ -38,8 +38,8 @@ fn main() -> glib::ExitCode {
         .expect("Unable to set the text domain encoding");
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
-    // Load resources
-    let resources = gio::Resource::load(PKGDATADIR.to_owned() + "/aardvark.gresource")
+    // Load compiled resources
+    let resources = gio::Resource::load_from_data(&include_bytes!(concat!(env!("OUT_DIR"), "/aardvark.gresource"))[..])
         .expect("Could not load resources");
     gio::resources_register(&resources);
 
