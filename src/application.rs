@@ -60,6 +60,7 @@ mod imp {
             };
 
             let current_text = doc.text(&root).unwrap();
+            println!("CMP '{}' == '{}'", current_text, text);
             if text == current_text {
                 return;
             }
@@ -153,6 +154,8 @@ mod imp {
                                 doc_local.text(&root).unwrap()
                             };
                             dbg!(&text);
+
+                            println!("SET_TEXT = '{}'", text);
                             w.set_text(&text);
                         }
                     });

@@ -99,6 +99,7 @@ pub fn run() -> Result<(
             let document_id = TextDocument(Hash::new(b"my first doc <3").into());
 
             let private_key = PrivateKey::new();
+            println!("my public key: {}", private_key.public_key());
 
             let mut operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
             let documents_store = TextDocumentStore::new();
