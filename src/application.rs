@@ -32,7 +32,7 @@ use automerge::transaction::Transactable;
 use automerge::ObjType;
 use std::cell::RefCell;
 use automerge::ObjId;
-
+use std::sync::mpsc::{Receiver, Sender};
 mod imp {
     use super::*;
 
@@ -40,11 +40,17 @@ mod imp {
     pub struct AardvarkApplication {
         automerge: RefCell<AutoCommit>,
         root: ObjId,
+        tx: Sender<Vec<u8>>,
+        rx: Receiver<Vec<u8>>,
     }
 
     impl AardvarkApplication {
         fn update_text(&self, text: &str) {
             println!("app: {}", text);
+            let ret = self.tx.send(text.as_bytes().to_vec());
+            if ret.is_err() {
+                println!("error sending message to network: {:?}", ret.err().unwrap().to_string());
+            }
             let mut doc = self.automerge.borrow_mut();
             doc.update_text(&self.root, text).unwrap();
         }
@@ -60,9 +66,14 @@ mod imp {
             let mut am = AutoCommit::new();
             let root = am.put_object(automerge::ROOT, "root", ObjType::Text).unwrap();
             let automerge = RefCell::new(am);
+
+            let (tx, rx) = network::run().expect("running p2p backend");
+
             AardvarkApplication {
                 automerge,
                 root,
+                tx: tx,
+                rx: rx,
             }
         }
     }
@@ -96,8 +107,6 @@ mod imp {
                 );
                 window.upcast()
             });
-
-            network::run().expect("running p2p backend");
 
             // Ask the window manager/compositor to present the window
             window.present();
