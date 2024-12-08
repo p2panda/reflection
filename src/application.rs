@@ -52,10 +52,13 @@ mod imp {
         fn update_text(&self, text: &str) {
             println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
+            let current_text = doc.text(&self.root).unwrap();
+            if text == current_text { return; }
+
             doc.update_text(&self.root, text).unwrap();
 
             {
-                let bytes = doc.save();
+                let bytes = doc.save_incremental();
                 let tx = self.tx.clone();
                 glib::spawn_future_local(async move {
                     if let Err(e) = tx.send(bytes).await {
@@ -127,12 +130,13 @@ mod imp {
                     let app = application.clone();
                     glib::spawn_future_local(async move {
                         while let Some(msg) = rx.recv().await {
-                            println!("got {:?}", msg);
+                            //println!("got {:?}", msg);
                             let text = {
                                 let mut doc = app.imp().automerge.borrow_mut();
                                 doc.load_incremental(&msg).unwrap();
                                 doc.text(&app.imp().root).unwrap()
                             };
+                            dbg!(&text);
                             w.set_text(&text);
                         }
                     });
