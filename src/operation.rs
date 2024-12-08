@@ -19,7 +19,7 @@ impl Extension<PruneFlag> for AardvarkExtensions {
     }
 }
 
-pub fn encode_payload<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>
+pub fn encode_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>
 where
     E: Clone + Serialize,
 {
@@ -29,7 +29,7 @@ where
     Ok(bytes)
 }
 
-pub fn decode_payload<E>(bytes: &[u8]) -> Result<(Header<E>, Option<Body>)>
+pub fn decode_operation<E>(bytes: &[u8]) -> Result<(Header<E>, Option<Body>)>
 where
     E: DeserializeOwned,
 {

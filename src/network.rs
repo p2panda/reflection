@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::operation::{create_operation, AardvarkExtensions};
+use crate::operation::{create_operation, encode_operation, AardvarkExtensions};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
 pub struct TextDocument([u8; 32]);
@@ -146,12 +146,11 @@ pub fn run() -> Result<(
                     .await
                     .expect("can create and persist operation");
 
-                    // 1) encode operation
-                    // 2) persist operation
-                    // 3) forward operation to the network
+                    let encoded_operation =
+                        encode_operation(header, body).expect("encodes operation");
 
                     topic_tx
-                        .send(ToNetwork::Message { bytes })
+                        .send(ToNetwork::Message { bytes: encoded_operation })
                         .await
                         .expect("can send on channel");
                 }
