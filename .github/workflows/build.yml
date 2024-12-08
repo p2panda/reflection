@@ -311,17 +311,26 @@ jobs:
       - name: Install Rust in MSYS2
         shell: msys2 {0}
         run: |
+          # Install Rust and cargo
           pacman -S --noconfirm mingw-w64-ucrt-x86_64-rust
-          # Verify rust installation
+          # Update PATH to include MSYS2 rust location
+          export PATH="/ucrt64/bin:$PATH"
+          # Initialize Rust environment
+          source /ucrt64/bin/cargo-env
+          # Verify installation
+          which rustc
+          which cargo
           rustc --version
           cargo --version
 
       - name: Build
         shell: msys2 {0}
         run: |
-          # Ensure we're using MSYS2's cargo
+          # Set up environment
           export PATH="/ucrt64/bin:$PATH"
-          cargo build --release
+          source /ucrt64/bin/cargo-env
+          # Build with verbose output for debugging
+          cargo build --release -vv
       - name: Package
         run: |
           mkdir aardvark-${{ matrix.arch }}
