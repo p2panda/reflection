@@ -92,6 +92,8 @@ impl AardvarkWindow {
     pub fn set_text(&self, text: &str) {
         let window = self.imp();
         let buffer = window.text_view.buffer();
+        let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
+        if text == s { println!("bailing out on superfluous set_text"); return; }
         buffer.set_text(text);
     }
 }
