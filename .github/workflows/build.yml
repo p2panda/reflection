@@ -219,46 +219,35 @@ jobs:
           G_MESSAGES_DEBUG: "all"
         run: ./Aardvark.app/Contents/MacOS/aardvark
 
-  windows:
+  windows-x64:
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
 
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           channel: stable
-          targets: ${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}
+          targets: x86_64-pc-windows-msvc
           cache: true
           cache-target: debug
-
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
           update: true
-          install: mingw-w64-ucrt-${{ matrix.arch }}-toolchain mingw-w64-ucrt-${{ matrix.arch }}-gtk4 pkg-config
-
+          install: mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-gtk4 pkg-config
       - name: Build
         shell: msys2 {0}
         run: |
           export PATH="/ucrt64/bin:$PATH"
           cargo build --release
-
       - name: Package
         run: |
-          mkdir aardvark-${{ matrix.arch }}
-          cp target/${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}/release/aardvark.exe aardvark-${{ matrix.arch }}/
-
+          mkdir aardvark-x64
+          cp target/x86_64-pc-windows-msvc/release/aardvark.exe aardvark-x64/
       - name: Create ZIP
-        run: Compress-Archive -Path aardvark-${{ matrix.arch }} -DestinationPath aardvark-windows-${{ matrix.arch }}.zip
-
+        run: Compress-Archive -Path aardvark-x64 -DestinationPath aardvark-windows-x64.zip
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: aardvark-windows-${{ matrix.arch }}
-          path: aardvark-windows-${{ matrix.arch }}.zip
+          name: aardvark-windows-x64
+          path: aardvark-windows-x64.zip
