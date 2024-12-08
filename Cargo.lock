@@ -20,6 +20,7 @@ dependencies = [
  "p2panda-stream",
  "p2panda-sync",
  "serde",
+ "serde_json",
  "tokio",
  "tokio-stream",
 ]

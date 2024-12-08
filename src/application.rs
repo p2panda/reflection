@@ -57,6 +57,7 @@ mod imp {
                 return;
             }
 
+            println!("UPDATING");
             doc.update_text(&self.root, text).unwrap();
 
             {
@@ -132,11 +133,15 @@ mod imp {
                     let app = application.clone();
                     glib::spawn_future_local(async move {
                         while let Some(bytes) = rx.recv().await {
-                            //println!("got {:?}", msg);
+                            println!("got {:?}", bytes);
                             let text = {
                                 let mut doc_remote = AutoCommit::load(&bytes).unwrap();
+                                println!("REMOTE:");
+                                print_document(&doc_remote);
                                 let mut doc_local = app.imp().automerge.borrow_mut();
                                 doc_local.merge(&mut doc_remote).unwrap();
+                                println!("LOCAL:");
+                                print_document(&*doc_local);
                                 doc_local.text(&app.imp().root).unwrap()
                             };
                             dbg!(&text);
@@ -196,4 +201,12 @@ impl AardvarkApplication {
 
         about.present(Some(&window));
     }
+}
+
+fn print_document<R>(doc: &R)
+where
+    R: ReadDoc,
+{
+    let serialized = serde_json::to_string_pretty(&automerge::AutoSerde::from(doc)).unwrap();
+    println!("{serialized}");
 }
