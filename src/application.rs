@@ -24,7 +24,7 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use automerge::transaction::Transactable;
 use automerge::ReadDoc;
-use automerge::{AutoCommit, ObjId, ObjType};
+use automerge::{AutoCommit, ObjType};
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::{mpsc, oneshot};
@@ -55,7 +55,7 @@ mod imp {
             let root = match doc.get(automerge::ROOT, "root").expect("root exists") {
                 Some(root) => root.1,
                 None => doc
-                    .put_object(automerge::ROOT, "root", ObjType::Map)
+                    .put_object(automerge::ROOT, "root", ObjType::Text)
                     .expect("inserting map at root"),
             };
 
@@ -68,7 +68,7 @@ mod imp {
             doc.update_text(&root, text).unwrap();
 
             {
-                let bytes = doc.save();
+                let bytes = doc.save_incremental();
                 let tx = self.tx.clone();
                 glib::spawn_future_local(async move {
                     if let Err(e) = tx.send(bytes).await {
@@ -136,11 +136,8 @@ mod imp {
                         while let Some(bytes) = rx.recv().await {
                             println!("got {:?}", bytes);
                             let text = {
-                                let mut doc_remote = AutoCommit::load(&bytes).unwrap();
-                                println!("REMOTE:");
-                                print_document(&doc_remote);
                                 let mut doc_local = app.imp().automerge.borrow_mut();
-                                doc_local.merge(&mut doc_remote).unwrap();
+                                doc_local.load_incremental(&bytes).unwrap();
                                 println!("LOCAL:");
                                 print_document(&*doc_local);
 
@@ -150,7 +147,7 @@ mod imp {
                                 {
                                     Some(root) => root.1,
                                     None => doc_local
-                                        .put_object(automerge::ROOT, "root", ObjType::Map)
+                                        .put_object(automerge::ROOT, "root", ObjType::Text)
                                         .expect("inserting map at root"),
                                 };
                                 doc_local.text(&root).unwrap()
