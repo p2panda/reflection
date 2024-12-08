@@ -227,6 +227,9 @@ jobs:
       - name: Install GTK4 and dependencies
         run: . .\.github\workflows\install_vcpkg.ps1
         shell: pwsh
+        env:
+          VCPKG_DISABLE_METRICS: 1
+        if: ${{ success() }}
 
       - name: Configure pkg-config paths
         run: |

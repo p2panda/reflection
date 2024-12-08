@@ -12,11 +12,21 @@ if (Test-Path $pkgConfigPath) {
     exit 1
 }
 
-# Install other dependencies
-vcpkg install gobject-2.0:$env:VCPKG_TRIPLET
-vcpkg install glib:$env:VCPKG_TRIPLET
-vcpkg install gtk4:$env:VCPKG_TRIPLET
-vcpkg install libadwaita:$env:VCPKG_TRIPLET
+# Install dependencies with error checking
+$packages = @(
+    "glib",
+    "gtk4",
+    "libadwaita"
+)
+
+foreach ($package in $packages) {
+    Write-Host "Installing $package..."
+    vcpkg install "$package`:$env:VCPKG_TRIPLET"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Error: Failed to install $package"
+        exit 1
+    }
+}
 
 # Create pkg-config wrapper script to handle Windows paths
 $wrapperContent = @"
