@@ -108,7 +108,7 @@ pub fn run() -> Result<(
             let sync = LogSyncProtocol::new(documents_store.clone(), operations_store.clone());
             let sync_config = SyncConfiguration::<TextDocument>::new(sync);
 
-            let mut network = NetworkBuilder::new(*network_id.as_bytes())
+            let mut network = NetworkBuilder::new(network_id.into())
                 .sync(sync_config)
                 .private_key(private_key.clone())
                 .discovery(LocalDiscovery::new().unwrap())
@@ -136,7 +136,13 @@ pub fn run() -> Result<(
                     FromNetwork::GossipMessage {
                         bytes,
                         delivered_from,
-                    } => decode_gossip_message(&bytes).ok(),
+                    } => match decode_gossip_message(&bytes) {
+                        Ok(result) => Some(result),
+                        Err(err) => {
+                            eprintln!("could not decode gossip message: {err}");
+                            None
+                        }
+                    },
                     FromNetwork::SyncMessage {
                         header,
                         payload,
