@@ -26,7 +26,7 @@ mod window;
 use self::application::AardvarkApplication;
 use self::window::AardvarkWindow;
 
-use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
+use config::{GETTEXT_PACKAGE, LOCALEDIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::{gio, glib};
 use gtk::prelude::*;
@@ -39,7 +39,9 @@ fn main() -> glib::ExitCode {
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
     // Load compiled resources
-    let resources = gio::Resource::load_from_data(&include_bytes!(concat!(env!("OUT_DIR"), "/aardvark.gresource"))[..])
+    let resource_bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/src/aardvark.gresource"))
+        .expect("Could not load resources");
+    let resources = gio::Resource::from_data(&gio::glib::Bytes::from(&resource_bytes))
         .expect("Could not load resources");
     gio::resources_register(&resources);
 
