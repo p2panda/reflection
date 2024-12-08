@@ -153,8 +153,9 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
       - name: Create App Bundle
         run: |
-          mkdir -p Aardvark.app/Contents/MacOS
+          mkdir -p Aardvark.app/Contents/{MacOS,Resources}
           cp target/${{ matrix.target }}/release/aardvark Aardvark.app/Contents/MacOS/
+          cp target/${{ matrix.target }}/release/aardvark.gresource Aardvark.app/Contents/Resources/
 
       # Bundle dependencies
       - name: Bundle dependencies
