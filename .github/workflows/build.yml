@@ -220,128 +220,43 @@ jobs:
         run: ./Aardvark.app/Contents/MacOS/aardvark
 
   windows:
-    name: "Windows"
     runs-on: windows-latest
-    # Only build for x64 since GTK4 is not available for Windows ARM64 yet
     strategy:
       fail-fast: false
       matrix:
-        arch: [x64]
+        arch: [x64, arm64]
+
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Install target
-        if: matrix.arch == 'arm64'
-        run: rustup target add aarch64-pc-windows-msvc
-      - name: Setup Windows build variables
-        run: |
-          $arch = "${{ matrix.arch }}"
-          $triplet = if ($arch -eq "x64") { "x64-windows" } else { "arm64-windows" }
-          echo "VCPKG_TRIPLET=$triplet" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        shell: pwsh
-
-      # Cache vcpkg packages
-      - name: Cache vcpkg
-        uses: actions/cache@v4
         with:
-          path: |
-            C:\vcpkg\installed
-            C:\vcpkg\packages
-          key: vcpkg-${{ matrix.arch }}-${{ hashFiles('**/vcpkg.json', '.github/workflows/install_vcpkg.ps1') }}
-          restore-keys: |
-            vcpkg-${{ matrix.arch }}-
+          channel: stable
+          targets: ${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}
+          cache: true
+          cache-target: debug
 
-      - name: Install GTK4 and dependencies
-        run: . .\.github\workflows\install_vcpkg.ps1
-        shell: pwsh
-        env:
-          VCPKG_DISABLE_METRICS: 1
-
-      - name: Configure pkg-config paths
-        run: |
-          $installPrefix = "$env:VCPKG_ROOT\installed\$env:VCPKG_TRIPLET"
-
-          $env:PKG_CONFIG = "$installPrefix\tools\pkgconf\pkg-config.bat"
-          # Use forward slashes and ensure the correct directory
-          $pkgConfigDir = "$installPrefix/lib/pkgconfig"
-          $pkgConfigDir = $pkgConfigDir -replace "\\","/"
-
-          $env:PKG_CONFIG_PATH = $pkgConfigDir
-          $env:PKG_CONFIG_LIBDIR = $pkgConfigDir
-          $env:PKG_CONFIG_ALLOW_CROSS = "1"
-          $env:PKG_CONFIG_ALLOW_SYSTEM_CFLAGS = "1"
-          $env:PKG_CONFIG_ALLOW_SYSTEM_LIBS = "1"
-          $env:GTK_INSTALL_PREFIX = "$installPrefix"
-          $env:GTK_LIBDIR = "$installPrefix\lib"
-          $env:GTK_INCLUDEDIR = "$installPrefix\include"
-
-          echo "PKG_CONFIG=$env:PKG_CONFIG" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "PKG_CONFIG_PATH=$env:PKG_CONFIG_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "PKG_CONFIG_LIBDIR=$env:PKG_CONFIG_LIBDIR" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "PKG_CONFIG_ALLOW_CROSS=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "PKG_CONFIG_ALLOW_SYSTEM_LIBS=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "GTK_INSTALL_PREFIX=$env:GTK_INSTALL_PREFIX" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "GTK_LIBDIR=$env:GTK_LIBDIR" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "GTK_INCLUDEDIR=$env:GTK_INCLUDEDIR" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-          $env:Path = "$installPrefix/bin;$installPrefix/tools/pkgconf;$env:Path"
-          "$installPrefix/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          "$installPrefix/tools/pkgconf" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        shell: pwsh
-
-      - name: Verify pkg-config setup
-        run: |
-          Write-Host "Verifying pkg-config installation..."
-          pkg-config --version
-          Write-Host "Checking library configurations..."
-          pkg-config --debug --print-errors --cflags --libs glib-2.0
-          pkg-config --debug --print-errors --cflags --libs gtk4 libadwaita-1
-        shell: pwsh
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
           update: true
-          install: mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-gtk4 pkg-config
-      - name: Install dependencies
-        shell: msys2 {0}
-        run: |
-          pacman -S --noconfirm mingw-w64-ucrt-x86_64-gtk4
-          echo "PKG_CONFIG_PATH=/ucrt64/lib/pkgconfig" >> $GITHUB_ENV
-          echo "PKG_CONFIG_LIBDIR=/ucrt64/lib/pkgconfig" >> $GITHUB_ENV
-      - name: Install Rust in MSYS2
-        shell: msys2 {0}
-        run: |
-          # Install Rust and cargo
-          pacman -S --noconfirm mingw-w64-ucrt-x86_64-rust
-          # Update PATH to include MSYS2 rust location
-          export PATH="/ucrt64/bin:$PATH"
-          # Initialize Rust environment
-          source /ucrt64/bin/cargo-env
-          # Verify installation
-          which rustc
-          which cargo
-          rustc --version
-          cargo --version
+          install: mingw-w64-ucrt-${{ matrix.arch }}-toolchain mingw-w64-ucrt-${{ matrix.arch }}-gtk4 pkg-config
 
       - name: Build
         shell: msys2 {0}
         run: |
-          # Set up environment
           export PATH="/ucrt64/bin:$PATH"
-          source /ucrt64/bin/cargo-env
-          # Build with verbose output for debugging
-          cargo build --release -vv
+          cargo build --release
+
       - name: Package
         run: |
           mkdir aardvark-${{ matrix.arch }}
-          copy target/${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}/release/aardvark.exe aardvark-${{ matrix.arch }}/
-          # Add any additional DLLs or resources here
+          cp target/${{ matrix.arch == 'x64' && 'x86_64-pc-windows-msvc' || 'aarch64-pc-windows-msvc' }}/release/aardvark.exe aardvark-${{ matrix.arch }}/
+
       - name: Create ZIP
         run: Compress-Archive -Path aardvark-${{ matrix.arch }} -DestinationPath aardvark-windows-${{ matrix.arch }}.zip
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
