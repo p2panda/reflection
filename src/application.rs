@@ -33,7 +33,6 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::config::VERSION;
 use crate::glib::closure_local;
-use crate::glib::closure_local;
 use crate::network;
 use crate::AardvarkWindow;
 
