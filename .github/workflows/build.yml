@@ -151,6 +151,19 @@ jobs:
           PKG_CONFIG_SYSROOT_DIR: ""
           PKG_CONFIG_PATH: "${{ env.PKG_CONFIG_PATH }}"
         run: cargo build --release --target ${{ matrix.target }}
+      - name: Install glib-compile-resources
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install glib || echo ERROR
+
+      - name: Install glib-compile-resources ARM64
+        if: matrix.arch == 'arm64'
+        run: brew install glib || echo ERROR
+
+      - name: Compile GResource
+        run: |
+          mkdir -p target/${{ matrix.target }}/release/
+          glib-compile-resources --sourcedir src --target target/${{ matrix.target }}/release/aardvark.gresource src/aardvark.gresource.xml
+
       - name: Create App Bundle
         run: |
           mkdir -p Aardvark.app/Contents/{MacOS,Resources}
