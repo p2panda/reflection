@@ -168,33 +168,38 @@ pub fn run() -> Result<(
 
                 // Process the operations and forward application messages to app layer.
                 while let Some(message) = stream.next().await {
-                    let operation = message.expect("stream message is ok");
+                    match message {
+                        Ok(operation) => {
+                            // When we discover a new author we need to add them to our "document store".
+                            {
+                                let mut write_lock = documents_store.write();
+                                write_lock
+                                    .authors
+                                    .entry(operation.header.public_key)
+                                    .and_modify(|documents| {
+                                        if !documents.contains(&document_id_clone) {
+                                            documents.push(document_id_clone.clone());
+                                        }
+                                    })
+                                    .or_insert(vec![document_id_clone.clone()]);
+                            };
 
-                    // When we discover a new author we need to add them to our "document store".
-                    {
-                        let mut write_lock = documents_store.write();
-                        write_lock
-                            .authors
-                            .entry(operation.header.public_key)
-                            .and_modify(|documents| {
-                                if !documents.contains(&document_id_clone) {
-                                    documents.push(document_id_clone.clone());
-                                }
-                            })
-                            .or_insert(vec![document_id_clone.clone()]);
-                    };
+                            println!("received {:?}", operation);
 
-                    println!("received {:?}", operation);
-
-                    // Forward the payload up to the app.
-                    to_app
-                        .send(
-                            operation
-                                .body
-                                .expect("all operations have a body")
-                                .to_bytes(),
-                        )
-                        .await?;
+                            // Forward the payload up to the app.
+                            to_app
+                                .send(
+                                    operation
+                                        .body
+                                        .expect("all operations have a body")
+                                        .to_bytes(),
+                                )
+                                .await?;
+                        }
+                        Err(err) => {
+                            eprintln!("could not ingest message: {err}");
+                        }
+                    }
                 }
 
                 println!("stream ended");
