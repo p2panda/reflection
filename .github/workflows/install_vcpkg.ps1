@@ -33,12 +33,16 @@ $wrapperContent = @"
 #!/usr/bin/env pwsh
 `$env:PKG_CONFIG_PATH = `$env:PKG_CONFIG_PATH -replace ';',':'
 `$env:PKG_CONFIG_LIBDIR = `$env:PKG_CONFIG_LIBDIR -replace ';',':'
+`$env:PKG_CONFIG_PATH = "`$env:VCPKG_ROOT\installed\`$env:VCPKG_TRIPLET\lib\pkgconfig"
+`$env:PKG_CONFIG_LIBDIR = "`$env:VCPKG_ROOT\installed\`$env:VCPKG_TRIPLET\lib\pkgconfig"
 & '$pkgConfigPath' @args
 "@
 
 $batchContent = @"
 @echo off
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ""%~dp0pkg-config.ps1"" %*
+set PKG_CONFIG_PATH=%VCPKG_ROOT%\installed\%VCPKG_TRIPLET%\lib\pkgconfig
+set PKG_CONFIG_LIBDIR=%VCPKG_ROOT%\installed\%VCPKG_TRIPLET%\lib\pkgconfig
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0pkg-config.ps1" %*
 "@
 
 $wrapperPath = "$env:VCPKG_ROOT\installed\$env:VCPKG_TRIPLET\tools\pkgconf\pkg-config.ps1"
