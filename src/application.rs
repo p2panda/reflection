@@ -49,10 +49,13 @@ mod imp {
             println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
             doc.update_text(&self.root, text).unwrap();
-            let ret = self.tx.blocking_send(doc.save());
-            if ret.is_err() {
-                println!("error sending message to network: {:?}", ret.err().unwrap().to_string());
-            }
+            let data = doc.save();
+            let tx = self.tx.clone();
+            glib::spawn_future_local(async move {
+                if let Err(e) = tx.send(data).await {
+                    println!("error sending message to network: {:?}", e.to_string());
+                }
+            });
         }
     }
 
