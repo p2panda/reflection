@@ -21,6 +21,7 @@ dependencies = [
  "p2panda-sync",
  "serde",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
