@@ -78,18 +78,23 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
     }
 }
 
-pub fn run() -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
+pub fn run() -> Result<(
+    oneshot::Sender<()>,
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+)> {
     let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
     let (to_app, from_network) = mpsc::channel(512);
+
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let _rt_handle: JoinHandle<Result<()>> = std::thread::spawn(|| {
+    std::thread::spawn(move || {
         let runtime = Builder::new_current_thread()
             .enable_all()
             .build()
             .expect("backend runtime ready to spawn tasks");
 
-        runtime.block_on(async {
+        runtime.block_on(async move {
             let network_id = Hash::new(b"aardvark <3");
             let private_key = PrivateKey::new();
 
@@ -102,12 +107,13 @@ pub fn run() -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
             let mut network = NetworkBuilder::new(*network_id.as_bytes())
                 .sync(sync_config)
                 .private_key(private_key)
-                .discovery(LocalDiscovery::new()?)
+                .discovery(LocalDiscovery::new().unwrap())
                 .build()
-                .await?;
+                .await
+                .unwrap();
 
             let test_document = TextDocument(Hash::new(b"my first doc <3").into());
-            let (topic_tx, mut topic_rx, ready) = network.subscribe(test_document).await?;
+            let (topic_tx, mut topic_rx, ready) = network.subscribe(test_document).await.unwrap();
 
             tokio::task::spawn(async move {
                 while let Some(message) = topic_rx.recv().await {
@@ -146,11 +152,9 @@ pub fn run() -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
                 }
             });
 
-            shutdown_rx.await?;
-
-            Ok(())
-        })
+            shutdown_rx.await.unwrap();
+        });
     });
 
-    Ok((to_network, from_network))
+    Ok((shutdown_tx, to_network, from_network))
 }
