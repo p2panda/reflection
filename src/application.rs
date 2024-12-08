@@ -49,8 +49,17 @@ mod imp {
 
     impl AardvarkApplication {
         fn update_text(&self, text: &str) {
-            println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
+            let current_text = doc.text(&root).unwrap();
+            println!("CMP '{}' == '{}'", current_text, text);
+
+            if text == "" {
+                return;
+            }
+
+            if text == current_text {
+                return;
+            }
 
             let root = match doc.get(automerge::ROOT, "root").expect("root exists") {
                 Some(root) => root.1,
@@ -58,16 +67,8 @@ mod imp {
                     .put_object(automerge::ROOT, "root", ObjType::Text)
                     .expect("inserting map at root"),
             };
-
             println!("root = {}", root);
 
-            let current_text = doc.text(&root).unwrap();
-            println!("CMP '{}' == '{}'", current_text, text);
-            if text == current_text {
-                return;
-            }
-
-            println!("UPDATING");
             doc.update_text(&root, text).unwrap();
 
             {
