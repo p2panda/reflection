@@ -106,6 +106,14 @@ jobs:
         if: matrix.arch == 'x86_64'
         run: arch -x86_64 /usr/local/bin/brew install -v libadwaita
 
+      - name: Install dylibbundler (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install -v dylibbundler
+
+      - name: Install dylibbundler ARM64
+        if: matrix.arch == 'arm64'
+        run: brew install -v dylibbundler
+
       - name: Verify and link x86_64 packages
         if: matrix.arch == 'x86_64'
         run: |
