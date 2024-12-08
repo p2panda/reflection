@@ -6,6 +6,9 @@
     <property name="title" translatable="yes">Aardvark</property>
     <property name="default-width">800</property>
     <property name="default-height">600</property>
+    <style>
+      <class name="view" />
+    </style>
     <property name="content">
       <object class="AdwToolbarView">
         <child type="top">
@@ -69,6 +72,10 @@
         </child>
         <child>
           <object class="GtkLabel">
+            <property name="wrap">True</property>
+            <property name="justify">GTK_JUSTIFY_CENTER</property>
+            <property name="max-width-chars">30</property>
+            <property name="natural-wrap-mode">GTK_NATURAL_WRAP_WORD</property>
             <property name="label" translatable="true">Give others access to this document by sharing this invite code with them:</property>
           </object>
         </child>
