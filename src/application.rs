@@ -40,6 +40,8 @@ mod imp {
     pub struct AardvarkApplication {
         automerge: RefCell<AutoCommit>,
         root: ObjId,
+        tx: Sender<Vec<u8>>,
+        rx: Receiver<Vec<u8>>,
     }
 
     impl AardvarkApplication {
@@ -47,6 +49,8 @@ mod imp {
             println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
             doc.update_text(&self.root, text).unwrap();
+            tx.send(doc.save())
+
         }
     }
 
@@ -60,9 +64,12 @@ mod imp {
             let mut am = AutoCommit::new();
             let root = am.put_object(automerge::ROOT, "root", ObjType::Text).unwrap();
             let automerge = RefCell::new(am);
+            let (tx, rx) = network::run().expect("running p2p backend");
             AardvarkApplication {
                 automerge,
                 root,
+                tx,
+                rx,
             }
         }
     }
@@ -96,8 +103,6 @@ mod imp {
                 );
                 window.upcast()
             });
-
-            network::run().expect("running p2p backend");
 
             // Ask the window manager/compositor to present the window
             window.present();
