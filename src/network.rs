@@ -13,7 +13,7 @@ use p2panda_sync::log_sync::LogSyncProtocol;
 use p2panda_sync::{TopicMap, TopicQuery};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
 struct TextDocument([u8; 32]);
@@ -81,6 +81,7 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
 pub fn run() -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
     let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
     let (to_app, from_network) = mpsc::channel(512);
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     let _rt_handle: JoinHandle<Result<()>> = std::thread::spawn(|| {
         let runtime = Builder::new_current_thread()
@@ -144,6 +145,8 @@ pub fn run() -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
                     topic_tx.send(ToNetwork::Message { bytes }).await;
                 }
             });
+
+            shutdown_rx.await?;
 
             Ok(())
         })
