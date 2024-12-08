@@ -170,6 +170,8 @@ jobs:
         with:
           name: aardvark-macos-${{ matrix.arch }}
           path: aardvark-${{ matrix.arch }}.dmg
+      - name: Smoke test the artifact
+        run: ./Aardvark.app/Contents/MacOS/aardvark
 
   windows:
     name: "Windows"
