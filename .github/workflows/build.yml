@@ -297,12 +297,22 @@ jobs:
           pkg-config --debug --print-errors --cflags --libs glib-2.0
           pkg-config --debug --print-errors --cflags --libs gtk4 libadwaita-1
         shell: pwsh
-      - name: Build
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-gtk4 pkg-config
+
+      - name: Install dependencies
+        shell: msys2 {0}
         run: |
-          $arch = "${{ matrix.arch }}"
-          $target = if ($arch -eq "x64") { "x86_64-pc-windows-msvc" } else { "aarch64-pc-windows-msvc" }
-          cargo build --release --target $target
-        shell: pwsh
+          pacman -S --noconfirm mingw-w64-ucrt-x86_64-gtk4
+          echo "PKG_CONFIG_PATH=/ucrt64/lib/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_LIBDIR=/ucrt64/lib/pkgconfig" >> $GITHUB_ENV
+      - name: Build
+        shell: msys2 {0}
+        run: cargo build --release
       - name: Package
         run: |
           mkdir aardvark-${{ matrix.arch }}
