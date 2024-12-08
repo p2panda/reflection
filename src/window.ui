@@ -18,45 +18,114 @@
             <property name="title" translatable="true">Aardvark</property>
             <child>
 
-              <object class="AdwToolbarView">
-                <child type="top">
-                  <object class="AdwHeaderBar">
-                    <child type="end">
-                      <object class="GtkMenuButton">
-                        <property name="primary">True</property>
-                        <property name="icon-name">open-menu-symbolic</property>
-                        <property name="tooltip-text" translatable="yes">Main Menu</property>
-                        <property name="menu-model">primary_menu</property>
-                      </object>
-                    </child>
+              <object class="GtkStack" id="home_stack">
 
-                  </object>
-                </child>
-                <property name="content">
+                <child>
+                  <object class="GtkStackPage" id="stack_page_welcome">
+                    <property name="title" translatable="true">Page 1</property>
+                    <property name="child">
 
-                  <object class="AdwStatusPage">
-                    <property name="icon-name">document-edit-symbolic</property>
-                    <property name="title" translatable="true">Write Collaboratively</property>
-
-                    <child>
-                      <object class="GtkBox">
-                        <property name="halign">center</property>
-                        <property name="margin-top">6</property>
-
-                        <child>
-                          <object class="GtkButton" id="open_document_button">
-                            <property name="label" translatable="true">Open Document</property>
-                            <style>
-                              <class name="pill" />
-                            </style>
+                      <object class="AdwToolbarView">
+                        <child type="top">
+                          <object class="AdwHeaderBar">
+                            <child type="end">
+                              <object class="GtkMenuButton">
+                                <property name="primary">True</property>
+                                <property name="icon-name">open-menu-symbolic</property>
+                                <property name="tooltip-text" translatable="yes">Main Menu</property>
+                                <property name="menu-model">primary_menu</property>
+                              </object>
+                            </child>
                           </object>
                         </child>
+                        <property name="content">
+
+                          <object class="AdwStatusPage">
+                            <property name="icon-name">document-edit-symbolic</property>
+                            <property name="title" translatable="true">Write Collaboratively</property>
+
+                            <child>
+                              <object class="GtkBox">
+                                <property name="halign">center</property>
+                                <property name="margin-top">6</property>
+
+                                <child>
+                                  <object class="GtkButton" id="open_document_button">
+                                    <property name="label" translatable="true">Open Document</property>
+                                    <style>
+                                      <class name="pill" />
+                                    </style>
+                                  </object>
+
+                                  <object class="GtkButton" id="open_document_list_button">
+                                    <property name="label" translatable="true">Show Document List</property>
+                                    <style>
+                                      <class name="pill" />
+                                    </style>
+                                  </object>
+
+                                </child>
+                              </object>
+                            </child>
+
+                          </object>
+
+                        </property>
                       </object>
 
-                    </child>
+                    </property>
                   </object>
+                </child>
 
-                </property>
+                <child>
+                  <object class="GtkStackPage" id="stack_page_list">
+                    <property name="title" translatable="true">Page 2</property>
+                    <property name="child">
+
+                      <object class="AdwToolbarView">
+                        <child type="top">
+                          <object class="AdwHeaderBar">
+                            <child type="end">
+                              <object class="GtkMenuButton">
+                                <property name="primary">True</property>
+                                <property name="icon-name">open-menu-symbolic</property>
+                                <property name="tooltip-text" translatable="yes">Main Menu</property>
+                                <property name="menu-model">primary_menu</property>
+                              </object>
+                            </child>
+
+                          </object>
+                        </child>
+                        <property name="content">
+
+                          <object class="AdwStatusPage">
+                            <property name="title" translatable="true">List of Documents</property>
+
+                            <child>
+                              <object class="GtkBox">
+                                <property name="halign">center</property>
+                                <property name="margin-top">6</property>
+
+                                <child>
+                                  <object class="GtkButton" id="list_open_document_button">
+                                    <property name="label" translatable="true">Open Document</property>
+                                    <style>
+                                      <class name="pill" />
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+
+                            </child>
+                          </object>
+
+                        </property>
+                      </object>
+
+                    </property>
+                  </object>
+                </child>
+
               </object>
 
             </child>

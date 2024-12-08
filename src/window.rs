@@ -37,11 +37,22 @@ mod imp {
         #[template_child]
         pub open_document_button: TemplateChild<gtk::Button>,
         #[template_child]
+        pub list_open_document_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub open_document_list_button: TemplateChild<gtk::Button>,
+        #[template_child]
         pub nav_view: TemplateChild<adw::NavigationView>,
         #[template_child]
         pub nav_home: TemplateChild<adw::NavigationPage>,
         #[template_child]
         pub nav_document: TemplateChild<adw::NavigationPage>,
+        #[template_child]
+        pub home_stack: TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub stack_page_welcome: TemplateChild<gtk::StackPage>,
+        #[template_child]
+        pub stack_page_list: TemplateChild<gtk::StackPage>,
+
 
     }
 
@@ -72,6 +83,14 @@ mod imp {
 
             self.open_document_button.connect_clicked(clone!(#[weak(rename_to = imp)] self, move |button|{
                 imp.nav_view.push(&*imp.nav_document);
+            }));
+
+            self.list_open_document_button.connect_clicked(clone!(#[weak(rename_to = imp)] self, move |button|{
+                imp.nav_view.push(&*imp.nav_document);
+            }));
+
+            self.open_document_list_button.connect_clicked(clone!(#[weak(rename_to = imp)] self, move |button|{
+                imp.home_stack.set_visible_child(&*imp.home_stack, &*imp.stack_page_list);
             }));
         }
 
