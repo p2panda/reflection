@@ -3,6 +3,7 @@ use std::time::SystemTime;
 use anyhow::Result;
 use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::{LogStore, MemoryStore, OperationStore};
+use p2panda_stream::operation::ingest_operation;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::network::TextDocument;
@@ -11,6 +12,9 @@ use crate::network::TextDocument;
 pub struct AardvarkExtensions {
     #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
     pub prune_flag: Option<PruneFlag>,
+
+    #[serde(rename = "d", skip_serializing_if = "Option::is_none")]
+    pub document_id: Option<TextDocument>,
 }
 
 impl Extension<PruneFlag> for AardvarkExtensions {
@@ -19,7 +23,13 @@ impl Extension<PruneFlag> for AardvarkExtensions {
     }
 }
 
-pub fn encode_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>
+impl Extension<TextDocument> for AardvarkExtensions {
+    fn extract(&self) -> Option<TextDocument> {
+        self.document_id.clone()
+    }
+}
+
+pub fn encode_gossip_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>
 where
     E: Clone + Serialize,
 {
@@ -29,10 +39,7 @@ where
     Ok(bytes)
 }
 
-pub fn decode_operation<E>(bytes: &[u8]) -> Result<(Header<E>, Option<Body>)>
-where
-    E: DeserializeOwned,
-{
+pub fn decode_gossip_message(bytes: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>)> {
     let raw_operation = ciborium::from_reader(bytes)?;
     Ok(raw_operation)
 }
@@ -40,7 +47,7 @@ where
 pub async fn create_operation(
     store: &mut MemoryStore<TextDocument, AardvarkExtensions>,
     private_key: &PrivateKey,
-    log_id: TextDocument,
+    document_id: TextDocument,
     body: Option<&[u8]>,
     prune_flag: bool,
 ) -> Result<(Header<AardvarkExtensions>, Option<Body>)> {
@@ -48,7 +55,7 @@ pub async fn create_operation(
 
     let public_key = private_key.public_key();
 
-    let latest_operation = store.latest_operation(&public_key, &log_id).await?;
+    let latest_operation = store.latest_operation(&public_key, &document_id).await?;
 
     let (seq_num, backlink) = match latest_operation {
         Some((header, body)) => (header.seq_num + 1, Some(header.hash())),
@@ -61,6 +68,7 @@ pub async fn create_operation(
 
     let extensions = AardvarkExtensions {
         prune_flag: Some(PruneFlag::new(prune_flag)),
+        document_id: Some(document_id.clone()),
     };
 
     let mut header = Header {
@@ -77,13 +85,14 @@ pub async fn create_operation(
     };
     header.sign(private_key);
 
+    // @TODO: use ingest_operation from p2panada_stream.
     store
         .insert_operation(
             header.hash(),
             &header,
             body.as_ref(),
             &header.to_bytes(),
-            &log_id,
+            &document_id,
         )
         .await?;
 
@@ -93,7 +102,7 @@ pub async fn create_operation(
             "can't prune from first operation in log"
         );
         store
-            .delete_operations(&header.public_key, &log_id, header.seq_num)
+            .delete_operations(&header.public_key, &document_id, header.seq_num)
             .await?;
     }
 
