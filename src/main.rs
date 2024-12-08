@@ -39,10 +39,15 @@ fn main() -> glib::ExitCode {
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
     // Load compiled resources
-    let resource_bytes = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/src/aardvark.gresource"))
-        .expect("Could not load resources");
+    let resource_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("_build")
+        .join("src")
+        .join("aardvark.gresource");
+    
+    let resource_bytes = std::fs::read(&resource_path)
+        .unwrap_or_else(|_| panic!("Could not load resources from {:?}", resource_path));
     let resources = gio::Resource::from_data(&gio::glib::Bytes::from(&resource_bytes))
-        .expect("Could not load resources");
+        .expect("Could not create resource from data");
     gio::resources_register(&resources);
 
     // Create a new GtkApplication. The application manages our main loop,

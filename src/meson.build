@@ -10,12 +10,18 @@ gresource = gnome.compile_resources('aardvark',
   install: false,
 )
 
-# Copy the compiled resource bundle to the source directory for Cargo build
-run_command(
-  'cp',
-  meson.current_build_dir() / 'aardvark.gresource',
-  meson.current_source_dir() / 'aardvark.gresource',
-  check: true
+# Ensure resource file is available for Cargo build
+resource_file = custom_target('resource-file',
+  input: 'aardvark.gresource.xml',
+  output: 'aardvark.gresource',
+  command: [
+    find_program('glib-compile-resources'),
+    '--sourcedir=@CURRENT_SOURCE_DIR@',
+    '--target=@OUTPUT@',
+    '@INPUT@'
+  ],
+  install: false,
+  build_by_default: true
 )
 
 conf = configuration_data()
