@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 use std::thread::JoinHandle as StdJoinHandle;
@@ -121,8 +122,11 @@ pub fn run() -> Result<(
                 .await
                 .expect("can subscribe to channel");
 
+            let is_ready = Arc::new(AtomicBool::new(false));
+            let is_ready_clone = is_ready.clone();
             tokio::task::spawn(async move {
                 ready.await;
+                is_ready_clone.store(true, Ordering::Relaxed);
                 println!("network joined!");
             });
 
@@ -219,12 +223,15 @@ pub fn run() -> Result<(
                     println!("Created operation: {header:?}");
 
                     let encoded_gossip_operation = encode_gossip_operation(header, body)?;
-                    // Broadcast operation on gossip overlay.
-                    topic_tx
-                        .send(ToNetwork::Message {
-                            bytes: encoded_gossip_operation,
-                        })
-                        .await?;
+
+                    if is_ready.load(Ordering::Relaxed) {
+                        // Broadcast operation on gossip overlay.
+                        topic_tx
+                            .send(ToNetwork::Message {
+                                bytes: encoded_gossip_operation,
+                            })
+                            .await?;
+                    }
                 }
 
                 Ok(())
