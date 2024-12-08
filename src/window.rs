@@ -33,6 +33,15 @@ mod imp {
         // Template widgets
         #[template_child]
         pub text_view: TemplateChild<gtk::TextView>,
+        #[template_child]
+        pub open_document_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub nav_view: TemplateChild<adw::NavigationView>,
+        #[template_child]
+        pub nav_home: TemplateChild<adw::NavigationPage>,
+        #[template_child]
+        pub nav_document: TemplateChild<adw::NavigationPage>,
+
     }
 
     #[glib::object_subclass]
@@ -58,6 +67,10 @@ mod imp {
             buffer.connect_changed(move |buffer| {
                 let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
                 obj.emit_by_name::<()>("text-changed", &[&s.as_str()]);
+            });
+
+            self.open_document_button.connect_clicked(|button|{
+                self.nav_view.push(&self.nav_document);
             });
         }
 
