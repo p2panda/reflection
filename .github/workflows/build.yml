@@ -155,28 +155,16 @@ jobs:
         run: |
           mkdir -p Aardvark.app/Contents/MacOS
           cp target/${{ matrix.target }}/release/aardvark Aardvark.app/Contents/MacOS/
-          # Create Info.plist - you'll need to customize this
-          cat > Aardvark.app/Contents/Info.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>aardvark</string>
-              <key>CFBundleIdentifier</key>
-              <string>org.p2panda.aardvark</string>
-              <key>CFBundleName</key>
-              <string>Aardvark</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>1.0</string>
-          </dict>
-          </plist>
-          EOF
-      - name: Create DMG
+
+      # Bundle dependencies
+      - name: Bundle dependencies
         run: |
-          hdiutil create -volname "Aardvark" -srcfolder Aardvark.app -ov -format UDZO aardvark-${{ matrix.arch }}.dmg
+          dylibbundler -od -b -x Aardvark.app/Contents/MacOS/aardvark \
+            -d Aardvark.app/Contents/Frameworks/ \
+            -p @executable_path/../Frameworks/
+      # Create DMG
+      - name: Create DMG
+        run: hdiutil create -volname "Aardvark" -srcfolder Aardvark.app -ov -format UDZO aardvark-${{ matrix.arch }}.dmg
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
