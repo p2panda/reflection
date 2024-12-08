@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use anyhow::Result;
@@ -51,7 +50,7 @@ impl TextDocumentStore {
     }
 
     pub fn write(&self) -> RwLockWriteGuard<TextDocumentStoreInner> {
-        self.inner.write().expect("can get write lock")
+        self.inner.write().expect("acquire write lock")
     }
 }
 
@@ -124,15 +123,10 @@ pub fn run() -> Result<(
                 .await
                 .expect("subscribe to topic");
 
-            let is_gossip_ready = Arc::new(AtomicBool::new(false));
-            {
-                let is_gossip_ready = is_gossip_ready.clone();
-                tokio::task::spawn(async move {
-                    let _ = ready.await;
-                    is_gossip_ready.store(true, Ordering::Relaxed);
-                    println!("network joined!");
-                });
-            }
+            tokio::task::spawn(async move {
+                let _ = ready.await;
+                println!("network joined!");
+            });
 
             // Task for handling operations arriving from the network.
             let operations_store_clone = operations_store.clone();
@@ -236,13 +230,11 @@ pub fn run() -> Result<(
                     let encoded_gossip_operation = encode_gossip_operation(header, body)?;
 
                     // Broadcast operation on gossip overlay.
-                    if is_gossip_ready.load(Ordering::Relaxed) {
-                        topic_tx
-                            .send(ToNetwork::Message {
-                                bytes: encoded_gossip_operation,
-                            })
-                            .await?;
-                    }
+                    topic_tx
+                        .send(ToNetwork::Message {
+                            bytes: encoded_gossip_operation,
+                        })
+                        .await?;
                 }
 
                 Ok(())
