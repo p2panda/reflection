@@ -168,6 +168,9 @@ pub fn run() -> Result<(
                             })
                             .or_insert(vec![document_id_clone.clone()]);
                     };
+
+                    println!("received {:?}", operation);
+
                     // Forward the payload up to the app.
                     to_app
                         .send(
@@ -178,6 +181,8 @@ pub fn run() -> Result<(
                         )
                         .await?;
                 }
+
+                println!("stream ended");
 
                 Ok(())
             });
