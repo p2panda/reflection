@@ -166,9 +166,35 @@ jobs:
 
       - name: Create App Bundle
         run: |
-          mkdir -p Aardvark.app/Contents/{MacOS,Resources}
+          mkdir -p Aardvark.app/Contents/{MacOS,Resources}/share/aardvark
           cp target/${{ matrix.target }}/release/aardvark Aardvark.app/Contents/MacOS/
-          cp target/${{ matrix.target }}/release/aardvark.gresource Aardvark.app/Contents/Resources/
+          cp target/${{ matrix.target }}/release/aardvark.gresource Aardvark.app/Contents/Resources/share/aardvark/
+
+          # Create Info.plist
+          cat > Aardvark.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>aardvark</string>
+              <key>CFBundleIdentifier</key>
+              <string>org.p2panda.aardvark</string>
+              <key>CFBundleName</key>
+              <string>Aardvark</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>0.1.0</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>10.15</string>
+              <key>CFBundleSupportedPlatforms</key>
+              <array>
+                  <string>MacOSX</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
 
       # Bundle dependencies
       - name: Bundle dependencies
