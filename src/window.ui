@@ -21,11 +21,11 @@
               <object class="GtkStack" id="home_stack">
 
                 <child>
-                  <object class="GtkStackPage" id="stack_page_welcome">
+                  <object class="GtkStackPage">
                     <property name="title" translatable="true">Page 1</property>
                     <property name="child">
 
-                      <object class="AdwToolbarView">
+                      <object class="AdwToolbarView"  id="stack_page_welcome">
                         <child type="top">
                           <object class="AdwHeaderBar">
                             <child type="end">
@@ -78,11 +78,11 @@
                 </child>
 
                 <child>
-                  <object class="GtkStackPage" id="stack_page_list">
+                  <object class="GtkStackPage">
                     <property name="title" translatable="true">Page 2</property>
                     <property name="child">
 
-                      <object class="AdwToolbarView">
+                      <object class="AdwToolbarView" id="stack_page_list">
                         <child type="top">
                           <object class="AdwHeaderBar">
                             <child type="end">

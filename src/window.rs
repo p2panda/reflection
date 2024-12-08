@@ -49,9 +49,9 @@ mod imp {
         #[template_child]
         pub home_stack: TemplateChild<gtk::Stack>,
         #[template_child]
-        pub stack_page_welcome: TemplateChild<gtk::StackPage>,
+        pub stack_page_welcome: TemplateChild<adw::ToolbarView>,
         #[template_child]
-        pub stack_page_list: TemplateChild<gtk::StackPage>,
+        pub stack_page_list: TemplateChild<adw::ToolbarView>,
 
 
     }
@@ -90,7 +90,7 @@ mod imp {
             }));
 
             self.open_document_list_button.connect_clicked(clone!(#[weak(rename_to = imp)] self, move |button|{
-                imp.home_stack.set_visible_child(&*imp.home_stack, &*imp.stack_page_list);
+                imp.home_stack.set_visible_child(&*imp.stack_page_list);
             }));
         }
 
