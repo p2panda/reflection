@@ -41,7 +41,6 @@ mod imp {
     pub struct AardvarkApplication {
         window: OnceCell<AardvarkWindow>,
         automerge: RefCell<AutoCommit>,
-        root: ObjId,
         #[allow(dead_code)]
         backend_shutdown_tx: oneshot::Sender<()>,
         tx: mpsc::Sender<Vec<u8>>,
@@ -52,13 +51,21 @@ mod imp {
         fn update_text(&self, text: &str) {
             println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
-            let current_text = doc.text(&self.root).unwrap();
+
+            let root = match doc.get(automerge::ROOT, "root").expect("root exists") {
+                Some(root) => root.1,
+                None => doc
+                    .put_object(automerge::ROOT, "root", ObjType::Map)
+                    .expect("inserting map at root"),
+            };
+
+            let current_text = doc.text(&root).unwrap();
             if text == current_text {
                 return;
             }
 
             println!("UPDATING");
-            doc.update_text(&self.root, text).unwrap();
+            doc.update_text(&root, text).unwrap();
 
             {
                 let bytes = doc.save();
@@ -79,17 +86,11 @@ mod imp {
         type ParentType = adw::Application;
 
         fn new() -> Self {
-            let mut am = AutoCommit::new();
-            let root = am
-                .put_object(automerge::ROOT, "root", ObjType::Text)
-                .unwrap();
-            let automerge = RefCell::new(am);
-
+            let automerge = RefCell::new(AutoCommit::new());
             let (backend_shutdown_tx, tx, rx) = network::run().expect("running p2p backend");
 
             AardvarkApplication {
                 automerge,
-                root,
                 backend_shutdown_tx,
                 tx,
                 rx: RefCell::new(Some(rx)),
@@ -142,7 +143,17 @@ mod imp {
                                 doc_local.merge(&mut doc_remote).unwrap();
                                 println!("LOCAL:");
                                 print_document(&*doc_local);
-                                doc_local.text(&app.imp().root).unwrap()
+
+                                let root = match doc_local
+                                    .get(automerge::ROOT, "root")
+                                    .expect("root exists")
+                                {
+                                    Some(root) => root.1,
+                                    None => doc_local
+                                        .put_object(automerge::ROOT, "root", ObjType::Map)
+                                        .expect("inserting map at root"),
+                                };
+                                doc_local.text(&root).unwrap()
                             };
                             dbg!(&text);
                             w.set_text(&text);
