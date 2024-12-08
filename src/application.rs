@@ -97,7 +97,7 @@ mod imp {
                 window.upcast()
             });
 
-            glib::spawn_future_local(network::run());
+            network::run().expect("running p2p backend");
 
             // Ask the window manager/compositor to present the window
             window.present();
