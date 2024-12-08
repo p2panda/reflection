@@ -4,7 +4,7 @@ use std::thread::JoinHandle;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
+use p2panda_core::{Body, Extension, Hash, PrivateKey, PruneFlag, PublicKey};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
 use p2panda_net::{ToNetwork, TopicId};
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::operation::AardvarkExtensions;
+use crate::operation::{create_operation, AardvarkExtensions};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
 pub struct TextDocument([u8; 32]);
@@ -89,10 +89,10 @@ pub fn run() -> Result<(
             let network_id = Hash::new(b"aardvark <3");
             let private_key = PrivateKey::new();
 
-            let operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
+            let mut operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
             let documents_store = TextDocumentStore::new();
 
-            let sync = LogSyncProtocol::new(documents_store, operations_store);
+            let sync = LogSyncProtocol::new(documents_store, operations_store.clone());
             let sync_config = SyncConfiguration::<TextDocument>::new(sync);
 
             let mut network = NetworkBuilder::new(*network_id.as_bytes())
@@ -104,7 +104,7 @@ pub fn run() -> Result<(
                 .unwrap();
 
             let test_document = TextDocument(Hash::new(b"my first doc <3").into());
-            let (topic_tx, mut topic_rx, ready) = network.subscribe(test_document).await.unwrap();
+            let (topic_tx, mut topic_rx, ready) = network.subscribe(test_document.clone()).await?;
 
             tokio::task::spawn(async move {
                 while let Some(message) = topic_rx.recv().await {
@@ -135,11 +135,25 @@ pub fn run() -> Result<(
                 while let Some(bytes) = from_app.recv().await {
                     println!("New message from app");
 
+                    let prune_flag = false;
+                    let (header, body) = create_operation(
+                        &mut operations_store,
+                        &private_key,
+                        test_document.clone(),
+                        Some(&bytes),
+                        prune_flag,
+                    )
+                    .await
+                    .expect("can create and persist operation");
+
                     // 1) encode operation
                     // 2) persist operation
                     // 3) forward operation to the network
 
-                    topic_tx.send(ToNetwork::Message { bytes }).await;
+                    topic_tx
+                        .send(ToNetwork::Message { bytes })
+                        .await
+                        .expect("can send on channel");
                 }
             });
 
