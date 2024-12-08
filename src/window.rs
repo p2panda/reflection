@@ -23,6 +23,7 @@ use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 use glib::subclass::Signal;
 use std::sync::OnceLock;
+use crate::glib::clone;
 
 mod imp {
     use super::*;
@@ -69,9 +70,9 @@ mod imp {
                 obj.emit_by_name::<()>("text-changed", &[&s.as_str()]);
             });
 
-            self.open_document_button.connect_clicked(|button|{
-                self.nav_view.push(&self.nav_document);
-            });
+            self.open_document_button.connect_clicked(clone!(#[weak(rename_to = imp)] self, move |button|{
+                imp.nav_view.push(&*imp.nav_document);
+            }));
         }
 
         fn signals() -> &'static [Signal] {
