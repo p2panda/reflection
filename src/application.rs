@@ -50,7 +50,9 @@ mod imp {
             println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
             doc.update_text(&self.root, text).unwrap();
-            self.tx.send(doc.save());
+            if let Err(e) = self.tx.blocking_send(doc.save()) {
+                println!("{}", e);
+            }
         }
     }
 
