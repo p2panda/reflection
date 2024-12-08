@@ -15,7 +15,7 @@ if (Test-Path $pkgConfigPath) {
 # Install dependencies with error checking
 $packages = @(
     "glib",
-    "gtk4",
+    "gtk",
     "libadwaita"
 )
 
