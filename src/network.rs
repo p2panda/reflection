@@ -18,7 +18,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::operation::AardvarkExtensions;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
-struct TextDocument([u8; 32]);
+pub struct TextDocument([u8; 32]);
 
 impl TopicQuery for TextDocument {}
 

@@ -5,6 +5,8 @@ use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::{LogStore, MemoryStore, OperationStore};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
+use crate::network::TextDocument;
+
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AardvarkExtensions {
     #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
@@ -36,9 +38,9 @@ where
 }
 
 pub async fn create_operation(
-    store: &mut MemoryStore<u64, AardvarkExtensions>,
+    store: &mut MemoryStore<TextDocument, AardvarkExtensions>,
     private_key: &PrivateKey,
-    log_id: u64,
+    log_id: TextDocument,
     body: Option<&[u8]>,
     prune_flag: bool,
 ) -> Result<(Header<AardvarkExtensions>, Option<Body>)> {
