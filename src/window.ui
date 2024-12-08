@@ -15,7 +15,7 @@
 
         <child>
           <object class="AdwNavigationPage" id="nav_home">
-            <property name="title" translatable="true">Aardvark Document List</property>
+            <property name="title" translatable="true">Aardvark</property>
             <child>
 
               <object class="AdwToolbarView">
@@ -35,15 +35,24 @@
                 <property name="content">
 
                   <object class="AdwStatusPage">
-                    <property name="title" translatable="true">Document List</property>
+                    <property name="icon-name">document-edit-symbolic</property>
+                    <property name="title" translatable="true">Write Collaboratively</property>
 
                     <child>
-                      <object class="GtkButton" id="open_document_button">
-                        <property name="label" translatable="true">Open Document</property>
-                        <style>
-                          <class name="pill" />
-                        </style>
+                      <object class="GtkBox">
+                        <property name="halign">center</property>
+                        <property name="margin-top">6</property>
+
+                        <child>
+                          <object class="GtkButton" id="open_document_button">
+                            <property name="label" translatable="true">Open Document</property>
+                            <style>
+                              <class name="pill" />
+                            </style>
+                          </object>
+                        </child>
                       </object>
+
                     </child>
                   </object>
 
@@ -56,26 +65,41 @@
 
         <child>
           <object class="AdwNavigationPage" id="nav_document">
-            <property name="title" translatable="true">Aardvark List</property>
+            <property name="title" translatable="true">Aardvark</property>
             <child>
 
               <object class="AdwToolbarView">
                 <child type="top">
                   <object class="AdwHeaderBar">
                     <child type="end">
-                      <object class="GtkMenuButton">
-                        <property name="primary">True</property>
-                        <property name="icon-name">open-menu-symbolic</property>
-                        <property name="tooltip-text" translatable="yes">Main Menu</property>
-                        <property name="menu-model">primary_menu</property>
-                      </object>
-                    </child>
-                    <child type="end">
                       <object class="GtkMenuButton" id="ShareButton">
                         <property name="icon-name">folder-publicshare-symbolic</property>
                         <property name="tooltip-text" translatable="yes">Share Document</property>
                         <property name="popover">share_popover</property>
                       </object>
+                    </child>
+                    <child type="end">
+                      <object class="GtkBox">
+                        <property name="margin-end">6</property>
+                        <child>
+                          <object class="GtkImage">
+                            <property name="margin-end">6</property>
+                            <property name="icon-name">system-users-symbolic</property>
+                            <property name="tooltip-text" translatable="yes">34 People Connected</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="label">34</property>
+                            <property name="vexpand">False</property>
+                            <style>
+                              <class name="user-counter"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+
+
                     </child>
                   </object>
                 </child>
