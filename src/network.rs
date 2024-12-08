@@ -15,6 +15,8 @@ use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::operation::AardvarkExtensions;
+
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
 struct TextDocument([u8; 32]);
 
@@ -23,17 +25,6 @@ impl TopicQuery for TextDocument {}
 impl TopicId for TextDocument {
     fn id(&self) -> [u8; 32] {
         self.0
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct AarvdarkExtensions {
-    prune_flag: PruneFlag,
-}
-
-impl Extension<PruneFlag> for AarvdarkExtensions {
-    fn extract(&self) -> Option<PruneFlag> {
-        Some(self.prune_flag.clone())
     }
 }
 
@@ -98,7 +89,7 @@ pub fn run() -> Result<(
             let network_id = Hash::new(b"aardvark <3");
             let private_key = PrivateKey::new();
 
-            let operations_store = MemoryStore::<LogId, AarvdarkExtensions>::new();
+            let operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
             let documents_store = TextDocumentStore::new();
 
             let sync = LogSyncProtocol::new(documents_store, operations_store);
