@@ -58,7 +58,7 @@ mod imp {
             doc.update_text(&self.root, text).unwrap();
 
             {
-                let bytes = doc.save_incremental();
+                let bytes = doc.save();
                 let tx = self.tx.clone();
                 glib::spawn_future_local(async move {
                     if let Err(e) = tx.send(bytes).await {
@@ -132,9 +132,10 @@ mod imp {
                         while let Some(msg) = rx.recv().await {
                             //println!("got {:?}", msg);
                             let text = {
-                                let mut doc = app.imp().automerge.borrow_mut();
-                                doc.load_incremental(&msg).unwrap();
-                                doc.text(&app.imp().root).unwrap()
+                                let mut doc_remote = AutoCommit::load(&msg).unwrap();
+                                let mut new_doc = AutoCommit::new();
+                                new_doc.merge(&mut doc_remote).unwrap();
+                                new_doc.text(&app.imp().root).unwrap()
                             };
                             dbg!(&text);
                             w.set_text(&text);
