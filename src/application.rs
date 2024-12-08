@@ -32,7 +32,7 @@ use automerge::transaction::Transactable;
 use automerge::ObjType;
 use std::cell::RefCell;
 use automerge::ObjId;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 mod imp {
     use super::*;
@@ -41,8 +41,8 @@ mod imp {
     pub struct AardvarkApplication {
         automerge: RefCell<AutoCommit>,
         root: ObjId,
-        tx: mpsc::Sender<Vec<u8>>,
-        rx: mpsc::Receiver<Vec<u8>>,
+        tx: Sender<Vec<u8>>,
+        rx: Receiver<Vec<u8>>,
     }
 
     impl AardvarkApplication {
@@ -50,8 +50,9 @@ mod imp {
             println!("app: {}", text);
             let mut doc = self.automerge.borrow_mut();
             doc.update_text(&self.root, text).unwrap();
-            if let Err(e) = self.tx.blocking_send(doc.save()) {
-                println!("{}", e);
+            let ret = self.tx.blocking_send(doc.save());
+            if ret.is_err() {
+                println!("error sending message to network: {:?}", ret.err().unwrap().to_string());
             }
         }
     }
