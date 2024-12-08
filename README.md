@@ -4,8 +4,7 @@ MVP local-first text editor :)
 
 ## Getting Started
 
-The [GNOME Builder IDE](https://flathub.org/apps/org.gnome.Builder)
-[docs](https://builder.readthedocs.io/) is
+The [GNOME Builder IDE](https://builder.readthedocs.io/) is
 required to build and run the project. It can be installed with flatpak.
 
 1. [Install flatpak](https://flatpak.org/setup/) for your distribution.
