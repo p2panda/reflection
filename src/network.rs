@@ -158,7 +158,10 @@ pub fn run() -> Result<(
                 let mut stream = stream
                     .decode()
                     .filter_map(|result| match result {
-                        Ok(operation) => Some(operation),
+                        Ok(operation) => {
+                            println!("RECEIVED {:?}", operation);
+                            Some(operation)
+                        },
                         Err(err) => {
                             println!("decode operation error: {err}");
                             None
