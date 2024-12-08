@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
+use std::thread::JoinHandle as StdJoinHandle;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -14,6 +14,7 @@ use p2panda_sync::{TopicMap, TopicQuery};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
 
 use crate::operation::{create_operation, encode_operation, AardvarkExtensions};
 
@@ -131,8 +132,8 @@ pub fn run() -> Result<(
                 }
             });
 
-            tokio::task::spawn(async move {
-                while let Some(bytes) = from_app.recv().await {
+            let result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+                while let Ok(bytes) = from_app.recv() {
                     println!("New message from app");
 
                     let prune_flag = false;
@@ -143,17 +144,18 @@ pub fn run() -> Result<(
                         Some(&bytes),
                         prune_flag,
                     )
-                    .await
-                    .expect("can create and persist operation");
+                    .await?;
 
-                    let encoded_operation =
-                        encode_operation(header, body).expect("encodes operation");
+                    let encoded_operation = encode_operation(header, body)?;
 
                     topic_tx
-                        .send(ToNetwork::Message { bytes: encoded_operation })
-                        .await
-                        .expect("can send on channel");
+                        .send(ToNetwork::Message {
+                            bytes: encoded_operation,
+                        })
+                        .await?;
                 }
+
+                Ok(())
             });
 
             shutdown_rx.await.unwrap();
