@@ -226,6 +226,7 @@ pub fn run() -> Result<(
 
                     if is_ready.load(Ordering::Relaxed) {
                         // Broadcast operation on gossip overlay.
+                        println!("Broadcast operation on gossip overlay");
                         topic_tx
                             .send(ToNetwork::Message {
                                 bytes: encoded_gossip_operation,
