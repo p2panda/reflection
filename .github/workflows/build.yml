@@ -220,9 +220,13 @@ jobs:
           $installPrefix = "$env:VCPKG_ROOT\installed\$env:VCPKG_TRIPLET"
 
           # Set up pkg-config environment
-          $env:PKG_CONFIG = "$installPrefix\tools\pkgconf\pkg-config.bat"  # Changed to .bat
+          $env:PKG_CONFIG = "$installPrefix\tools\pkgconf\pkg-config.bat"
           $env:PKG_CONFIG_PATH = "$installPrefix\lib\pkgconfig"
           $env:PKG_CONFIG_LIBDIR = "$installPrefix\lib\pkgconfig"
+          $env:SYSTEM_DEPS_GOBJECT_2_0_NO_PKG_CONFIG = "1"
+          $env:SYSTEM_DEPS_GOBJECT_2_0_LIB = "gobject-2.0"
+          $env:SYSTEM_DEPS_GOBJECT_2_0_LIB_DIR = "$installPrefix\lib"
+          $env:SYSTEM_DEPS_GOBJECT_2_0_INCLUDE_DIR = "$installPrefix\include\glib-2.0"
           $env:PKG_CONFIG_ALLOW_CROSS = "1"
           $env:PKG_CONFIG_ALLOW_SYSTEM_CFLAGS = "1"
           $env:PKG_CONFIG_ALLOW_SYSTEM_LIBS = "1"

@@ -13,6 +13,7 @@ if (Test-Path $pkgConfigPath) {
 }
 
 # Install other dependencies
+vcpkg install gobject-2.0:$env:VCPKG_TRIPLET
 vcpkg install glib:$env:VCPKG_TRIPLET
 vcpkg install gtk4:$env:VCPKG_TRIPLET
 vcpkg install libadwaita:$env:VCPKG_TRIPLET
