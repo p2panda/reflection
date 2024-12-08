@@ -297,13 +297,11 @@ jobs:
           pkg-config --debug --print-errors --cflags --libs glib-2.0
           pkg-config --debug --print-errors --cflags --libs gtk4 libadwaita-1
         shell: pwsh
-
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
           update: true
           install: mingw-w64-ucrt-x86_64-toolchain mingw-w64-ucrt-x86_64-gtk4 pkg-config
-
       - name: Install dependencies
         shell: msys2 {0}
         run: |
