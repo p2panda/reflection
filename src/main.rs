@@ -23,9 +23,11 @@ mod config;
 mod network;
 mod operation;
 mod window;
+mod textbuffer;
 
 use self::application::AardvarkApplication;
 use self::window::AardvarkWindow;
+use self::textbuffer::AardvarkTextBuffer;
 
 use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};

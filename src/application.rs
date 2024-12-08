@@ -28,11 +28,13 @@ use automerge::{AutoCommit, ObjType};
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::{mpsc, oneshot};
+use automerge::ScalarValue;
 
 use crate::config::VERSION;
 use crate::glib::closure_local;
 use crate::network;
 use crate::AardvarkWindow;
+use crate::AardvarkTextBuffer;
 
 mod imp {
     use super::*;
@@ -40,6 +42,7 @@ mod imp {
     #[derive(Debug)]
     pub struct AardvarkApplication {
         window: OnceCell<AardvarkWindow>,
+        buffer: OnceCell<gtk::TextBuffer>,
         automerge: RefCell<AutoCommit>,
         #[allow(dead_code)]
         backend_shutdown_tx: oneshot::Sender<()>,
@@ -48,7 +51,7 @@ mod imp {
     }
 
     impl AardvarkApplication {
-        fn update_text(&self, text: &str) {
+        fn update_text(&self, position: i32, del: i32, text: &str) {
             let mut doc = self.automerge.borrow_mut();
 
             let current_text = match doc.get(automerge::ROOT, "root").expect("root exists") {
@@ -74,7 +77,15 @@ mod imp {
             };
             println!("root = {}", root);
 
-            doc.update_text(&root, text).unwrap();
+//            doc.update_text(&root, text).unwrap();
+            doc.splice(
+                &root,
+                position as usize,
+                del as isize,
+                text
+                    .chars()
+                    .map(|character| ScalarValue::Str(character.to_string().into()))
+            );
 
             {
                 let bytes = doc.save_incremental();
@@ -104,6 +115,7 @@ mod imp {
                 tx,
                 rx: RefCell::new(Some(rx)),
                 window: OnceCell::new(),
+                buffer: OnceCell::new(),
             }
         }
     }
@@ -130,14 +142,6 @@ mod imp {
                 .get_or_init(|| {
                     let window = AardvarkWindow::new(&*application);
                     let app = application.clone();
-                    window.connect_closure(
-                        "text-changed",
-                        false,
-                        closure_local!(|_window: AardvarkWindow, text: &str| {
-                            app.imp().update_text(text);
-                        }),
-                    );
-
                     let mut rx = application.imp().rx.take().unwrap();
                     let w = window.clone();
                     let app = application.clone();
@@ -165,13 +169,29 @@ mod imp {
                             dbg!(&text);
 
                             println!("SET_TEXT = '{}'", text);
-                            w.set_text(&text);
+                            w.splice_text_view(0, 0, &text);
                         }
                     });
 
                     window
                 })
                 .clone();
+
+                self
+                .buffer
+                .get_or_init(|| {
+                    window.clone().get_text_buffer()
+                });
+
+                let app = application.clone();
+                self.buffer.get().unwrap().connect_closure(
+                    "text-change",
+                    false,
+                    closure_local!(|_buffer: AardvarkTextBuffer, position: i32, del: i32, text: &str| {
+                        println!("recv signal");
+                        app.imp().update_text(position, del, text);
+                    }),
+                );
 
             // Ask the window manager/compositor to present the window
             window.upcast::<gtk::Window>().present();

@@ -23,6 +23,7 @@ use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 use glib::subclass::Signal;
 use std::sync::OnceLock;
+use crate::AardvarkTextBuffer;
 
 mod imp {
     use super::*;
@@ -53,7 +54,10 @@ mod imp {
     impl ObjectImpl for AardvarkWindow {
         fn constructed(&self) {
             self.parent_constructed();
-            let buffer = self.text_view.buffer();
+
+            let buffer = AardvarkTextBuffer::new();
+            self.text_view.set_buffer(Some(&buffer));
+
             let obj = self.obj().clone();
             buffer.connect_changed(move |buffer| {
                 let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
@@ -79,7 +83,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct AardvarkWindow(ObjectSubclass<imp::AardvarkWindow>)
-        @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,        @implements gio::ActionGroup, gio::ActionMap;
+        @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
+        @implements gio::ActionGroup, gio::ActionMap;
 }
 
 impl AardvarkWindow {
@@ -89,11 +94,20 @@ impl AardvarkWindow {
             .build()
     }
 
-    pub fn set_text(&self, text: &str) {
+    pub fn splice_text_view(&self, pos: i32, del: i32, text: &str) {
         let window = self.imp();
         let buffer = window.text_view.buffer();
+
         let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
         if text == s { println!("bailing out on superfluous set_text"); return; }
-        buffer.set_text(text);
+        //buffer.set_text(text);
+
+        let mut pos_iter = buffer.iter_at_offset(pos);
+        buffer.insert(&mut pos_iter, text);
+    }
+
+    pub fn get_text_buffer(&self) -> gtk::TextBuffer {
+        let window = self.imp();
+        window.text_view.buffer()
     }
 }
