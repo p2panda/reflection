@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "automerge",
+ "ciborium",
  "gettext-rs",
  "gtk4",
  "libadwaita",
@@ -20,6 +21,7 @@ dependencies = [
  "p2panda-sync",
  "serde",
  "tokio",
+ "tokio-stream",
 ]
 
 [[package]]

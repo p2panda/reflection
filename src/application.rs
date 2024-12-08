@@ -18,19 +18,15 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::cell::RefCell;
-use std::thread::JoinHandle;
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use anyhow::Result;
 use automerge::transaction::Transactable;
-use automerge::{AutoCommit, ObjId, ObjType};
 use automerge::ReadDoc;
+use automerge::{AutoCommit, ObjId, ObjType};
 use gettextrs::gettext;
 use gtk::{gio, glib};
-use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::config::VERSION;
@@ -46,6 +42,7 @@ mod imp {
         window: OnceCell<AardvarkWindow>,
         automerge: RefCell<AutoCommit>,
         root: ObjId,
+        #[allow(dead_code)]
         backend_shutdown_tx: oneshot::Sender<()>,
         tx: mpsc::Sender<Vec<u8>>,
         rx: RefCell<Option<mpsc::Receiver<Vec<u8>>>>,
@@ -112,32 +109,35 @@ mod imp {
         fn activate(&self) {
             let application = self.obj();
             // Get the current window or create one if necessary
-            let window = self.window.get_or_init(|| {
-                let window = AardvarkWindow::new(&*application);
-                let app = application.clone();
-                window.connect_closure(
-                    "text-changed",
-                    false,
-                    closure_local!(|_window: AardvarkWindow, text: &str| {
-                        app.imp().update_text(text);
-                    }),
-                );
+            let window = self
+                .window
+                .get_or_init(|| {
+                    let window = AardvarkWindow::new(&*application);
+                    let app = application.clone();
+                    window.connect_closure(
+                        "text-changed",
+                        false,
+                        closure_local!(|_window: AardvarkWindow, text: &str| {
+                            app.imp().update_text(text);
+                        }),
+                    );
 
-                let mut rx = application.imp().rx.take().unwrap();
-                let w = window.clone();
-                let app = application.clone();
-                glib::spawn_future_local(async move {
-                    while let Some(msg) = rx.recv().await {
-                        println!("got {:?}", msg);
-                        let mut doc = app.imp().automerge.borrow_mut();
-                        doc.load_incremental(&msg).unwrap();
-                        let text = doc.text(&app.imp().root).unwrap();
-                        w.set_text(&text);
-                    }
-                });
+                    let mut rx = application.imp().rx.take().unwrap();
+                    let w = window.clone();
+                    let app = application.clone();
+                    glib::spawn_future_local(async move {
+                        while let Some(msg) = rx.recv().await {
+                            println!("got {:?}", msg);
+                            let mut doc = app.imp().automerge.borrow_mut();
+                            doc.load_incremental(&msg).unwrap();
+                            let text = doc.text(&app.imp().root).unwrap();
+                            w.set_text(&text);
+                        }
+                    });
 
-                window
-            }).clone();
+                    window
+                })
+                .clone();
 
             // Ask the window manager/compositor to present the window
             window.upcast::<gtk::Window>().present();

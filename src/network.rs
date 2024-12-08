@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::thread::JoinHandle;
+use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -9,31 +8,28 @@ use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
 use p2panda_net::{ToNetwork, TopicId};
 use p2panda_store::MemoryStore;
+use p2panda_stream::{DecodeExt, IngestExt};
 use p2panda_sync::log_sync::LogSyncProtocol;
 use p2panda_sync::{TopicMap, TopicQuery};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+
+use crate::operation::{
+    create_operation, decode_gossip_message, encode_gossip_operation, AardvarkExtensions,
+};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
-struct TextDocument([u8; 32]);
+pub struct TextDocument([u8; 32]);
 
 impl TopicQuery for TextDocument {}
 
 impl TopicId for TextDocument {
     fn id(&self) -> [u8; 32] {
         self.0
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct AarvdarkExtensions {
-    prune_flag: PruneFlag,
-}
-
-impl Extension<PruneFlag> for AarvdarkExtensions {
-    fn extract(&self) -> Option<PruneFlag> {
-        Some(self.prune_flag.clone())
     }
 }
 
@@ -51,6 +47,10 @@ impl TextDocumentStore {
                 authors: HashMap::new(),
             })),
         }
+    }
+
+    pub fn write(&self) -> RwLockWriteGuard<TextDocumentStoreInner> {
+        self.inner.write().expect("acquire write lock")
     }
 }
 
@@ -96,60 +96,148 @@ pub fn run() -> Result<(
 
         runtime.block_on(async move {
             let network_id = Hash::new(b"aardvark <3");
+            let document_id = TextDocument(Hash::new(b"my first doc <3").into());
+
             let private_key = PrivateKey::new();
 
-            let operations_store = MemoryStore::<LogId, AarvdarkExtensions>::new();
+            let mut operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
             let documents_store = TextDocumentStore::new();
+            documents_store
+                .write()
+                .authors
+                .insert(private_key.public_key(), vec![document_id.clone()]);
 
-            let sync = LogSyncProtocol::new(documents_store, operations_store);
+            let sync = LogSyncProtocol::new(documents_store.clone(), operations_store.clone());
             let sync_config = SyncConfiguration::<TextDocument>::new(sync);
 
-            let mut network = NetworkBuilder::new(*network_id.as_bytes())
+            let network = NetworkBuilder::new(network_id.into())
+                .private_key(private_key.clone())
+                .discovery(LocalDiscovery::new().expect("local discovery service"))
                 .sync(sync_config)
-                .private_key(private_key)
-                .discovery(LocalDiscovery::new().unwrap())
                 .build()
                 .await
-                .unwrap();
+                .expect("network spawning");
 
-            let test_document = TextDocument(Hash::new(b"my first doc <3").into());
-            let (topic_tx, mut topic_rx, ready) = network.subscribe(test_document).await.unwrap();
+            let (topic_tx, topic_rx, ready) = network
+                .subscribe(document_id.clone())
+                .await
+                .expect("subscribe to topic");
 
             tokio::task::spawn(async move {
-                while let Some(message) = topic_rx.recv().await {
-                    println!("New message from network");
-
-                    let bytes = match message {
-                        FromNetwork::GossipMessage {
-                            bytes,
-                            delivered_from,
-                        } => bytes,
-                        FromNetwork::SyncMessage {
-                            header,
-                            payload,
-                            delivered_from,
-                        } => payload.expect("all messages have a payload"),
-                    };
-
-                    // 1) decode operation
-                    // 2) check who the author is and add them to our TextDocumentStore
-                    // 3) persist the operation
-                    // 4) forward the payload onto the app
-
-                    to_app.send(bytes).await.expect("can send on channel");
-                }
+                let _ = ready.await;
+                println!("network joined!");
             });
 
-            tokio::task::spawn(async move {
-                while let Some(bytes) = from_app.recv().await {
-                    println!("New message from app");
+            // Task for handling operations arriving from the network.
+            let operations_store_clone = operations_store.clone();
+            let document_id_clone = document_id.clone();
+            let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+                let stream = ReceiverStream::new(topic_rx);
 
-                    // 1) encode operation
-                    // 2) persist operation
-                    // 3) forward operation to the network
+                let stream = stream.filter_map(|event| match event {
+                    FromNetwork::GossipMessage { bytes, .. } => match decode_gossip_message(&bytes)
+                    {
+                        Ok(result) => Some(result),
+                        Err(err) => {
+                            eprintln!("could not decode gossip message: {err}");
+                            None
+                        }
+                    },
+                    FromNetwork::SyncMessage {
+                        header, payload, ..
+                    } => Some((header, payload)),
+                });
 
-                    topic_tx.send(ToNetwork::Message { bytes }).await;
+                // Decode and ingest the p2panda operations.
+                let mut stream = stream
+                    .decode()
+                    .filter_map(|result| match result {
+                        Ok(operation) => Some(operation),
+                        Err(err) => {
+                            eprintln!("decode operation error: {err}");
+                            None
+                        }
+                    })
+                    .ingest(operations_store_clone, 128);
+
+                // Process the operations and forward application messages to app layer.
+                while let Some(message) = stream.next().await {
+                    match message {
+                        Ok(operation) => {
+                            let prune_flag: PruneFlag =
+                                operation.header.extract().unwrap_or_default();
+                            println!(
+                                "received operation from {}, seq_num={}, prune_flag={}",
+                                operation.header.public_key,
+                                operation.header.seq_num,
+                                prune_flag.is_set(),
+                            );
+
+                            // When we discover a new author we need to add them to our "document store".
+                            {
+                                let mut write_lock = documents_store.write();
+                                write_lock
+                                    .authors
+                                    .entry(operation.header.public_key)
+                                    .and_modify(|documents| {
+                                        if !documents.contains(&document_id_clone) {
+                                            documents.push(document_id_clone.clone());
+                                        }
+                                    })
+                                    .or_insert(vec![document_id_clone.clone()]);
+                            };
+
+                            // Forward the payload up to the app.
+                            to_app
+                                .send(
+                                    operation
+                                        .body
+                                        .expect("all operations have a body")
+                                        .to_bytes(),
+                                )
+                                .await?;
+                        }
+                        Err(err) => {
+                            eprintln!("could not ingest message: {err}");
+                        }
+                    }
                 }
+
+                Ok(())
+            });
+
+            // Task for handling events coming from the application layer.
+            let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+                while let Some(bytes) = from_app.recv().await {
+                    // @TODO: set prune flag from the frontend.
+                    let prune_flag = false;
+
+                    // Create the p2panda operations with application message as payload.
+                    let (header, body) = create_operation(
+                        &mut operations_store,
+                        &private_key,
+                        document_id.clone(),
+                        Some(&bytes),
+                        prune_flag,
+                    )
+                    .await?;
+
+                    println!(
+                        "created operation seq_num={}, prune_flag={}",
+                        header.seq_num, prune_flag
+                    );
+
+                    let encoded_gossip_operation = encode_gossip_operation(header, body)?;
+
+                    // Broadcast operation on gossip overlay.
+                    topic_tx
+                        .send(ToNetwork::Message {
+                            bytes: encoded_gossip_operation,
+                        })
+                        .await?;
+                }
+
+                Ok(())
             });
 
             shutdown_rx.await.unwrap();

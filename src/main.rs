@@ -21,6 +21,7 @@
 mod application;
 mod config;
 mod network;
+mod operation;
 mod window;
 
 use self::application::AardvarkApplication;
