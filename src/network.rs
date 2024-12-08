@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 
@@ -14,6 +13,7 @@ use p2panda_sync::log_sync::LogSyncProtocol;
 use p2panda_sync::{TopicMap, TopicQuery};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
+use tokio::sync::mpsc;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
 struct TextDocument([u8; 32]);
@@ -78,11 +78,11 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
     }
 }
 
-pub fn run() -> Result<(Sender<Vec<u8>>, Receiver<Vec<u8>>)> {
-    let (to_network, from_app) = std::sync::mpsc::channel::<Vec<u8>>();
-    let (to_app, from_network) = std::sync::mpsc::channel();
+pub fn run() -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
+    let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
+    let (to_app, from_network) = mpsc::channel(512);
 
-    let rt_handle: JoinHandle<Result<()>> = std::thread::spawn(|| {
+    let _rt_handle: JoinHandle<Result<()>> = std::thread::spawn(|| {
         let runtime = Builder::new_current_thread()
             .enable_all()
             .build()
@@ -129,12 +129,12 @@ pub fn run() -> Result<(Sender<Vec<u8>>, Receiver<Vec<u8>>)> {
                     // 3) persist the operation
                     // 4) forward the payload onto the app
 
-                    to_app.send(bytes).expect("can send on channel");
+                    to_app.send(bytes).await.expect("can send on channel");
                 }
             });
 
             tokio::task::spawn(async move {
-                while let Ok(bytes) = from_app.recv() {
+                while let Some(bytes) = from_app.recv().await {
                     println!("New message from app");
 
                     // 1) encode operation
