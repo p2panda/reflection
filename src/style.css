@@ -1,4 +1,14 @@
-.invite-code {
-  font-size: 20px;
-  font-style: bold;
+.invite-code, .invite-code-entry {
+  font-size: 40px;
+  letter-spacing: .12em;
+  font-weight: bold;
+}
+
+.invite-code-entry {
+	border-radius: 15px;
+	padding: 15px 20px;
+}
+
+.user-counter {
+  font-weight: bold;
 }

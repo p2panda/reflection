@@ -13,6 +13,18 @@
       <object class="AdwToolbarView">
         <child type="top">
           <object class="AdwHeaderBar">
+            <child type="start">
+              <object class="GtkButton" id="open_document_button">
+                <property name="child">
+                  <object class="AdwButtonContent">
+                    <property name="icon-name">document-open-symbolic</property>
+                    <property name="label" translatable="yes">_Open</property>
+                    <property name="use-underline">True</property>
+                  </object>
+                </property>
+              </object>
+
+            </child>
             <child type="end">
               <object class="GtkMenuButton">
                 <property name="primary">True</property>
@@ -26,6 +38,27 @@
                 <property name="icon-name">folder-publicshare-symbolic</property>
                 <property name="tooltip-text" translatable="yes">Share Document</property>
                 <property name="popover">share_popover</property>
+              </object>
+            </child>
+            <child type="end">
+              <object class="GtkBox">
+                <property name="margin-end">6</property>
+                <child>
+                  <object class="GtkImage">
+                    <property name="margin-end">6</property>
+                    <property name="icon-name">system-users-symbolic</property>
+                    <property name="tooltip-text" translatable="yes">34 People Connected</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label">34</property>
+                    <property name="vexpand">False</property>
+                    <style>
+                      <class name="user-counter"/>
+                    </style>
+                  </object>
+                </child>
               </object>
             </child>
           </object>
@@ -54,10 +87,10 @@
     <property name="name">share_popover</property>
     <property name="child">
       <object class="GtkBox" id="plain-popover-box">
-        <property name="margin-top">18</property>
-        <property name="margin-bottom">18</property>
-        <property name="margin-start">18</property>
-        <property name="margin-end">18</property>
+        <property name="margin-top">24</property>
+        <property name="margin-bottom">24</property>
+        <property name="margin-start">24</property>
+        <property name="margin-end">24</property>
         <property name="orientation">vertical</property>
         <property name="spacing">12</property>
         <property name="width-request">100</property>
@@ -76,7 +109,7 @@
             <property name="justify">GTK_JUSTIFY_CENTER</property>
             <property name="max-width-chars">25</property>
             <property name="natural-wrap-mode">GTK_NATURAL_WRAP_WORD</property>
-            <property name="label" translatable="true">Give others access to this document by sharing this invite code with them:</property>
+            <property name="label" translatable="true">Invite people to collaborate by sharing the invite code</property>
           </object>
         </child>
         <child>
@@ -85,7 +118,7 @@
             <property name="wrap-mode">char</property>
             <property name="justify">GTK_JUSTIFY_CENTER</property>
             <property name="max-width-chars">25</property>
-            <property name="label" translatable="true">sdf0398p2jbytc6n4wpq339aw0y23l0nd9dk032jbn39accw0y23bl0n78deb200b21m289he </property>
+            <property name="label" translatable="true">356702</property>
             <style>
               <class name="invite-code" />
               <class name="monospace" />
@@ -95,15 +128,22 @@
         <child>
           <object class="GtkBox">
             <property name="halign">center</property>
-            <property name="margin-top">12</property>
+            <property name="margin-top">6</property>
 
             <child>
               <object class="GtkButton">
-                <property name="label" translatable="true">Copy to Clipboard</property>
                 <style>
                   <class name="pill" />
                 </style>
+
+                <property name="child">
+                  <object class="AdwButtonContent">
+                    <property name="icon-name">edit-copy-symbolic</property>
+                    <property name="label" translatable="yes">Copy to Clipboard</property>
+                  </object>
+                </property>
               </object>
+
             </child>
           </object>
         </child>
@@ -126,5 +166,85 @@
       </item>
     </section>
   </menu>
+  <object class="AdwDialog" id="open_document_dialog">
+    <property name="can-close">true</property>
+    <property name="width-request">320</property>
+    <property name="height-request">300</property>
+
+    <child>
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar"></object>
+        </child>
+
+
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="margin-top">0</property>
+            <property name="margin-bottom">36</property>
+            <property name="margin-start">36</property>
+            <property name="margin-end">36</property>
+            <property name="spacing">12</property>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="true">Open Document</property>
+                <style>
+                  <class name="title-2" />
+                </style>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkLabel">
+                <property name="wrap">True</property>
+                <property name="justify">GTK_JUSTIFY_CENTER</property>
+                <property name="max-width-chars">25</property>
+                <property name="natural-wrap-mode">GTK_NATURAL_WRAP_WORD</property>
+                <property name="label" translatable="true">Enter an invite code to start collaborating on a document</property>
+              </object>
+            </child>
+
+
+            <child>
+              <object class="GtkEntry" id="entry_row">
+                <property name="placeholder-text" translatable="true">000000</property>
+                <property name="max-width-chars">7</property>
+                <property name="halign">center</property>
+                <property name="margin-top">12</property>
+
+                <style>
+                  <class name="invite-code-entry"/>
+                  <class name="monospace"/>
+                </style>
+              </object>
+            </child>
+
+
+
+            <child>
+              <object class="GtkBox">
+                <property name="halign">center</property>
+                <property name="margin-top">12</property>
+
+                <child>
+                  <object class="GtkButton">
+                    <property name="label" translatable="true">Open</property>
+                    <property name="width-request">140</property>
+                    <style>
+                      <class name="pill" />
+                      <class name="suggested-action" />
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+
+      </object>
+    </child>
+  </object>
 </interface>
 

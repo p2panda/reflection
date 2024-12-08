@@ -23,6 +23,7 @@ use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 use glib::subclass::Signal;
 use std::sync::OnceLock;
+use adw::prelude::AdwDialogExt;
 
 mod imp {
     use super::*;
@@ -33,6 +34,10 @@ mod imp {
         // Template widgets
         #[template_child]
         pub text_view: TemplateChild<gtk::TextView>,
+        #[template_child]
+        pub open_document_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub open_document_dialog: TemplateChild<adw::Dialog>,
     }
 
     #[glib::object_subclass]
@@ -58,6 +63,12 @@ mod imp {
             buffer.connect_changed(move |buffer| {
                 let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
                 obj.emit_by_name::<()>("text-changed", &[&s.as_str()]);
+            });
+
+            let w = self.obj().clone().upcast::<gtk::Widget>();
+            let d = self.open_document_dialog.clone();
+            self.open_document_button.connect_clicked(move |_| {
+                d.present(Some(&w));
             });
         }
 
