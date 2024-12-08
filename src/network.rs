@@ -105,6 +105,10 @@ pub fn run() -> Result<(
 
             let mut operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
             let documents_store = TextDocumentStore::new();
+            documents_store
+                .write()
+                .authors
+                .insert(private_key.public_key(), vec![document_id.clone()]);
 
             let sync = LogSyncProtocol::new(documents_store.clone(), operations_store.clone());
             let sync_config = SyncConfiguration::<TextDocument>::new(sync);
@@ -161,7 +165,7 @@ pub fn run() -> Result<(
                         Ok(operation) => {
                             println!("RECEIVED {:?}", operation);
                             Some(operation)
-                        },
+                        }
                         Err(err) => {
                             println!("decode operation error: {err}");
                             None
