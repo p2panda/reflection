@@ -308,9 +308,20 @@ jobs:
           pacman -S --noconfirm mingw-w64-ucrt-x86_64-gtk4
           echo "PKG_CONFIG_PATH=/ucrt64/lib/pkgconfig" >> $GITHUB_ENV
           echo "PKG_CONFIG_LIBDIR=/ucrt64/lib/pkgconfig" >> $GITHUB_ENV
+      - name: Install Rust in MSYS2
+        shell: msys2 {0}
+        run: |
+          pacman -S --noconfirm mingw-w64-ucrt-x86_64-rust
+          # Verify rust installation
+          rustc --version
+          cargo --version
+
       - name: Build
         shell: msys2 {0}
-        run: cargo build --release
+        run: |
+          # Ensure we're using MSYS2's cargo
+          export PATH="/ucrt64/bin:$PATH"
+          cargo build --release
       - name: Package
         run: |
           mkdir aardvark-${{ matrix.arch }}
