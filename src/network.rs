@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use p2panda_core::{Hash, PrivateKey, PublicKey};
+use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
 use p2panda_net::{ToNetwork, TopicId};
@@ -170,6 +170,15 @@ pub fn run() -> Result<(
                 while let Some(message) = stream.next().await {
                     match message {
                         Ok(operation) => {
+                            let prune_flag: PruneFlag =
+                                operation.header.extract().unwrap_or_default();
+                            println!(
+                                "received operation from {}, seq_num={}, prune_flag={}",
+                                operation.header.public_key,
+                                operation.header.seq_num,
+                                prune_flag.is_set(),
+                            );
+
                             // When we discover a new author we need to add them to our "document store".
                             {
                                 let mut write_lock = documents_store.write();
@@ -219,7 +228,10 @@ pub fn run() -> Result<(
                     )
                     .await?;
 
-                    println!("created operation: {header:?}");
+                    println!(
+                        "created operation seq_num={}, prune_flag={}",
+                        header.seq_num, prune_flag
+                    );
 
                     let encoded_gossip_operation = encode_gossip_operation(header, body)?;
 
