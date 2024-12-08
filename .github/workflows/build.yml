@@ -229,7 +229,6 @@ jobs:
         shell: pwsh
         env:
           VCPKG_DISABLE_METRICS: 1
-        if: ${{ success() }}
 
       - name: Configure pkg-config paths
         run: |
