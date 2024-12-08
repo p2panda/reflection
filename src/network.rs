@@ -162,7 +162,7 @@ pub fn run() -> Result<(
                                 documents.push(document_id_clone.clone());
                             }
                         })
-                        .or_insert(vec![document_id]);
+                        .or_insert(vec![document_id.clone()]);
 
                     // Forward the payload up to the app.
                     to_app.send(
