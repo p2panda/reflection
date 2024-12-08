@@ -20,6 +20,7 @@
 
 use std::cell::RefCell;
 use std::thread::JoinHandle;
+use std::cell::OnceCell;
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
@@ -41,6 +42,7 @@ mod imp {
 
     #[derive(Debug)]
     pub struct AardvarkApplication {
+        window: OnceCell<AardvarkWindow>,
         automerge: RefCell<AutoCommit>,
         root: ObjId,
         backend_shutdown_tx: oneshot::Sender<()>,
@@ -91,6 +93,7 @@ mod imp {
                 root,
                 backend_shutdown_tx,
                 tx,
+                window: OnceCell::new(),
             }
         }
     }
@@ -112,7 +115,7 @@ mod imp {
         fn activate(&self) {
             let application = self.obj();
             // Get the current window or create one if necessary
-            let window = application.active_window().unwrap_or_else(|| {
+            let window = self.window.get_or_init(|| {
                 let window = AardvarkWindow::new(&*application);
                 let app = application.clone();
                 window.connect_closure(
@@ -122,11 +125,11 @@ mod imp {
                         app.imp().update_text(text);
                     }),
                 );
-                window.upcast()
-            });
+                window
+            }).clone();
 
             // Ask the window manager/compositor to present the window
-            window.present();
+            window.upcast::<gtk::Window>().present();
         }
     }
 
