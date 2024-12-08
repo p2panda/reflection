@@ -47,6 +47,7 @@ mod imp {
         root: ObjId,
         backend_shutdown_tx: oneshot::Sender<()>,
         tx: mpsc::Sender<Vec<u8>>,
+        rx: RefCell<Option<mpsc::Receiver<Vec<u8>>>>,
     }
 
     impl AardvarkApplication {
@@ -80,19 +81,14 @@ mod imp {
                 .unwrap();
             let automerge = RefCell::new(am);
 
-            let (backend_shutdown_tx, tx, mut rx) = network::run().expect("running p2p backend");
-
-            glib::spawn_future_local(async move {
-                while let Some(msg) = rx.recv().await {
-                    println!("got {:?}", msg);
-                }
-            });
+            let (backend_shutdown_tx, tx, rx) = network::run().expect("running p2p backend");
 
             AardvarkApplication {
                 automerge,
                 root,
                 backend_shutdown_tx,
                 tx,
+                rx: RefCell::new(Some(rx)),
                 window: OnceCell::new(),
             }
         }
@@ -125,6 +121,14 @@ mod imp {
                         app.imp().update_text(text);
                     }),
                 );
+
+                let mut rx = application.imp().rx.take().unwrap();
+                glib::spawn_future_local(async move {
+                    while let Some(msg) = rx.recv().await {
+                        println!("got {:?}", msg);
+                    }
+                });
+
                 window
             }).clone();
 
