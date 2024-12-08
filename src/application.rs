@@ -59,6 +59,8 @@ mod imp {
                     .expect("inserting map at root"),
             };
 
+            println!("root = {}", root);
+
             let current_text = doc.text(&root).unwrap();
             println!("CMP '{}' == '{}'", current_text, text);
             if text == current_text {
@@ -151,6 +153,7 @@ mod imp {
                                         .put_object(automerge::ROOT, "root", ObjType::Text)
                                         .expect("inserting map at root"),
                                 };
+                                println!("root = {}", root);
                                 doc_local.text(&root).unwrap()
                             };
                             dbg!(&text);
