@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "automerge",
+ "ciborium",
  "gettext-rs",
  "gtk4",
  "libadwaita",
