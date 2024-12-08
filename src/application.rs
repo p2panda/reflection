@@ -27,6 +27,7 @@ use adw::subclass::prelude::*;
 use anyhow::Result;
 use automerge::transaction::Transactable;
 use automerge::{AutoCommit, ObjId, ObjType};
+use automerge::ReadDoc;
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -123,9 +124,15 @@ mod imp {
                 );
 
                 let mut rx = application.imp().rx.take().unwrap();
+                let w = window.clone();
+                let app = application.clone();
                 glib::spawn_future_local(async move {
                     while let Some(msg) = rx.recv().await {
                         println!("got {:?}", msg);
+                        let mut doc = app.imp().automerge.borrow_mut();
+                        doc.load_incremental(&msg).unwrap();
+                        let text = doc.text(&app.imp().root).unwrap();
+                        w.set_text(&text);
                     }
                 });
 
