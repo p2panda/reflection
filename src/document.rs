@@ -1,11 +1,21 @@
 use std::fmt;
 
 use anyhow::Result;
+use automerge::transaction::Transactable;
 use automerge::{AutoCommit, AutoSerde, Patch};
 
-const DOCUMENT_OBJ_ID: &str = "doc";
-
+/// Hard-coded automerge document schema in bytes representation for "Aardvark".
+///
+/// Creating a local document based on this schema allows peers to independently do so as they'll
+/// all have the same schema and object ids in the end. Otherwise peers wouldn't be able to merge
+/// their changes into each other's documents as the id's wouldn't match.
+///
+/// Read more here:
+/// <https://automerge.org/docs/cookbook/modeling-data/#setting-up-an-initial-document-structure>
 const DOCUMENT_SCHEMA: [u8] = [1, 2, 3];
+
+/// Identifier in automerge document path where we store the text.
+const DOCUMENT_OBJ_ID: &str = "doc";
 
 #[derive(Debug)]
 pub struct Document {
