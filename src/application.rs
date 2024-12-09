@@ -23,18 +23,18 @@ use std::cell::{OnceCell, RefCell};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use automerge::transaction::Transactable;
+use automerge::PatchAction;
 use automerge::ReadDoc;
 use automerge::{AutoCommit, ObjType};
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::{mpsc, oneshot};
-use automerge::PatchAction;
 
 use crate::config::VERSION;
 use crate::glib::closure_local;
 use crate::network;
-use crate::AardvarkWindow;
 use crate::AardvarkTextBuffer;
+use crate::AardvarkWindow;
 
 mod imp {
     use super::*;
@@ -61,27 +61,28 @@ mod imp {
             };
             println!("root = {}", root);
 
-            doc.splice_text(&root,position as usize, del as isize, text).unwrap();
+            doc.splice_text(&root, position as usize, del as isize, text)
+                .unwrap();
 
             // move the diff pointer forward to current position
             doc.update_diff_cursor();
-/*
-            let patches = doc.diff_incremental();
-            for patch in patches.iter() {
-                println!("{}", patch.action);
-                match &patch.action {
-                    PatchAction::SpliceText { index: _, value: _, marks: _ } => {},
-                    PatchAction::DeleteSeq { index: _, length: _ } => {},
-                    PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
-                    PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
-                    PatchAction::Insert { index: _, values: _ } => {},
-                    PatchAction::Increment { prop: _, value: _ } => {},
-                    PatchAction::Conflict { prop: _ } => {},
-                    PatchAction::DeleteMap { key: _ } => {},
-                    PatchAction::Mark { marks: _ } => {},
-                }
-            }
-*/
+            /*
+                        let patches = doc.diff_incremental();
+                        for patch in patches.iter() {
+                            println!("{}", patch.action);
+                            match &patch.action {
+                                PatchAction::SpliceText { index: _, value: _, marks: _ } => {},
+                                PatchAction::DeleteSeq { index: _, length: _ } => {},
+                                PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
+                                PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
+                                PatchAction::Insert { index: _, values: _ } => {},
+                                PatchAction::Increment { prop: _, value: _ } => {},
+                                PatchAction::Conflict { prop: _ } => {},
+                                PatchAction::DeleteMap { key: _ } => {},
+                                PatchAction::Mark { marks: _ } => {},
+                            }
+                        }
+            */
 
             {
                 let bytes = doc.save_incremental();
@@ -165,19 +166,38 @@ mod imp {
                                 for patch in patches.iter() {
                                     println!("PATCH RECEIVED: {}", patch.action);
                                     match &patch.action {
-                                        PatchAction::SpliceText { index, value, marks: _ } => {
-                                            w.splice_text_view(*index as i32, 0, value.make_string().as_str());
-                                        },
+                                        PatchAction::SpliceText {
+                                            index,
+                                            value,
+                                            marks: _,
+                                        } => {
+                                            w.splice_text_view(
+                                                *index as i32,
+                                                0,
+                                                value.make_string().as_str(),
+                                            );
+                                        }
                                         PatchAction::DeleteSeq { index, length } => {
                                             w.splice_text_view(*index as i32, *length as i32, "");
-                                        },
-                                        PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
-                                        PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
-                                        PatchAction::Insert { index: _, values: _ } => {},
-                                        PatchAction::Increment { prop: _, value: _ } => {},
-                                        PatchAction::Conflict { prop: _ } => {},
-                                        PatchAction::DeleteMap { key: _ } => {},
-                                        PatchAction::Mark { marks: _ } => {},
+                                        }
+                                        PatchAction::PutMap {
+                                            key: _,
+                                            value: _,
+                                            conflict: _,
+                                        } => {}
+                                        PatchAction::PutSeq {
+                                            index: _,
+                                            value: _,
+                                            conflict: _,
+                                        } => {}
+                                        PatchAction::Insert {
+                                            index: _,
+                                            values: _,
+                                        } => {}
+                                        PatchAction::Increment { prop: _, value: _ } => {}
+                                        PatchAction::Conflict { prop: _ } => {}
+                                        PatchAction::DeleteMap { key: _ } => {}
+                                        PatchAction::Mark { marks: _ } => {}
                                     }
                                 }
 
@@ -191,14 +211,17 @@ mod imp {
                 })
                 .clone();
 
-                let app = application.clone();
-                window.clone().get_text_buffer().connect_closure(
-                    "text-change",
-                    false,
-                    closure_local!(|_buffer: AardvarkTextBuffer, position: i32, del: i32, text: &str| {
-                        app.imp().update_text(position, del, text);
-                    }),
-                );
+            let app = application.clone();
+            window.clone().get_text_buffer().connect_closure(
+                "text-change",
+                false,
+                closure_local!(|_buffer: AardvarkTextBuffer,
+                                position: i32,
+                                del: i32,
+                                text: &str| {
+                    app.imp().update_text(position, del, text);
+                }),
+            );
 
             // Ask the window manager/compositor to present the window
             window.upcast::<gtk::Window>().present();
