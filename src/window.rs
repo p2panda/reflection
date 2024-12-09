@@ -98,11 +98,14 @@ impl AardvarkWindow {
         let window = self.imp();
         let buffer = window.text_view.buffer();
 
-        let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
-        if text == s { println!("bailing out on superfluous set_text"); return; }
-        //buffer.set_text(text);
+        if del != 0 {
+            // FIXME: delete stuff from buffer here
+            return;
+        }
 
         let mut pos_iter = buffer.iter_at_offset(pos);
+        // FIXME: need to tell AardvarkTextBuffer to not emit ::text-change signal during this insert op
+        // to avoid a loop
         buffer.insert(&mut pos_iter, text);
     }
 

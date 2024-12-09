@@ -29,6 +29,7 @@ use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::{mpsc, oneshot};
 use automerge::ScalarValue;
+use automerge::PatchAction;
 
 use crate::config::VERSION;
 use crate::glib::closure_local;
@@ -54,20 +55,10 @@ mod imp {
         fn update_text(&self, position: i32, del: i32, text: &str) {
             let mut doc = self.automerge.borrow_mut();
 
-            let current_text = match doc.get(automerge::ROOT, "root").expect("root exists") {
+            /*let current_text = match doc.get(automerge::ROOT, "root").expect("root exists") {
                 Some((_, root)) => doc.text(&root).unwrap(),
                 None => "".to_owned(),
-            };
-
-            println!("CMP '{}' == '{}'", current_text, text);
-
-            if text == "" {
-                return;
-            }
-
-            if text == current_text {
-                return;
-            }
+            };*/
 
             let root = match doc.get(automerge::ROOT, "root").expect("root exists") {
                 Some(root) => root.1,
@@ -77,15 +68,30 @@ mod imp {
             };
             println!("root = {}", root);
 
-//            doc.update_text(&root, text).unwrap();
-            doc.splice(
-                &root,
-                position as usize,
-                del as isize,
-                text
-                    .chars()
-                    .map(|character| ScalarValue::Str(character.to_string().into()))
-            );
+            doc.splice_text(&root,position as usize, del as isize, text).unwrap();
+
+            // move the diff pointer forward to current position
+            //doc.update_diff_cursor();
+            let patches = doc.diff_incremental();
+            for patch in patches.iter() {
+                match &patch.action {
+                    PatchAction::SpliceText { index, value, marks } => {
+                    },
+                    PatchAction::DeleteSeq { index, length } => {
+                    },
+                    PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
+                    PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
+                    PatchAction::Insert { index: _, values: _ } => {},
+                    PatchAction::Increment { prop: _, value: _ } => {},
+                    PatchAction::Conflict { prop: _ } => {},
+                    PatchAction::DeleteMap { key: _ } => {},
+                    PatchAction::Mark { marks: _ } => {},
+                }
+                // there's probably either PatchAction::SpliceText or PatchAction::DeleteSeq
+                // in here, and those we can now apply using splice_text_view
+                println!("{}", patch.action);
+                //w.splice_text_view(pos, del, &text);
+            }
 
             {
                 let bytes = doc.save_incremental();
@@ -164,12 +170,34 @@ mod imp {
                                         .expect("inserting map at root"),
                                 };
                                 println!("root = {}", root);
+
+                                // get the latest changes
+                                let patches = doc_local.diff_incremental();
+                                for patch in patches.iter() {
+                                    println!("PATCH: {}", patch.action);
+                                    match &patch.action {
+                                        PatchAction::SpliceText { index, value, marks: _ } => {
+                                            // FIXME: actually pass the value here instead of an empty string
+                                            w.splice_text_view(*index as i32, 0, "");
+                                        },
+                                        PatchAction::DeleteSeq { index, length } => {
+                                            w.splice_text_view(*index as i32, *length as i32, "");
+                                        },
+                                        PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
+                                        PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
+                                        PatchAction::Insert { index: _, values: _ } => {},
+                                        PatchAction::Increment { prop: _, value: _ } => {},
+                                        PatchAction::Conflict { prop: _ } => {},
+                                        PatchAction::DeleteMap { key: _ } => {},
+                                        PatchAction::Mark { marks: _ } => {},
+                                    }
+                                }
+
                                 doc_local.text(&root).unwrap()
                             };
                             dbg!(&text);
 
-                            println!("SET_TEXT = '{}'", text);
-                            w.splice_text_view(0, 0, &text);
+                            println!("new final text = '{}'", text);
                         }
                     });
 
