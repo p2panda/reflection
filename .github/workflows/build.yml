@@ -33,6 +33,7 @@ jobs:
         with:
           bundle: aardvark.flatpak
           manifest-path: org.p2panda.aardvark.json
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ hashFiles('org.p2panda.aardvark.json') }}
           arch: ${{ matrix.arch }}
 # The above job will build the application as a flatpack and
 # publish it as an artifact. To test it locally you can download
