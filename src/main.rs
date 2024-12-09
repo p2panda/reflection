@@ -29,7 +29,7 @@ use self::application::AardvarkApplication;
 use self::textbuffer::AardvarkTextBuffer;
 use self::window::AardvarkWindow;
 
-use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
+use config::{GETTEXT_PACKAGE, LOCALEDIR, get_pkgdatadir};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
@@ -42,7 +42,7 @@ fn main() -> glib::ExitCode {
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
     // Load resources
-    let resources = gio::Resource::load(PKGDATADIR.to_owned() + "/aardvark.gresource")
+    let resources = gio::Resource::load(get_pkgdatadir().join("aardvark.gresource"))
         .expect("Could not load resources");
     gio::resources_register(&resources);
 
