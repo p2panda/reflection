@@ -222,5 +222,9 @@ jobs:
           RUST_BACKTRACE: "full"
           RUST_LOG: "debug"
           G_MESSAGES_DEBUG: "all"
-        run: ./Aardvark.app/Contents/MacOS/aardvark
-        continue-on-error: true # Not currently working because of gresources
+        run: |
+          ./Aardvark.app/Contents/MacOS/aardvark &
+          PID=$!
+          sleep 5
+          echo Killing aardvark
+          kill $PID || true
