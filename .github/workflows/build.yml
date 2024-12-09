@@ -36,9 +36,93 @@ jobs:
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
 
-# The above job will build the application as a flatpack and
-# publish it as an artifact. To test it locally you can download
-# the zip artifact, extract it, install the flatpack and run it.
-# unzip aardvark-x86_64.zip
-# flatpak --user install aardvark.flatpak
-# flatpak run org.p2panda.aardvark
+  # The above job will build the application as a flatpack and
+  # publish it as an artifact. To test it locally you can download
+  # the zip artifact, extract it, install the flatpack and run it.
+  # unzip aardvark-x86_64.zip
+  # flatpak --user install aardvark.flatpak
+  # flatpak run org.p2panda.aardvark
+
+  windows:
+    name: "Windows"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: moonrepo/setup-rust@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Windows build variables
+        run: |
+          echo "VCPKG_TRIPLET=x64-windows" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
+      # Cache vcpkg packages
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            C:\vcpkg\installed
+            C:\vcpkg\packages
+          key: vcpkg-x64-${{ hashFiles('**/vcpkg.json', '.github/workflows/install_vcpkg.ps1') }}
+          restore-keys: |
+            vcpkg-x64-
+
+      - name: Install GTK4 and dependencies
+        run: . .\.github\workflows\install_vcpkg.ps1
+        shell: pwsh
+
+      - name: Configure pkg-config paths
+        run: |
+          $installPrefix = "$env:VCPKG_ROOT\installed\$env:VCPKG_TRIPLET"
+
+          # Set up pkg-config environment
+          $env:PKG_CONFIG = "$installPrefix\tools\pkgconf\pkg-config.ps1"
+          $env:PKG_CONFIG_PATH = "$installPrefix\lib\pkgconfig"
+          $env:PKG_CONFIG_LIBDIR = "$installPrefix\lib\pkgconfig"
+          $env:PKG_CONFIG_ALLOW_CROSS = "1"
+          $env:PKG_CONFIG_ALLOW_SYSTEM_CFLAGS = "1"
+          $env:PKG_CONFIG_ALLOW_SYSTEM_LIBS = "1"
+
+          # Add required paths to system PATH
+          $env:Path = "$installPrefix\bin;$installPrefix\tools\pkgconf;$env:Path"
+
+          # Export variables to GITHUB_ENV
+          "PKG_CONFIG=$env:PKG_CONFIG" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PKG_CONFIG_PATH=$env:PKG_CONFIG_PATH" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PKG_CONFIG_LIBDIR=$env:PKG_CONFIG_LIBDIR" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PKG_CONFIG_ALLOW_CROSS=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PKG_CONFIG_ALLOW_SYSTEM_LIBS=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          # Add to PATH for subsequent steps
+          "$installPrefix\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "$installPrefix\tools\pkgconf" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Verify pkg-config setup
+        run: |
+          Write-Host "Verifying pkg-config installation..."
+          pkg-config --version
+          Write-Host "Checking library configurations..."
+          pkg-config --debug --print-errors --cflags --libs glib-2.0
+          pkg-config --debug --print-errors --cflags --libs gtk4 libadwaita-1
+        shell: pwsh
+      - name: Build
+        run: |
+          $arch = "x64"
+          $target = if ($arch -eq "x64") { "x86_64-pc-windows-msvc" } else { "aarch64-pc-windows-msvc" }
+          cargo build --release --target $target
+        shell: pwsh
+      - name: Package
+        run: |
+          mkdir aardvark-x64
+          copy target/x86_64-pc-windows-msvc/release/aardvark.exe aardvark-x64/
+          # Add any additional DLLs or resources here
+      - name: Create ZIP
+        run: Compress-Archive -Path aardvark-x64 -DestinationPath aardvark-windows-x64.zip
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: aardvark-windows-x64
+          path: aardvark-windows-x64.zip
