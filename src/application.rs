@@ -101,54 +101,54 @@ mod imp {
             let application = self.obj();
 
             // Get the current window or create one if necessary
-            let window = self
-                .window
-                .get_or_init(|| {
-                    let window = AardvarkWindow::new(&*application);
-                    let mut rx = application.imp().rx.take().expect("rx should be given at this point");
+            let window = self.window.get_or_init(|| {
+                let window = AardvarkWindow::new(&*application);
+                let mut rx = application
+                    .imp()
+                    .rx
+                    .take()
+                    .expect("rx should be given at this point");
 
-                    {
-                        let window = window.clone();
-                        let application = application.clone();
+                {
+                    let window = window.clone();
+                    let application = application.clone();
 
-                        glib::spawn_future_local(async move {
-                            while let Some(bytes) = rx.recv().await {
-                                let document = &application.imp().document;
+                    glib::spawn_future_local(async move {
+                        while let Some(bytes) = rx.recv().await {
+                            let document = &application.imp().document;
 
-                                // Apply remote changes to our local text CRDT
-                                if let Err(err) = document.load_incremental(&bytes) {
-                                    eprintln!("failed applying text change from remote peer to automerge document: {err}");
-                                    continue;
-                                }
-
-                                // Get latest changes and apply them to our local text buffer
-                                for patch in document.diff_incremental() {
-                                    match &patch.action {
-                                        PatchAction::SpliceText {
-                                            index,
-                                            value,
-                                            ..
-                                        } => {
-                                            window.splice_text_view(
-                                                *index as i32,
-                                                0,
-                                                value.make_string().as_str(),
-                                            );
-                                        }
-                                        PatchAction::DeleteSeq { index, length } => {
-                                            window.splice_text_view(*index as i32, *length as i32, "");
-                                        }
-                                        _ => (),
-                                    }
-                                }
-
-                                dbg!(document.text());
+                            // Apply remote changes to our local text CRDT
+                            if let Err(err) = document.load_incremental(&bytes) {
+                                eprintln!(
+                                    "failed applying text change from remote peer to automerge document: {err}"
+                                );
+                                continue;
                             }
-                        });
-                    }
 
-                    window
-                });
+                            // Get latest changes and apply them to our local text buffer
+                            for patch in document.diff_incremental() {
+                                match &patch.action {
+                                    PatchAction::SpliceText { index, value, .. } => {
+                                        window.splice_text_view(
+                                            *index as i32,
+                                            0,
+                                            value.make_string().as_str(),
+                                        );
+                                    }
+                                    PatchAction::DeleteSeq { index, length } => {
+                                        window.splice_text_view(*index as i32, *length as i32, "");
+                                    }
+                                    _ => (),
+                                }
+                            }
+
+                            dbg!(document.text());
+                        }
+                    });
+                }
+
+                window
+            });
 
             {
                 let application = application.clone();
