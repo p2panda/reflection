@@ -20,6 +20,7 @@
 
 mod application;
 mod config;
+mod document;
 mod network;
 mod operation;
 mod textbuffer;

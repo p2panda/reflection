@@ -22,77 +22,44 @@ use std::cell::{OnceCell, RefCell};
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
-use automerge::transaction::Transactable;
-use automerge::PatchAction;
-use automerge::ReadDoc;
-use automerge::{AutoCommit, ObjType};
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::config::VERSION;
+use crate::document::Document;
 use crate::glib::closure_local;
 use crate::network;
 use crate::{AardvarkTextBuffer, AardvarkWindow};
 
 mod imp {
+    use automerge::PatchAction;
+
     use super::*;
 
     #[derive(Debug)]
     pub struct AardvarkApplication {
         window: OnceCell<AardvarkWindow>,
-        automerge: RefCell<AutoCommit>,
-        #[allow(dead_code)]
-        backend_shutdown_tx: oneshot::Sender<()>,
+        document: Document,
         tx: mpsc::Sender<Vec<u8>>,
         rx: RefCell<Option<mpsc::Receiver<Vec<u8>>>>,
+        #[allow(dead_code)]
+        backend_shutdown: oneshot::Sender<()>,
     }
 
     impl AardvarkApplication {
         fn update_text(&self, position: i32, del: i32, text: &str) {
-            let mut doc = self.automerge.borrow_mut();
+            self.document
+                .update(position, del, text)
+                .expect("update automerge document after text update");
 
-            let root = match doc.get(automerge::ROOT, "root").expect("root exists") {
-                Some(root) => root.1,
-                None => doc
-                    .put_object(automerge::ROOT, "root", ObjType::Text)
-                    .expect("inserting map at root"),
-            };
-            println!("root = {}", root);
-
-            doc.splice_text(&root, position as usize, del as isize, text)
-                .unwrap();
-
-            // move the diff pointer forward to current position
-            doc.update_diff_cursor();
-
-            /*
-            let patches = doc.diff_incremental();
-            for patch in patches.iter() {
-                println!("{}", patch.action);
-                match &patch.action {
-                    PatchAction::SpliceText { index: _, value: _, marks: _ } => {},
-                    PatchAction::DeleteSeq { index: _, length: _ } => {},
-                    PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
-                    PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
-                    PatchAction::Insert { index: _, values: _ } => {},
-                    PatchAction::Increment { prop: _, value: _ } => {},
-                    PatchAction::Conflict { prop: _ } => {},
-                    PatchAction::DeleteMap { key: _ } => {},
-                    PatchAction::Mark { marks: _ } => {},
-                }
-            }
-            */
-
-            {
-                let bytes = doc.save_incremental();
-                let tx = self.tx.clone();
-                glib::spawn_future_local(async move {
-                    if let Err(e) = tx.send(bytes).await {
-                        println!("{}", e);
-                    }
-                });
-            }
+            let bytes = self.document.save_incremental();
+            let tx = self.tx.clone();
+            glib::spawn_future_local(async move {
+                tx.send(bytes)
+                    .await
+                    .expect("sending message to networking backend");
+            });
         }
     }
 
@@ -103,12 +70,12 @@ mod imp {
         type ParentType = adw::Application;
 
         fn new() -> Self {
-            let automerge = RefCell::new(AutoCommit::new());
-            let (backend_shutdown_tx, tx, rx) = network::run().expect("running p2p backend");
+            let document = Document::default();
+            let (backend_shutdown, tx, rx) = network::run().expect("running p2p backend");
 
             AardvarkApplication {
-                automerge,
-                backend_shutdown_tx,
+                document,
+                backend_shutdown,
                 tx,
                 rx: RefCell::new(Some(rx)),
                 window: OnceCell::new(),
@@ -126,105 +93,79 @@ mod imp {
     }
 
     impl ApplicationImpl for AardvarkApplication {
-        // We connect to the activate callback to create a window when the application
-        // has been launched. Additionally, this callback notifies us when the user
-        // tries to launch a "second instance" of the application. When they try
-        // to do that, we'll just present any existing window.
+        // We connect to the activate callback to create a window when the application has been
+        // launched. Additionally, this callback notifies us when the user tries to launch a
+        // "second instance" of the application. When they try to do that, we'll just present any
+        // existing window.
         fn activate(&self) {
             let application = self.obj();
+
             // Get the current window or create one if necessary
-            let window = self
-                .window
-                .get_or_init(|| {
-                    let window = AardvarkWindow::new(&*application);
-                    let app = application.clone();
-                    let mut rx = application.imp().rx.take().unwrap();
-                    let w = window.clone();
+            let window = self.window.get_or_init(|| {
+                let window = AardvarkWindow::new(&*application);
+                let mut rx = application
+                    .imp()
+                    .rx
+                    .take()
+                    .expect("rx should be given at this point");
+
+                {
+                    let window = window.clone();
+                    let application = application.clone();
 
                     glib::spawn_future_local(async move {
                         while let Some(bytes) = rx.recv().await {
-                            println!("got {:?}", bytes);
-                            let text = {
-                                let mut doc_local = app.imp().automerge.borrow_mut();
-                                doc_local.load_incremental(&bytes).unwrap();
-                                println!("LOCAL:");
-                                print_document(&*doc_local);
+                            let document = &application.imp().document;
 
-                                let root = match doc_local
-                                    .get(automerge::ROOT, "root")
-                                    .expect("root exists")
-                                {
-                                    Some(root) => root.1,
-                                    None => doc_local
-                                        .put_object(automerge::ROOT, "root", ObjType::Text)
-                                        .expect("inserting map at root"),
-                                };
-                                println!("root = {}", root);
+                            // Apply remote changes to our local text CRDT
+                            if let Err(err) = document.load_incremental(&bytes) {
+                                eprintln!(
+                                    "failed applying text change from remote peer to automerge document: {err}"
+                                );
+                                continue;
+                            }
 
-                                // get the latest changes
-                                let patches = doc_local.diff_incremental();
-                                for patch in patches.iter() {
-                                    println!("PATCH RECEIVED: {}", patch.action);
-                                    match &patch.action {
-                                        PatchAction::SpliceText {
-                                            index,
-                                            value,
-                                            marks: _,
-                                        } => {
-                                            w.splice_text_view(
-                                                *index as i32,
-                                                0,
-                                                value.make_string().as_str(),
-                                            );
-                                        }
-                                        PatchAction::DeleteSeq { index, length } => {
-                                            w.splice_text_view(*index as i32, *length as i32, "");
-                                        }
-                                        PatchAction::PutMap {
-                                            key: _,
-                                            value: _,
-                                            conflict: _,
-                                        } => {}
-                                        PatchAction::PutSeq {
-                                            index: _,
-                                            value: _,
-                                            conflict: _,
-                                        } => {}
-                                        PatchAction::Insert {
-                                            index: _,
-                                            values: _,
-                                        } => {}
-                                        PatchAction::Increment { prop: _, value: _ } => {}
-                                        PatchAction::Conflict { prop: _ } => {}
-                                        PatchAction::DeleteMap { key: _ } => {}
-                                        PatchAction::Mark { marks: _ } => {}
+                            // Get latest changes and apply them to our local text buffer
+                            for patch in document.diff_incremental() {
+                                match &patch.action {
+                                    PatchAction::SpliceText { index, value, .. } => {
+                                        window.splice_text_view(
+                                            *index as i32,
+                                            0,
+                                            value.make_string().as_str(),
+                                        );
                                     }
+                                    PatchAction::DeleteSeq { index, length } => {
+                                        window.splice_text_view(*index as i32, *length as i32, "");
+                                    }
+                                    _ => (),
                                 }
+                            }
 
-                                doc_local.text(&root).unwrap()
-                            };
-                            dbg!(&text);
+                            dbg!(document.text());
                         }
                     });
+                }
 
-                    window
-                })
-                .clone();
+                window
+            });
 
-            let app = application.clone();
-            window.clone().get_text_buffer().connect_closure(
-                "text-change",
-                false,
-                closure_local!(|_buffer: AardvarkTextBuffer,
-                                position: i32,
-                                del: i32,
-                                text: &str| {
-                    app.imp().update_text(position, del, text);
-                }),
-            );
+            {
+                let application = application.clone();
+                window.get_text_buffer().connect_closure(
+                    "text-change",
+                    false,
+                    closure_local!(|_buffer: AardvarkTextBuffer,
+                                    position: i32,
+                                    del: i32,
+                                    text: &str| {
+                        application.imp().update_text(position, del, text);
+                    }),
+                );
+            }
 
             // Ask the window manager/compositor to present the window
-            window.upcast::<gtk::Window>().present();
+            window.clone().upcast::<gtk::Window>().present();
         }
     }
 
@@ -271,12 +212,4 @@ impl AardvarkApplication {
 
         about.present(Some(&window));
     }
-}
-
-fn print_document<R>(doc: &R)
-where
-    R: ReadDoc,
-{
-    let serialized = serde_json::to_string_pretty(&automerge::AutoSerde::from(doc)).unwrap();
-    println!("{serialized}");
 }
