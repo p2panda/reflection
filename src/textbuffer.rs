@@ -18,12 +18,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gtk::prelude::*;
 use adw::subclass::prelude::*;
-use gtk::glib;
 use glib::subclass::Signal;
-use std::sync::OnceLock;
+use gtk::glib;
+use gtk::prelude::*;
 use std::cell::Cell;
+use std::sync::OnceLock;
 
 mod imp {
     use super::*;
@@ -41,7 +41,7 @@ mod imp {
     }
 
     impl ObjectImpl for AardvarkTextBuffer {
-            fn signals() -> &'static [Signal] {
+        fn signals() -> &'static [Signal] {
             static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
             SIGNALS.get_or_init(|| {
                 vec![Signal::builder("text-change")
@@ -56,7 +56,8 @@ mod imp {
             let offset = iter.offset();
             println!("inserting new text {} at pos {}", new_text, offset);
             if !self.inhibit_emit_text_change.get() {
-                self.obj().emit_by_name::<()>("text-change", &[&offset, &0, &new_text]);
+                self.obj()
+                    .emit_by_name::<()>("text-change", &[&offset, &0, &new_text]);
             }
             self.parent_insert_text(iter, new_text);
         }
@@ -64,9 +65,15 @@ mod imp {
         fn delete_range(&self, start: &mut gtk::TextIter, end: &mut gtk::TextIter) {
             let offset_start = start.offset();
             let offset_end = end.offset();
-            println!("deleting range at start {} end {}", offset_start, offset_end);
+            println!(
+                "deleting range at start {} end {}",
+                offset_start, offset_end
+            );
             if !self.inhibit_emit_text_change.get() {
-                self.obj().emit_by_name::<()>("text-change", &[&offset_start, &(offset_end - offset_start), &""]);
+                self.obj().emit_by_name::<()>(
+                    "text-change",
+                    &[&offset_start, &(offset_end - offset_start), &""],
+                );
             }
             self.parent_delete_range(start, end);
         }
@@ -84,6 +91,8 @@ impl AardvarkTextBuffer {
     }
 
     pub fn set_inhibit_emit_text_change(&self, inhibit_emit_text_change: bool) {
-        self.imp().inhibit_emit_text_change.set(inhibit_emit_text_change);
+        self.imp()
+            .inhibit_emit_text_change
+            .set(inhibit_emit_text_change);
     }
 }

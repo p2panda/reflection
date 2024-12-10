@@ -33,8 +33,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::config::VERSION;
 use crate::glib::closure_local;
 use crate::network;
-use crate::AardvarkTextBuffer;
-use crate::AardvarkWindow;
+use crate::{AardvarkTextBuffer, AardvarkWindow};
 
 mod imp {
     use super::*;
@@ -66,22 +65,23 @@ mod imp {
 
             // move the diff pointer forward to current position
             doc.update_diff_cursor();
+
             /*
-                        let patches = doc.diff_incremental();
-                        for patch in patches.iter() {
-                            println!("{}", patch.action);
-                            match &patch.action {
-                                PatchAction::SpliceText { index: _, value: _, marks: _ } => {},
-                                PatchAction::DeleteSeq { index: _, length: _ } => {},
-                                PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
-                                PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
-                                PatchAction::Insert { index: _, values: _ } => {},
-                                PatchAction::Increment { prop: _, value: _ } => {},
-                                PatchAction::Conflict { prop: _ } => {},
-                                PatchAction::DeleteMap { key: _ } => {},
-                                PatchAction::Mark { marks: _ } => {},
-                            }
-                        }
+            let patches = doc.diff_incremental();
+            for patch in patches.iter() {
+                println!("{}", patch.action);
+                match &patch.action {
+                    PatchAction::SpliceText { index: _, value: _, marks: _ } => {},
+                    PatchAction::DeleteSeq { index: _, length: _ } => {},
+                    PatchAction::PutMap { key: _, value: _, conflict: _ } => {},
+                    PatchAction::PutSeq { index: _, value: _, conflict: _ } => {},
+                    PatchAction::Insert { index: _, values: _ } => {},
+                    PatchAction::Increment { prop: _, value: _ } => {},
+                    PatchAction::Conflict { prop: _ } => {},
+                    PatchAction::DeleteMap { key: _ } => {},
+                    PatchAction::Mark { marks: _ } => {},
+                }
+            }
             */
 
             {

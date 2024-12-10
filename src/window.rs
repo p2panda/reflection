@@ -18,12 +18,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gtk::prelude::*;
-use adw::subclass::prelude::*;
-use gtk::{gio, glib};
-use glib::subclass::Signal;
 use std::sync::OnceLock;
+
 use adw::prelude::AdwDialogExt;
+use adw::subclass::prelude::*;
+use glib::subclass::Signal;
+use gtk::prelude::*;
+use gtk::{gio, glib};
+
 use crate::AardvarkTextBuffer;
 
 mod imp {
