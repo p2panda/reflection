@@ -30,9 +30,7 @@ and run the project. It can be installed with flatpak.
 
 ## Todo
 
-> This is a list of ideas which came up during our hacky GTK + Rust + Automerge
-> + p2panda hackfest (December 24, Berlin) trying to get a working POC
-> together.
+> This is a list of ideas which came up during our hacky GTK + Rust + Automerge + p2panda hackfest (December 24, Berlin) trying to get a working POC together.
 
 - [ ] UI: Creating and joining a new document flows
 - [ ] UI: Multi-cursor support
