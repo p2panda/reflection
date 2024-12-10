@@ -56,7 +56,7 @@ impl Document {
         obj_id
     }
 
-    pub fn update(&mut self, position: i32, del: i32, text: &str) -> Result<()> {
+    pub fn update(&self, position: i32, del: i32, text: &str) -> Result<()> {
         let text_obj = self.text_object();
         let mut doc = self.doc.borrow_mut();
         doc.splice_text(&text_obj, position as usize, del as isize, text)?;
@@ -65,13 +65,13 @@ impl Document {
         Ok(())
     }
 
-    pub fn load_incremental(&mut self, bytes: &[u8]) -> Result<()> {
+    pub fn load_incremental(&self, bytes: &[u8]) -> Result<()> {
         let mut doc = self.doc.borrow_mut();
         doc.load_incremental(&bytes)?;
         Ok(())
     }
 
-    pub fn diff_incremental(&mut self) -> Vec<Patch> {
+    pub fn diff_incremental(&self) -> Vec<Patch> {
         let mut doc = self.doc.borrow_mut();
         doc.diff_incremental()
     }
@@ -83,12 +83,13 @@ impl Document {
             .expect("text to be given in automerge document")
     }
 
-    pub fn save(&mut self) -> Vec<u8> {
+    #[allow(dead_code)]
+    pub fn save(&self) -> Vec<u8> {
         let mut doc = self.doc.borrow_mut();
         doc.save()
     }
 
-    pub fn save_incremental(&mut self) -> Vec<u8> {
+    pub fn save_incremental(&self) -> Vec<u8> {
         let mut doc = self.doc.borrow_mut();
         doc.save_incremental()
     }
