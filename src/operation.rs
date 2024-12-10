@@ -2,7 +2,8 @@ use std::time::SystemTime;
 
 use anyhow::Result;
 use p2panda_core::{Body, Extension, Extensions, Header, PrivateKey, PruneFlag};
-use p2panda_store::{LogStore, MemoryStore, OperationStore};
+use p2panda_store::{LogStore, MemoryStore};
+use p2panda_stream::operation::ingest_operation;
 use serde::{Deserialize, Serialize};
 
 use crate::network::TextDocument;
@@ -86,26 +87,16 @@ pub async fn create_operation(
     };
     header.sign(private_key);
 
-    // @TODO: use ingest_operation from p2panada_stream.
-    store
-        .insert_operation(
-            header.hash(),
-            &header,
-            body.as_ref(),
-            &header.to_bytes(),
-            &document_id,
-        )
-        .await?;
-
-    if prune_flag {
-        assert!(
-            header.seq_num > 0,
-            "can't prune from first operation in log"
-        );
-        store
-            .delete_operations(&header.public_key, &document_id, header.seq_num)
-            .await?;
-    }
+    let prune_flag: PruneFlag = header.extract().unwrap_or_default();
+    ingest_operation(
+        store,
+        header.clone(),
+        body.clone(),
+        header.to_bytes(),
+        &document_id,
+        prune_flag.is_set(),
+    )
+    .await?;
 
     Ok((header, body))
 }
