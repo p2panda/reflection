@@ -224,8 +224,10 @@ pub fn run() -> Result<(
                     .await?;
 
                     println!(
-                        "created operation seq_num={}, prune_flag={}",
-                        header.seq_num, prune_flag
+                        "created operation seq_num={}, prune_flag={}, payload_size={}",
+                        header.seq_num,
+                        prune_flag,
+                        bytes.len(),
                     );
 
                     let encoded_gossip_operation = encode_gossip_operation(header, body)?;
