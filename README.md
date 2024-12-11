@@ -32,9 +32,10 @@ and run the project. It can be installed with flatpak.
 
 > This is a list of ideas which came up during our hacky GTK + Rust + Automerge + p2panda hackfest (December 24, Berlin) trying to get a working POC together.
 
-- [ ] UI: Creating and joining a new document flows
+- [ ] UI: Creating and joining a new document flow
 - [ ] UI: Multi-cursor support
+- [ ] Automerge: Keep message size below 4096 bytes to not exceed gossip broadcast limit
 - [ ] p2panda: Look into max. reorder attempt bug
-- [ ] p2panda: Re-attempty sync after being offline bug
+- [ ] p2panda: Re-attempt sync after being offline bug
 - [ ] Frequently do full-state "snapshots" with automerge and prune p2panda log
     - For example, do it every x minutes or after someone pressed "Save"?
