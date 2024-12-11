@@ -35,6 +35,8 @@ and run the project. It can be installed with flatpak.
 - [ ] UI: Creating and joining a new document flow
 - [ ] UI: Multi-cursor support
 - [ ] Automerge: Keep message size below 4096 bytes to not exceed gossip broadcast limit
+    - Come up with own way to send patches over the wire as `save_incremental` seems to be too naive
+    - Detect large Copy & Paste insertions above limit and insert it in "batches"
 - [ ] p2panda: Look into max. reorder attempt bug
 - [ ] p2panda: Re-attempt sync after being offline bug
 - [ ] Frequently do full-state "snapshots" with automerge and prune p2panda log
