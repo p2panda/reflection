@@ -1,3 +1,2 @@
-.flatpak-builder
-src/config.rs
 target
+.flatpak-builder
