@@ -1,27 +1,5 @@
-[package]
-name = "aardvark"
-version = "0.1.0"
-edition = "2021"
+[workspace]
 
-[dependencies]
-anyhow = "1.0.94"
-async-trait = "0.1.83"
-automerge = "0.5.12"
-ciborium = "0.2.2"
-gettext-rs = { version = "0.7", features = ["gettext-system"] }
-gtk = { version = "0.9", package = "gtk4", features = ["gnome_47"] }
-p2panda-core = "0.1.0"
-p2panda-discovery = { version = "0.1.0", features = ["mdns"] }
-p2panda-net = "0.1.0"
-p2panda-store = "0.1.0"
-p2panda-stream = "0.1.0"
-p2panda-sync = { version = "0.1.0", features = ["log-sync"] }
-serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0.128"
-tokio = { version = "1.42.0", features = ["full"] }
-tokio-stream = "0.1.17"
-
-[dependencies.adw]
-package = "libadwaita"
-version = "0.7"
-features = ["v1_6"]
+members = [
+    "aardvark-app", "aardvark-node",
+]
