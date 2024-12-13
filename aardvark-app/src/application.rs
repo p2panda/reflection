@@ -125,18 +125,20 @@ mod imp {
                                 continue;
                             }
 
+                            let buffer = window.get_text_buffer();
+
                             // Get latest changes and apply them to our local text buffer
                             for patch in document.diff_incremental() {
                                 match &patch.action {
                                     PatchAction::SpliceText { index, value, .. } => {
-                                        window.splice_text_view(
+                                        buffer.splice(
                                             *index as i32,
                                             0,
                                             value.make_string().as_str(),
                                         );
                                     }
                                     PatchAction::DeleteSeq { index, length } => {
-                                        window.splice_text_view(*index as i32, *length as i32, "");
+                                        buffer.splice(*index as i32, *length as i32, "");
                                     }
                                     _ => (),
                                 }
