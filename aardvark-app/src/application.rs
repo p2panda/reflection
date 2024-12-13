@@ -40,26 +40,13 @@ mod imp {
     pub struct AardvarkApplication {
         pub window: OnceCell<AardvarkWindow>,
         pub document: Document,
-        tx: mpsc::Sender<Vec<u8>>,
-        rx: RefCell<Option<mpsc::Receiver<Vec<u8>>>>,
+        pub tx: mpsc::Sender<Vec<u8>>,
+        pub rx: RefCell<Option<mpsc::Receiver<Vec<u8>>>>,
         #[allow(dead_code)]
         backend_shutdown: oneshot::Sender<()>,
     }
 
     impl AardvarkApplication {
-        fn update_text(&self, position: i32, del: i32, text: &str) {
-            self.document
-                .update(position, del, text)
-                .expect("update automerge document after text update");
-
-            let bytes = self.document.save_incremental();
-            let tx = self.tx.clone();
-            glib::spawn_future_local(async move {
-                tx.send(bytes)
-                    .await
-                    .expect("sending message to networking backend");
-            });
-        }
     }
 
     #[glib::object_subclass]
@@ -98,43 +85,7 @@ mod imp {
         // existing window.
         fn activate(&self) {
             let application = self.obj();
-
-            // Get the current window or create one if necessary
-            let window = self.window.get_or_init(|| {
-                let window = AardvarkWindow::new(&*application);
-
-                {
-                    let application = application.clone();
-                    let mut rx = application
-                        .imp()
-                        .rx
-                        .take()
-                        .expect("rx should be given at this point");
-
-                    glib::spawn_future_local(async move {
-                        while let Some(bytes) = rx.recv().await {
-                            application.ingest_message(bytes);
-                        }
-                    });
-                }
-
-                {
-                    let application = application.clone();
-
-                    window.get_text_buffer().connect_closure(
-                        "text-change",
-                        false,
-                        closure_local!(|_buffer: AardvarkTextBuffer,
-                                        position: i32,
-                                        del: i32,
-                                        text: &str| {
-                            application.imp().update_text(position, del, text);
-                        }),
-                    );
-                }
-
-                window
-            });
+            let window = application.get_window();
 
             // Ask the window manager/compositor to present the window
             window.clone().upcast::<gtk::Window>().present();
@@ -185,7 +136,46 @@ impl AardvarkApplication {
         about.present(Some(&window));
     }
 
-    pub fn ingest_message(&self, message: Vec<u8>) {
+    pub fn get_window(&self) -> &AardvarkWindow {
+        // Get the current window or create one if necessary
+        self.imp().window.get_or_init(|| {
+            let window = AardvarkWindow::new(self);
+
+            {
+                let application = self.clone();
+                let mut rx = self
+                    .imp()
+                    .rx
+                    .take()
+                    .expect("rx should be given at this point");
+
+                glib::spawn_future_local(async move {
+                    while let Some(bytes) = rx.recv().await {
+                        application.ingest_message(bytes);
+                    }
+                });
+            }
+
+            {
+                let application = self.clone();
+
+                window.get_text_buffer().connect_closure(
+                    "text-change",
+                    false,
+                    closure_local!(|_buffer: AardvarkTextBuffer,
+                                    position: i32,
+                                    del: i32,
+                                    text: &str| {
+                        application.update_text(position, del, text);
+                    }),
+                );
+            }
+
+            window
+        })
+    }
+
+    fn ingest_message(&self, message: Vec<u8>) {
         let document = &self.imp().document;
         let window = self.imp().window.get().unwrap();
         let buffer = window.get_text_buffer();
@@ -226,5 +216,20 @@ impl AardvarkApplication {
         }
 
         dbg!(document.text());
+    }
+
+    fn update_text(&self, position: i32, del: i32, text: &str) {
+        self.imp()
+            .document
+            .update(position, del, text)
+            .expect("update automerge document after text update");
+
+        let bytes = self.imp().document.save_incremental();
+        let tx = self.imp().tx.clone();
+        glib::spawn_future_local(async move {
+            tx.send(bytes)
+                .await
+                .expect("sending message to networking backend");
+        });
     }
 }
