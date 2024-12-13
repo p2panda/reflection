@@ -7,12 +7,9 @@ project('aardvark', 'rust',
 i18n = import('i18n')
 gnome = import('gnome')
 
-
-
-
-subdir('data')
-subdir('src')
-subdir('po')
+subdir('aardvark-app/data')
+subdir('aardvark-app/src')
+subdir('aardvark-app/po')
 
 gnome.post_install(
      glib_compile_schemas: true,
