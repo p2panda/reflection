@@ -118,22 +118,23 @@ mod imp {
                     });
                 }
 
+                {
+                    let application = application.clone();
+
+                    window.get_text_buffer().connect_closure(
+                        "text-change",
+                        false,
+                        closure_local!(|_buffer: AardvarkTextBuffer,
+                                        position: i32,
+                                        del: i32,
+                                        text: &str| {
+                            application.imp().update_text(position, del, text);
+                        }),
+                    );
+                }
+
                 window
             });
-
-            {
-                let application = application.clone();
-                window.get_text_buffer().connect_closure(
-                    "text-change",
-                    false,
-                    closure_local!(|_buffer: AardvarkTextBuffer,
-                                    position: i32,
-                                    del: i32,
-                                    text: &str| {
-                        application.imp().update_text(position, del, text);
-                    }),
-                );
-            }
 
             // Ask the window manager/compositor to present the window
             window.clone().upcast::<gtk::Window>().present();
