@@ -169,7 +169,7 @@ jobs:
       - name: Compile GResource
         run: |
           mkdir -p target/${{ matrix.target }}/release/
-          glib-compile-resources --sourcedir src --target target/${{ matrix.target }}/release/aardvark.gresource aardvark-app/src/aardvark.gresource.xml
+          glib-compile-resources --sourcedir aardvark-app/src --target target/${{ matrix.target }}/release/aardvark.gresource aardvark-app/src/aardvark.gresource.xml
 
       - name: Create App Bundle
         run: |
