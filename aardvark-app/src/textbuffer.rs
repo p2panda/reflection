@@ -111,4 +111,8 @@ impl AardvarkTextBuffer {
         self.insert(&mut pos_iter, text);
         self.set_inhibit_emit_text_change(false);
     }
+
+    pub fn full_text(&self) -> String {
+        self.text(&self.start_iter(), &self.end_iter(), true).into()
+    }
 }

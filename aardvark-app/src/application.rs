@@ -144,6 +144,13 @@ mod imp {
                                 }
                             }
 
+                            // Sanity check that the text buffer and CRDT are in the same state
+                            if buffer.full_text() != document.text() {
+                                window.add_toast(adw::Toast::new("The CRDT and the text view have different states!"));
+                                // if the state diverged, use the CRDT as the source of truth
+                                buffer.set_text(&document.text());
+                            }
+
                             dbg!(document.text());
                         }
                     });
