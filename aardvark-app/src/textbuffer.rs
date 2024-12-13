@@ -90,9 +90,25 @@ impl AardvarkTextBuffer {
         glib::Object::builder().build()
     }
 
-    pub fn set_inhibit_emit_text_change(&self, inhibit_emit_text_change: bool) {
+    fn set_inhibit_emit_text_change(&self, inhibit_emit_text_change: bool) {
         self.imp()
             .inhibit_emit_text_change
             .set(inhibit_emit_text_change);
+    }
+
+    pub fn splice(&self, pos: i32, del: i32, text: &str) {
+        if del != 0 {
+            let mut begin = self.iter_at_offset(pos);
+            let mut end = self.iter_at_offset(pos + del);
+            self.set_inhibit_emit_text_change(true);
+            self.delete(&mut begin, &mut end);
+            self.set_inhibit_emit_text_change(false);
+            return;
+        }
+
+        let mut pos_iter = self.iter_at_offset(pos);
+        self.set_inhibit_emit_text_change(true);
+        self.insert(&mut pos_iter, text);
+        self.set_inhibit_emit_text_change(false);
     }
 }

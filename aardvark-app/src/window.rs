@@ -107,24 +107,6 @@ impl AardvarkWindow {
             .build()
     }
 
-    pub fn splice_text_view(&self, pos: i32, del: i32, text: &str) {
-        let buffer: AardvarkTextBuffer = self.get_text_buffer();
-
-        if del != 0 {
-            let mut begin = buffer.iter_at_offset(pos);
-            let mut end = buffer.iter_at_offset(pos + del);
-            buffer.set_inhibit_emit_text_change(true);
-            buffer.delete(&mut begin, &mut end);
-            buffer.set_inhibit_emit_text_change(false);
-            return;
-        }
-
-        let mut pos_iter = buffer.iter_at_offset(pos);
-        buffer.set_inhibit_emit_text_change(true);
-        buffer.insert(&mut pos_iter, text);
-        buffer.set_inhibit_emit_text_change(false);
-    }
-
     pub fn get_text_buffer(&self) -> AardvarkTextBuffer {
         let window = self.imp();
         window.text_view.buffer().downcast().unwrap()
