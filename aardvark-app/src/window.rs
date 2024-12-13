@@ -18,11 +18,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::sync::OnceLock;
-
 use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
-use glib::subclass::Signal;
 use gtk::prelude::*;
 use gtk::{gio, glib};
 
@@ -67,26 +64,11 @@ mod imp {
             let buffer = AardvarkTextBuffer::new();
             self.text_view.set_buffer(Some(&buffer));
 
-            let obj = self.obj().clone();
-            buffer.connect_changed(move |buffer| {
-                let s = buffer.text(&buffer.start_iter(), &buffer.end_iter(), false);
-                obj.emit_by_name::<()>("text-changed", &[&s.as_str()]);
-            });
-
             let w = self.obj().clone().upcast::<gtk::Widget>();
             let d = self.open_document_dialog.clone();
             self.open_document_button.connect_clicked(move |_| {
                 d.present(Some(&w));
             });
-        }
-
-        fn signals() -> &'static [Signal] {
-            static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
-            SIGNALS.get_or_init(|| {
-                vec![Signal::builder("text-changed")
-                    .param_types([str::static_type()])
-                    .build()]
-            })
         }
     }
 
