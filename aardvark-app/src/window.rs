@@ -64,10 +64,10 @@ mod imp {
             let buffer = AardvarkTextBuffer::new();
             self.text_view.set_buffer(Some(&buffer));
 
-            let w = self.obj().clone().upcast::<gtk::Widget>();
-            let d = self.open_document_dialog.clone();
+            let window = self.obj().clone();
+            let dialog = self.open_document_dialog.clone();
             self.open_document_button.connect_clicked(move |_| {
-                d.present(Some(&w));
+                dialog.present(Some(&window));
             });
         }
     }
