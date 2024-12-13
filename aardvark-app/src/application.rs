@@ -102,15 +102,14 @@ mod imp {
             // Get the current window or create one if necessary
             let window = self.window.get_or_init(|| {
                 let window = AardvarkWindow::new(&*application);
-                let mut rx = application
-                    .imp()
-                    .rx
-                    .take()
-                    .expect("rx should be given at this point");
 
                 {
-                    let window = window.clone();
                     let application = application.clone();
+                    let mut rx = application
+                        .imp()
+                        .rx
+                        .take()
+                        .expect("rx should be given at this point");
 
                     glib::spawn_future_local(async move {
                         while let Some(bytes) = rx.recv().await {
