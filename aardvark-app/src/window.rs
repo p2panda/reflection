@@ -41,6 +41,8 @@ mod imp {
         pub open_document_button: TemplateChild<gtk::Button>,
         #[template_child]
         pub open_document_dialog: TemplateChild<adw::Dialog>,
+        #[template_child]
+        pub toast_overlay: TemplateChild<adw::ToastOverlay>,
     }
 
     #[glib::object_subclass]
@@ -110,5 +112,9 @@ impl AardvarkWindow {
     pub fn get_text_buffer(&self) -> AardvarkTextBuffer {
         let window = self.imp();
         window.text_view.buffer().downcast().unwrap()
+    }
+
+    pub fn add_toast(&self, toast: adw::Toast) {
+        self.imp().toast_overlay.add_toast(toast);
     }
 }
