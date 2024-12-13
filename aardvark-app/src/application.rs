@@ -26,6 +26,7 @@ use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::{mpsc, oneshot};
+use automerge::PatchAction;
 
 use crate::config::VERSION;
 use crate::document::Document;
@@ -33,14 +34,12 @@ use crate::glib::closure_local;
 use crate::{AardvarkTextBuffer, AardvarkWindow};
 
 mod imp {
-    use automerge::PatchAction;
-
     use super::*;
 
     #[derive(Debug)]
     pub struct AardvarkApplication {
-        window: OnceCell<AardvarkWindow>,
-        document: Document,
+        pub window: OnceCell<AardvarkWindow>,
+        pub document: Document,
         tx: mpsc::Sender<Vec<u8>>,
         rx: RefCell<Option<mpsc::Receiver<Vec<u8>>>>,
         #[allow(dead_code)]
@@ -115,43 +114,7 @@ mod imp {
 
                     glib::spawn_future_local(async move {
                         while let Some(bytes) = rx.recv().await {
-                            let document = &application.imp().document;
-
-                            // Apply remote changes to our local text CRDT
-                            if let Err(err) = document.load_incremental(&bytes) {
-                                eprintln!(
-                                    "failed applying text change from remote peer to automerge document: {err}"
-                                );
-                                continue;
-                            }
-
-                            let buffer = window.get_text_buffer();
-
-                            // Get latest changes and apply them to our local text buffer
-                            for patch in document.diff_incremental() {
-                                match &patch.action {
-                                    PatchAction::SpliceText { index, value, .. } => {
-                                        buffer.splice(
-                                            *index as i32,
-                                            0,
-                                            value.make_string().as_str(),
-                                        );
-                                    }
-                                    PatchAction::DeleteSeq { index, length } => {
-                                        buffer.splice(*index as i32, *length as i32, "");
-                                    }
-                                    _ => (),
-                                }
-                            }
-
-                            // Sanity check that the text buffer and CRDT are in the same state
-                            if buffer.full_text() != document.text() {
-                                window.add_toast(adw::Toast::new("The CRDT and the text view have different states!"));
-                                // if the state diverged, use the CRDT as the source of truth
-                                buffer.set_text(&document.text());
-                            }
-
-                            dbg!(document.text());
+                            application.ingest_message(bytes);
                         }
                     });
                 }
@@ -220,5 +183,48 @@ impl AardvarkApplication {
             .build();
 
         about.present(Some(&window));
+    }
+
+    pub fn ingest_message(&self, message: Vec<u8>) {
+        let document = &self.imp().document;
+        let window = self.imp().window.get().unwrap();
+        let buffer = window.get_text_buffer();
+
+        // Apply remote changes to our local text CRDT
+        if let Err(err) = document.load_incremental(&message) {
+            eprintln!(
+                "failed applying text change from remote peer to automerge document: {err}"
+            );
+            window.add_toast(adw::Toast::new(
+                "The network provided bad data!"
+            ));
+            return;
+        }
+
+        // Get latest changes and apply them to our local text buffer
+        for patch in document.diff_incremental() {
+            match &patch.action {
+                PatchAction::SpliceText { index, value, .. } => {
+                    buffer.splice(
+                        *index as i32,
+                        0,
+                        value.make_string().as_str(),
+                    );
+                }
+                PatchAction::DeleteSeq { index, length } => {
+                    buffer.splice(*index as i32, *length as i32, "");
+                }
+                _ => (),
+            }
+        }
+
+        // Sanity check that the text buffer and CRDT are in the same state
+        if buffer.full_text() != document.text() {
+            window.add_toast(adw::Toast::new("The CRDT and the text view have different states!"));
+            // if the state diverged, use the CRDT as the source of truth
+            buffer.set_text(&document.text());
+        }
+
+        dbg!(document.text());
     }
 }
