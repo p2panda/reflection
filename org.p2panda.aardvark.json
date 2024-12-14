@@ -12,17 +12,15 @@
         "--share=ipc",
         "--socket=fallback-x11",
         "--device=dri",
-        "--socket=wayland"
+        "--socket=wayland",
+        "--env=RUST_BACKTRACE=1",
+        "--env=RUST_LOG=aardvark=debug"
     ],
     "build-options" : {
         "append-path" : "/usr/lib/sdk/rust-stable/bin",
         "build-args" : [
             "--share=network"
-        ],
-        "env" : {
-            "RUST_BACKTRACE" : "1",
-            "RUST_LOG" : "aardvark=debug"
-        }
+        ]
     },
     "cleanup" : [
         "/include",
