@@ -18,12 +18,15 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use adw::subclass::prelude::*;
 use glib::subclass::Signal;
 use gtk::glib;
 use gtk::prelude::*;
+use gtk::subclass::prelude::*;
 use std::cell::Cell;
 use std::sync::OnceLock;
+use sourceview::*;
+use sourceview::subclass::prelude::*;
+use sourceview::prelude::BufferExt;
 
 mod imp {
     use super::*;
@@ -37,7 +40,7 @@ mod imp {
     impl ObjectSubclass for AardvarkTextBuffer {
         const NAME: &'static str = "AardvarkTextBuffer";
         type Type = super::AardvarkTextBuffer;
-        type ParentType = gtk::TextBuffer;
+        type ParentType = sourceview::Buffer;
     }
 
     impl ObjectImpl for AardvarkTextBuffer {
@@ -48,6 +51,29 @@ mod imp {
                     .param_types([i32::static_type(), i32::static_type(), str::static_type()])
                     .build()]
             })
+
+        }
+
+        fn constructed(&self) {
+            let manager = adw::StyleManager::default();
+            let buffer = self.obj();
+
+            let language_manager = sourceview::LanguageManager::new();
+            let markdown = language_manager.language("markdown");
+
+            buffer.set_language(markdown.as_ref());
+            // FIXME: When using subclassing highlight matching brackets causes a crash
+            // See: https://gitlab.gnome.org/World/Rust/sourceview5-rs/-/issues/11
+            buffer.set_highlight_matching_brackets(false);
+            buffer.set_style_scheme(style_scheme().as_ref());
+
+            manager.connect_dark_notify(glib::clone!(
+                #[weak]
+                buffer,
+                move |_| {
+                    buffer.set_style_scheme(style_scheme().as_ref());
+                }
+            ));
         }
     }
 
@@ -78,11 +104,13 @@ mod imp {
             self.parent_delete_range(start, end);
         }
     }
+
+    impl BufferImpl for AardvarkTextBuffer {}
 }
 
 glib::wrapper! {
     pub struct AardvarkTextBuffer(ObjectSubclass<imp::AardvarkTextBuffer>)
-        @extends gtk::TextBuffer;
+        @extends gtk::TextBuffer, sourceview::Buffer;
 }
 
 impl AardvarkTextBuffer {
@@ -115,4 +143,15 @@ impl AardvarkTextBuffer {
     pub fn full_text(&self) -> String {
         self.text(&self.start_iter(), &self.end_iter(), true).into()
     }
+}
+
+fn style_scheme() -> Option<sourceview::StyleScheme> {
+    let manager = adw::StyleManager::default();
+    let scheme_name = if manager.is_dark() {
+        "Adwaita-dark"
+    } else {
+        "Adwaita"
+    };
+
+    sourceview::StyleSchemeManager::default().scheme(scheme_name)
 }
