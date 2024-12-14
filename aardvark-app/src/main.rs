@@ -25,7 +25,6 @@ mod textbuffer;
 mod window;
 
 use std::path::PathBuf;
-use std::env;
 use self::application::AardvarkApplication;
 use self::textbuffer::AardvarkTextBuffer;
 use self::window::AardvarkWindow;
@@ -63,7 +62,7 @@ fn main() -> glib::ExitCode {
 fn get_pkgdatadir() -> PathBuf {
     #[cfg(target_os = "macos")]
     {
-        let exe_path = env::current_exe().expect("Failed to get current executable path");
+        let exe_path = std::env::current_exe().expect("Failed to get current executable path");
         // Navigate to the 'Resources/share/aardvark' directory relative to the executable
         exe_path
             .parent()       // Goes up to 'Contents/MacOS'
