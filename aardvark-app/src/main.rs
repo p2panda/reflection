@@ -30,7 +30,7 @@ use self::textbuffer::AardvarkTextBuffer;
 use self::window::AardvarkWindow;
 
 
-use config::{GETTEXT_PACKAGE, LOCALEDIR};
+use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
@@ -73,6 +73,6 @@ fn get_pkgdatadir() -> PathBuf {
 
     #[cfg(not(target_os = "macos"))]
     {
-        PathBuf::from("/app/share/aardvark")
+        PathBuf::from(PKGDATADIR)
     }
 }
