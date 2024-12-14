@@ -20,6 +20,7 @@
 
 use std::cell::{OnceCell, RefCell};
 
+use aardvark_node::network;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
@@ -29,7 +30,6 @@ use tokio::sync::{mpsc, oneshot};
 use crate::config::VERSION;
 use crate::document::Document;
 use crate::glib::closure_local;
-use crate::network;
 use crate::{AardvarkTextBuffer, AardvarkWindow};
 
 mod imp {

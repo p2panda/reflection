@@ -1,0 +1,18 @@
+[package]
+name = "aardvark-node"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.94"
+async-trait = "0.1.83"
+ciborium = "0.2.2"
+p2panda-core = "0.1.0"
+p2panda-discovery = { version = "0.1.0", features = ["mdns"] }
+p2panda-net = "0.1.0"
+p2panda-store = "0.1.0"
+p2panda-stream = "0.1.0"
+p2panda-sync = { version = "0.1.0", features = ["log-sync"] }
+serde = { version = "1.0.215", features = ["derive"] }
+tokio = { version = "1.42.0", features = ["full"] }
+tokio-stream = "0.1.17"
