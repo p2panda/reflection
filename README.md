@@ -29,17 +29,3 @@ the application: `dbus-run-session org.gnome.Builder`.
 Set the `RUST_LOG` environment variable to your verbosity setting and filter to
 enable log-based diagnostics with [tracing](https://docs.rs/tracing). Example:
 `RUST_LOG=debug` or `RUST_LOG=p2panda_net=INFO` etc.
-
-## Todo
-
-> This is a list of ideas which came up during our hacky GTK + Rust + Automerge + p2panda hackfest (December 24, Berlin) trying to get a working POC together.
-
-- [ ] UI: Creating and joining a new document flow
-- [ ] UI: Multi-cursor support
-- [ ] Automerge: Keep message size below 4096 bytes to not exceed gossip broadcast limit
-    - Come up with own way to send patches over the wire as `save_incremental` seems to be too naive
-    - Detect large Copy & Paste insertions above limit and insert it in "batches"
-- [ ] p2panda: Look into max. reorder attempt bug
-- [ ] p2panda: Re-attempt sync after being offline bug
-- [ ] Frequently do full-state "snapshots" with automerge and prune p2panda log
-    - For example, do it every x minutes or after someone pressed "Save"?
