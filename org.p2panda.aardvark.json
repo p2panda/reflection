@@ -14,7 +14,7 @@
         "--device=dri",
         "--socket=wayland",
         "--env=RUST_BACKTRACE=1",
-        "--env=RUST_LOG=aardvark=debug"
+        "--env=RUST_LOG=debug"
     ],
     "build-options" : {
         "append-path" : "/usr/lib/sdk/rust-stable/bin",
@@ -44,6 +44,9 @@
                     "url" : "./",
                     "branch" : "HEAD"
                 }
+            ],
+            "config-opts" : [
+                "--libdir=lib"
             ]
         }
     ]

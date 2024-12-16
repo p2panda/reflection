@@ -25,17 +25,21 @@ mod textbuffer;
 mod window;
 
 use std::path::PathBuf;
-use self::application::AardvarkApplication;
-use self::textbuffer::AardvarkTextBuffer;
-use self::window::AardvarkWindow;
 
-
-use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
+
+use self::application::AardvarkApplication;
+use self::config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
+use self::textbuffer::AardvarkTextBuffer;
+use self::window::AardvarkWindow;
 
 fn main() -> glib::ExitCode {
+    setup_logging();
+
     // Set up gettext translations
     bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR).expect("Unable to bind the text domain");
     bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8")
@@ -65,7 +69,7 @@ fn get_pkgdatadir() -> PathBuf {
         let exe_path = std::env::current_exe().expect("Failed to get current executable path");
         // Navigate to the 'Resources/share/aardvark' directory relative to the executable
         exe_path
-            .parent()       // Goes up to 'Contents/MacOS'
+            .parent() // Goes up to 'Contents/MacOS'
             .and_then(|p| p.parent()) // Goes up to 'Contents'
             .map(|p| p.join("Resources/share/aardvark"))
             .expect("Failed to compute PKGDATADIR")
@@ -75,4 +79,12 @@ fn get_pkgdatadir() -> PathBuf {
     {
         PathBuf::from(PKGDATADIR)
     }
+}
+
+fn setup_logging() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+        .with(EnvFilter::from_default_env())
+        .try_init()
+        .ok();
 }
