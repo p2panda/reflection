@@ -29,3 +29,7 @@ the application: `dbus-run-session org.gnome.Builder`.
 Set the `RUST_LOG` environment variable to your verbosity setting and filter to
 enable log-based diagnostics with [tracing](https://docs.rs/tracing). Example:
 `RUST_LOG=debug` or `RUST_LOG=p2panda_net=INFO` etc.
+
+## License
+
+[GNU General Public License v3.0](COPYING)
