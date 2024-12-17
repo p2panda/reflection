@@ -78,6 +78,7 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn run() -> Result<(
     oneshot::Sender<()>,
     mpsc::Sender<Vec<u8>>,
