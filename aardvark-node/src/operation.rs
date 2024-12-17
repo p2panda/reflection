@@ -10,22 +10,26 @@ use crate::network::TextDocument;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AardvarkExtensions {
-    #[serde(rename = "p", skip_serializing_if = "Option::is_none")]
-    pub prune_flag: Option<PruneFlag>,
+    #[serde(
+        rename = "p",
+        skip_serializing_if = "PruneFlag::is_not_set",
+        default = "PruneFlag::default"
+    )]
+    pub prune_flag: PruneFlag,
 
-    #[serde(rename = "d", skip_serializing_if = "Option::is_none")]
-    pub document_id: Option<TextDocument>,
+    #[serde(rename = "d")]
+    pub document_id: TextDocument,
 }
 
 impl Extension<PruneFlag> for AardvarkExtensions {
     fn extract(&self) -> Option<PruneFlag> {
-        self.prune_flag.clone()
+        Some(self.prune_flag.clone())
     }
 }
 
 impl Extension<TextDocument> for AardvarkExtensions {
     fn extract(&self) -> Option<TextDocument> {
-        self.document_id.clone()
+        Some(self.document_id.clone())
     }
 }
 
@@ -69,8 +73,8 @@ pub async fn create_operation(
         .as_secs();
 
     let extensions = AardvarkExtensions {
-        prune_flag: Some(PruneFlag::new(prune_flag)),
-        document_id: Some(document_id.clone()),
+        prune_flag: PruneFlag::new(prune_flag),
+        document_id: document_id.clone(),
     };
 
     let mut header = Header {
