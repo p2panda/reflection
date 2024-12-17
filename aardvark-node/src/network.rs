@@ -6,8 +6,7 @@ use async_trait::async_trait;
 use iroh_gossip::proto::Config as GossipConfig;
 use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
 use p2panda_discovery::mdns::LocalDiscovery;
-use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
-use p2panda_net::{ToNetwork, TopicId};
+use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork, TopicId};
 use p2panda_store::MemoryStore;
 use p2panda_stream::{DecodeExt, IngestExt};
 use p2panda_sync::log_sync::LogSyncProtocol;
@@ -79,6 +78,7 @@ impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStor
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn run() -> Result<(
     oneshot::Sender<()>,
     mpsc::Sender<Vec<u8>>,
@@ -178,49 +178,48 @@ pub fn run() -> Result<(
                             None
                         }
                     })
-                    .ingest(operations_store_clone, 128);
+                    .ingest(operations_store_clone, 128)
+                    .filter_map(|result| match result {
+                        Ok(operation) => Some(operation),
+                        Err(err) => {
+                            eprintln!("ingest operation error: {err}");
+                            None
+                        }
+                    });
 
                 // Process the operations and forward application messages to app layer.
-                while let Some(message) = stream.next().await {
-                    match message {
-                        Ok(operation) => {
-                            let prune_flag: PruneFlag =
-                                operation.header.extract().unwrap_or_default();
-                            println!(
-                                "received operation from {}, seq_num={}, prune_flag={}",
-                                operation.header.public_key,
-                                operation.header.seq_num,
-                                prune_flag.is_set(),
-                            );
+                while let Some(operation) = stream.next().await {
+                    let prune_flag: PruneFlag = operation.header.extract().unwrap_or_default();
+                    println!(
+                        "received operation from {}, seq_num={}, prune_flag={}",
+                        operation.header.public_key,
+                        operation.header.seq_num,
+                        prune_flag.is_set(),
+                    );
 
-                            // When we discover a new author we need to add them to our "document store".
-                            {
-                                let mut write_lock = documents_store.write();
-                                write_lock
-                                    .authors
-                                    .entry(operation.header.public_key)
-                                    .and_modify(|documents| {
-                                        if !documents.contains(&document_id_clone) {
-                                            documents.push(document_id_clone.clone());
-                                        }
-                                    })
-                                    .or_insert(vec![document_id_clone.clone()]);
-                            };
+                    // When we discover a new author we need to add them to our "document store".
+                    {
+                        let mut write_lock = documents_store.write();
+                        write_lock
+                            .authors
+                            .entry(operation.header.public_key)
+                            .and_modify(|documents| {
+                                if !documents.contains(&document_id_clone) {
+                                    documents.push(document_id_clone.clone());
+                                }
+                            })
+                            .or_insert(vec![document_id_clone.clone()]);
+                    };
 
-                            // Forward the payload up to the app.
-                            to_app
-                                .send(
-                                    operation
-                                        .body
-                                        .expect("all operations have a body")
-                                        .to_bytes(),
-                                )
-                                .await?;
-                        }
-                        Err(err) => {
-                            eprintln!("could not ingest message: {err}");
-                        }
-                    }
+                    // Forward the payload up to the app.
+                    to_app
+                        .send(
+                            operation
+                                .body
+                                .expect("all operations have a body")
+                                .to_bytes(),
+                        )
+                        .await?;
                 }
 
                 Ok(())
