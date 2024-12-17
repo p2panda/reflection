@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use anyhow::Result;
 use async_trait::async_trait;
+use iroh_gossip::proto::Config as GossipConfig;
 use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
@@ -114,6 +115,24 @@ pub fn run() -> Result<(
             let network = NetworkBuilder::new(network_id.into())
                 .private_key(private_key.clone())
                 .discovery(LocalDiscovery::new().expect("local discovery service"))
+                .gossip(GossipConfig {
+                    // @TODO(adz): This is a temporary workaround to account for Automerge giving
+                    // us surprisingly fairly large payloads which break the default gossip message
+                    // size limit given by iroh-gossip (4092 bytes).
+                    //
+                    // This especially happens if another peer edits a document for the first time
+                    // which already contains some text, even if it's just adding one single
+                    // character. It's also surprising that the 4kb limit is reached even if the
+                    // text itself is less than ca. 100 characters long.
+                    //
+                    // I believe we can fix this by understanding better how Automerge's "diffs"
+                    // are made and possibily using more low-level methods of their library to
+                    // really only send the actual changed text.
+                    //
+                    // Related issue: https://github.com/p2panda/aardvark/issues/11
+                    max_message_size: 512_000,
+                    ..Default::default()
+                })
                 .sync(sync_config)
                 .build()
                 .await

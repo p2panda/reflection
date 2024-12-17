@@ -25,6 +25,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "ciborium",
+ "iroh-gossip",
  "p2panda-core",
  "p2panda-discovery",
  "p2panda-net",
