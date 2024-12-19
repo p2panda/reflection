@@ -20,17 +20,18 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use crate::operation::{
-    create_operation, decode_gossip_message, encode_gossip_operation, AardvarkExtensions,
+    create_operation, decode_gossip_message, encode_gossip_operation, init_document,
+    AardvarkExtensions,
 };
 
 #[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
-pub struct TextDocument([u8; 32]);
+pub struct TextDocument(pub String);
 
 impl TopicQuery for TextDocument {}
 
 impl TopicId for TextDocument {
     fn id(&self) -> [u8; 32] {
-        self.0
+        Hash::new(self.0.as_bytes()).into()
     }
 }
 
@@ -97,12 +98,15 @@ pub fn run() -> Result<(
 
         runtime.block_on(async move {
             let network_id = Hash::new(b"aardvark <3");
-            let document_id = TextDocument(Hash::new(b"my first doc <3").into());
-
             let private_key = PrivateKey::new();
             println!("my public key: {}", private_key.public_key());
 
             let mut operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
+
+            let document_id = init_document(&mut operations_store, &private_key, vec![0, 0, 0])
+                .await
+                .expect("can init document");
+
             let documents_store = TextDocumentStore::new();
             documents_store
                 .write()
