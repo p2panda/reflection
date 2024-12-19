@@ -1,7 +1,7 @@
 use std::time::SystemTime;
 
 use anyhow::Result;
-use p2panda_core::{Body, Extension, Extensions, Header, PrivateKey, PruneFlag};
+use p2panda_core::{Body, Extension, Extensions, Hash, Header, PrivateKey, PruneFlag};
 use p2panda_store::{LogStore, MemoryStore};
 use p2panda_stream::operation::ingest_operation;
 use serde::{Deserialize, Serialize};
@@ -99,4 +99,56 @@ pub async fn create_operation(
     .await?;
 
     Ok((header, body))
+}
+
+pub async fn init_document(
+    store: &mut MemoryStore<TextDocument, AardvarkExtensions>,
+    private_key: &PrivateKey,
+    body: Vec<u8>,
+) -> Result<TextDocument> {
+    let body = Body::new(&body);
+    let public_key = private_key.public_key();
+
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .expect("can get system time")
+        .as_secs();
+
+    let document_id = Hash::new(format!("{}-{}", private_key.public_key(), timestamp).as_bytes());
+    let document_id = TextDocument(document_id.to_string());
+
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs();
+
+    let extensions = AardvarkExtensions {
+        prune_flag: None,
+        document_id: Some(document_id.clone()),
+    };
+
+    let mut header = Header {
+        version: 1,
+        public_key,
+        signature: None,
+        payload_size: body.size(),
+        payload_hash: Some(body.hash()),
+        timestamp,
+        seq_num: 0,
+        backlink: None,
+        previous: vec![],
+        extensions: Some(extensions),
+    };
+    header.sign(private_key);
+
+    ingest_operation(
+        store,
+        header.clone(),
+        Some(body),
+        header.to_bytes(),
+        &document_id,
+        false,
+    )
+    .await?;
+
+    Ok(document_id)
 }
