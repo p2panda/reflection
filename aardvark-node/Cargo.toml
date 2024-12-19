@@ -8,12 +8,16 @@ anyhow = "1.0.94"
 async-trait = "0.1.83"
 ciborium = "0.2.2"
 iroh-gossip = "0.25.0"
-p2panda-core = "0.1.0"
-p2panda-discovery = { version = "0.1.0", features = ["mdns"] }
-p2panda-net = "0.1.0"
-p2panda-store = "0.1.0"
-p2panda-stream = "0.1.0"
-p2panda-sync = { version = "0.1.0", features = ["log-sync"] }
+p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c40603cfa3eb48fcde97918f23dbc8" }
+p2panda-discovery = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c40603cfa3eb48fcde97918f23dbc8", features = [
+    "mdns",
+] }
+p2panda-net = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c40603cfa3eb48fcde97918f23dbc8" }
+p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c40603cfa3eb48fcde97918f23dbc8" }
+p2panda-stream = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c40603cfa3eb48fcde97918f23dbc8" }
+p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c40603cfa3eb48fcde97918f23dbc8", features = [
+    "log-sync",
+] }
 serde = { version = "1.0.215", features = ["derive"] }
 tokio = { version = "1.42.0", features = ["full"] }
 tokio-stream = "0.1.17"

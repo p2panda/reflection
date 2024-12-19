@@ -10,8 +10,8 @@ use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
 use p2panda_net::{ToNetwork, TopicId};
 use p2panda_store::MemoryStore;
 use p2panda_stream::{DecodeExt, IngestExt};
-use p2panda_sync::log_sync::LogSyncProtocol;
-use p2panda_sync::{TopicMap, TopicQuery};
+use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
+use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
@@ -62,7 +62,7 @@ struct TextDocumentStoreInner {
 }
 
 #[async_trait]
-impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStore {
+impl TopicLogMap<TextDocument, LogId> for TextDocumentStore {
     async fn get(&self, topic: &TextDocument) -> Option<HashMap<PublicKey, Vec<LogId>>> {
         let authors = &self.inner.read().unwrap().authors;
         let mut result = HashMap::<PublicKey, Vec<LogId>>::new();
