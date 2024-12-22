@@ -2,30 +2,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use async_trait::async_trait;
-use p2panda_core::{cbor, Hash, PublicKey};
-use p2panda_net::TopicId;
-use p2panda_sync::{log_sync::TopicLogMap, TopicQuery};
-use serde::{Deserialize, Serialize};
+use p2panda_core::PublicKey;
+use p2panda_sync::log_sync::TopicLogMap;
 
 use crate::operation::LogId;
+use crate::topics::TextDocument;
 
-#[derive(Clone, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
-pub struct TextDocument(pub PublicKey, pub u64);
-
-impl TextDocument {
-    pub fn hash(&self) -> Hash {
-        let bytes = cbor::encode_cbor(self).expect("can encode as cbor bytes");
-        Hash::new(bytes)
-    }
-}
-
-impl TopicQuery for TextDocument {}
-
-impl TopicId for TextDocument {
-    fn id(&self) -> [u8; 32] {
-        self.hash().as_bytes().to_owned()
-    }
-}
+pub type ShortCode = [char; 8];
 
 #[derive(Clone, Debug)]
 pub struct TextDocumentStore {
