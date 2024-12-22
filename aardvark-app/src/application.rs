@@ -20,7 +20,7 @@
 
 use std::cell::{OnceCell, RefCell};
 
-use aardvark_node::network::{self, ToApp};
+use aardvark_node::network::{self, FromApp, ToApp};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use automerge::PatchAction;
@@ -34,15 +34,13 @@ use crate::glib::closure_local;
 use crate::{AardvarkTextBuffer, AardvarkWindow};
 
 mod imp {
-    use network::ToApp;
-
     use super::*;
 
     #[derive(Debug)]
     pub struct AardvarkApplication {
         pub window: OnceCell<AardvarkWindow>,
         pub document: Document,
-        pub tx: mpsc::Sender<Vec<u8>>,
+        pub tx: mpsc::Sender<FromApp>,
         pub rx: RefCell<Option<mpsc::Receiver<ToApp>>>,
         #[allow(dead_code)]
         backend_shutdown: oneshot::Sender<()>,
@@ -227,7 +225,7 @@ impl AardvarkApplication {
         let bytes = self.imp().document.save_incremental();
         let tx = self.imp().tx.clone();
         glib::spawn_future_local(async move {
-            tx.send(bytes)
+            tx.send(FromApp::Message(bytes))
                 .await
                 .expect("sending message to networking backend");
         });
