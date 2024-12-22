@@ -13,11 +13,17 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
-use crate::document::{TextDocument, TextDocumentStore};
+use crate::document::{ShortCode, TextDocumentStore};
 use crate::operation::{
     create_operation, decode_gossip_message, encode_gossip_operation, init_document,
     AardvarkExtensions, LogId,
 };
+use crate::topics::TextDocument;
+
+pub enum FromApp {
+    Subscribe(ShortCode),
+    Message(Vec<u8>),
+}
 
 pub enum ToApp {
     NewDocument(TextDocument),
@@ -26,10 +32,10 @@ pub enum ToApp {
 
 pub fn run() -> Result<(
     oneshot::Sender<()>,
-    mpsc::Sender<Vec<u8>>,
+    mpsc::Sender<FromApp>,
     mpsc::Receiver<ToApp>,
 )> {
-    let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
+    let (to_network, mut from_app) = mpsc::channel::<FromApp>(512);
     let (to_app, from_network) = mpsc::channel(512);
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
@@ -181,35 +187,40 @@ pub fn run() -> Result<(
 
             // Task for handling events coming from the application layer.
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
-                while let Some(bytes) = from_app.recv().await {
-                    // @TODO: set prune flag from the frontend.
-                    let prune_flag = false;
+                while let Some(message) = from_app.recv().await {
+                    match message {
+                        FromApp::Subscribe(_short_code) => todo!(),
+                        FromApp::Message(bytes) => {
+                            // @TODO: set prune flag from the frontend.
+                            let prune_flag = false;
 
-                    // Create the p2panda operations with application message as payload.
-                    let (header, body) = create_operation(
-                        &mut operations_store,
-                        &private_key,
-                        document.clone(),
-                        Some(&bytes),
-                        prune_flag,
-                    )
-                    .await?;
+                            // Create the p2panda operations with application message as payload.
+                            let (header, body) = create_operation(
+                                &mut operations_store,
+                                &private_key,
+                                document.clone(),
+                                Some(&bytes),
+                                prune_flag,
+                            )
+                            .await?;
 
-                    println!(
-                        "created operation seq_num={}, prune_flag={}, payload_size={}",
-                        header.seq_num,
-                        prune_flag,
-                        bytes.len(),
-                    );
+                            println!(
+                                "created operation seq_num={}, prune_flag={}, payload_size={}",
+                                header.seq_num,
+                                prune_flag,
+                                bytes.len(),
+                            );
 
-                    let encoded_gossip_operation = encode_gossip_operation(header, body)?;
+                            let encoded_gossip_operation = encode_gossip_operation(header, body)?;
 
-                    // Broadcast operation on gossip overlay.
-                    topic_tx
-                        .send(ToNetwork::Message {
-                            bytes: encoded_gossip_operation,
-                        })
-                        .await?;
+                            // Broadcast operation on gossip overlay.
+                            topic_tx
+                                .send(ToNetwork::Message {
+                                    bytes: encoded_gossip_operation,
+                                })
+                                .await?;
+                        }
+                    }
                 }
 
                 Ok(())
