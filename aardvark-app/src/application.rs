@@ -152,6 +152,8 @@ impl AardvarkApplication {
                     while let Some(message) = rx.recv().await {
                         match message {
                             ToApp::NewDocument(text_document) => {
+                                // @TODO: get the short code for this document into the share UI
+                                // component.
                                 println!("new document: {}", text_document.hash())
                             }
                             ToApp::Message(bytes) => application.ingest_message(bytes),

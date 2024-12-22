@@ -33,7 +33,7 @@ impl TextDocument {
     }
 
     pub fn short_code(&self) -> ShortCode {
-        let short_code = self.hash().to_hex().split_off(HASH_LEN - 8);
+        let short_code = self.hash().to_hex().split_off(HASH_LEN - 6);
         let chars: Vec<char> = short_code.chars().collect();
         chars.try_into().unwrap()
     }

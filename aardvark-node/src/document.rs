@@ -8,7 +8,7 @@ use p2panda_sync::log_sync::TopicLogMap;
 use crate::operation::LogId;
 use crate::topics::TextDocument;
 
-pub type ShortCode = [char; 8];
+pub type ShortCode = [char; 6];
 
 #[derive(Clone, Debug)]
 pub struct TextDocumentStore {
