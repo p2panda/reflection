@@ -19,10 +19,15 @@ use crate::operation::{
     AardvarkExtensions, LogId,
 };
 
+pub enum ToApp {
+    NewDocument(TextDocument),
+    Message(Vec<u8>),
+}
+
 pub fn run() -> Result<(
     oneshot::Sender<()>,
     mpsc::Sender<Vec<u8>>,
-    mpsc::Receiver<Vec<u8>>,
+    mpsc::Receiver<ToApp>,
 )> {
     let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
     let (to_app, from_network) = mpsc::channel(512);
@@ -42,15 +47,20 @@ pub fn run() -> Result<(
 
             let mut operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
 
-            let document_id = init_document(&mut operations_store, &private_key)
+            let document = init_document(&mut operations_store, &private_key)
                 .await
                 .expect("can init document");
+
+            to_app
+                .send(ToApp::NewDocument(document.clone()))
+                .await
+                .expect("can send on app channel");
 
             let documents_store = TextDocumentStore::new();
             documents_store
                 .write()
                 .authors
-                .insert(private_key.public_key(), vec![document_id.clone()]);
+                .insert(private_key.public_key(), vec![document.clone()]);
 
             let sync = LogSyncProtocol::new(documents_store.clone(), operations_store.clone());
             let sync_config = SyncConfiguration::<TextDocument>::new(sync);
@@ -82,7 +92,7 @@ pub fn run() -> Result<(
                 .expect("network spawning");
 
             let (topic_tx, topic_rx, ready) = network
-                .subscribe(document_id.clone())
+                .subscribe(document.clone())
                 .await
                 .expect("subscribe to topic");
 
@@ -93,7 +103,7 @@ pub fn run() -> Result<(
 
             // Task for handling operations arriving from the network.
             let operations_store_clone = operations_store.clone();
-            let document_id_clone = document_id.clone();
+            let document_clone = document.clone();
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
                 let stream = ReceiverStream::new(topic_rx);
 
@@ -143,21 +153,21 @@ pub fn run() -> Result<(
                                     .authors
                                     .entry(operation.header.public_key)
                                     .and_modify(|documents| {
-                                        if !documents.contains(&document_id_clone) {
-                                            documents.push(document_id_clone.clone());
+                                        if !documents.contains(&document_clone) {
+                                            documents.push(document_clone.clone());
                                         }
                                     })
-                                    .or_insert(vec![document_id_clone.clone()]);
+                                    .or_insert(vec![document_clone.clone()]);
                             };
 
                             // Forward the payload up to the app.
                             to_app
-                                .send(
+                                .send(ToApp::Message(
                                     operation
                                         .body
                                         .expect("all operations have a body")
                                         .to_bytes(),
-                                )
+                                ))
                                 .await?;
                         }
                         Err(err) => {
@@ -179,7 +189,7 @@ pub fn run() -> Result<(
                     let (header, body) = create_operation(
                         &mut operations_store,
                         &private_key,
-                        document_id.clone(),
+                        document.clone(),
                         Some(&bytes),
                         prune_flag,
                     )
