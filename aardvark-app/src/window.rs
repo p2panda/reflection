@@ -22,6 +22,7 @@ use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use sourceview::*;
 
 use crate::AardvarkTextBuffer;
 
@@ -33,7 +34,7 @@ mod imp {
     pub struct AardvarkWindow {
         // Template widgets
         #[template_child]
-        pub text_view: TemplateChild<gtk::TextView>,
+        pub text_view: TemplateChild<sourceview::View>,
         #[template_child]
         pub open_document_button: TemplateChild<gtk::Button>,
         #[template_child]
