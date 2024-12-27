@@ -67,6 +67,8 @@ mod imp {
             let window = self.obj().clone();
             let dialog = self.open_document_dialog.clone();
             self.open_document_button.connect_clicked(move |_| {
+                // @TODO: Send `FromApp::Subscribe` message to network containing the share code
+                // and wait for the document to be joined.
                 dialog.present(Some(&window));
             });
         }

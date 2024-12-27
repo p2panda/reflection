@@ -7,6 +7,9 @@ edition = "2021"
 anyhow = "1.0.94"
 async-trait = "0.1.83"
 ciborium = "0.2.2"
+futures-io = "0.3.31"
+futures-sink = "0.3.31"
+futures-util = "0.3.31"
 iroh-gossip = "0.25.0"
 p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c40603cfa3eb48fcde97918f23dbc8" }
 p2panda-discovery = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c40603cfa3eb48fcde97918f23dbc8", features = [
@@ -19,5 +22,5 @@ p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "a174565f25c4
     "log-sync",
 ] }
 serde = { version = "1.0.215", features = ["derive"] }
-tokio = { version = "1.42.0", features = ["full"] }
+tokio = { version = "1.42.0", features = ["rt"] }
 tokio-stream = "0.1.17"

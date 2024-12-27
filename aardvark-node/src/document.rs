@@ -6,7 +6,7 @@ use p2panda_core::PublicKey;
 use p2panda_sync::log_sync::TopicLogMap;
 
 use crate::operation::LogId;
-use crate::topics::TextDocument;
+use crate::topics::{AardvarkTopics, TextDocument};
 
 pub type ShortCode = [char; 6];
 
@@ -15,15 +15,17 @@ pub struct TextDocumentStore {
     inner: Arc<RwLock<TextDocumentStoreInner>>,
 }
 
-impl TextDocumentStore {
-    pub fn new() -> Self {
+impl Default for TextDocumentStore {
+    fn default() -> Self {
         Self {
             inner: Arc::new(RwLock::new(TextDocumentStoreInner {
                 authors: HashMap::new(),
             })),
         }
     }
+}
 
+impl TextDocumentStore {
     pub fn write(&self) -> RwLockWriteGuard<TextDocumentStoreInner> {
         self.inner.write().expect("acquire write lock")
     }
@@ -35,17 +37,25 @@ pub struct TextDocumentStoreInner {
 }
 
 #[async_trait]
-impl TopicLogMap<TextDocument, LogId> for TextDocumentStore {
-    async fn get(&self, topic: &TextDocument) -> Option<HashMap<PublicKey, Vec<LogId>>> {
+impl TopicLogMap<AardvarkTopics, LogId> for TextDocumentStore {
+    async fn get(&self, topic: &AardvarkTopics) -> Option<HashMap<PublicKey, Vec<LogId>>> {
+        let text_document = match topic {
+            // When discovering documents we don't want any sync sessions to occur, this is a
+            // little hack to make sure that is the case, as if both peers resolve a topic to
+            // "None" then the sync session will naturally end.
+            AardvarkTopics::DiscoveryCode(_) => return None,
+            AardvarkTopics::TextDocument(text_document) => text_document,
+        };
+
         let authors = &self.inner.read().unwrap().authors;
         let mut result = HashMap::<PublicKey, Vec<LogId>>::new();
 
         for (public_key, documents) in authors {
-            if documents.contains(&topic) {
+            if documents.contains(text_document) {
                 result
                     .entry(*public_key)
-                    .and_modify(|logs| logs.push(topic.hash()))
-                    .or_insert(vec![topic.hash()]);
+                    .and_modify(|logs| logs.push(text_document.hash()))
+                    .or_insert(vec![text_document.hash()]);
             }
         }
 

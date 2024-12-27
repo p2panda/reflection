@@ -57,14 +57,16 @@ pub fn decode_gossip_message(bytes: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>)>
 pub async fn create_operation(
     store: &mut MemoryStore<Hash, AardvarkExtensions>,
     private_key: &PrivateKey,
-    text_document: TextDocument,
+    text_document: &TextDocument,
     body: Option<&[u8]>,
     prune_flag: bool,
 ) -> Result<(Header<AardvarkExtensions>, Option<Body>)> {
     let body = body.map(Body::new);
     let public_key = private_key.public_key();
 
-    let latest_operation = store.latest_operation(&public_key, &text_document.hash()).await?;
+    let latest_operation = store
+        .latest_operation(&public_key, &text_document.hash())
+        .await?;
 
     let (seq_num, backlink) = match latest_operation {
         Some((header, _)) => (header.seq_num + 1, Some(header.hash())),
