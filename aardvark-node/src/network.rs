@@ -451,8 +451,11 @@ mod tests {
             .await
             .unwrap();
 
+        assert!(!join_handle.is_finished());
+        
         unsubscribe_tx.send(()).unwrap();
         let result = join_handle.await.unwrap();
+        
         assert!(result.is_ok());
     }
 }
