@@ -148,7 +148,9 @@ impl Node {
         tokio::task::spawn(async move {
             while let Some(message) = from_app.recv().await {
                 match message {
-                    FromApp::CreateDocument => self.create().await?,
+                    FromApp::CreateDocument => {
+                        let _ = self.create().await?;
+                    }
                     FromApp::SubscribeToDocument(short_code) => {
                         let document = match self.discovered_documents.get(&short_code) {
                             Some(document) => document.clone(),
@@ -215,7 +217,7 @@ impl Node {
         Ok(())
     }
 
-    async fn create(&mut self) -> Result<()> {
+    async fn create(&mut self) -> Result<TextDocument> {
         let document = init_document(&mut self.operations_store, &self.private_key).await?;
 
         self.discovered_documents
@@ -228,7 +230,7 @@ impl Node {
             .send(ToApp::SubscriptionSuccess(document.clone()))
             .await?;
 
-        Ok(())
+        Ok(document)
     }
 
     /// Discover a document based on its `ShortCode`.
@@ -456,8 +458,8 @@ mod tests {
     #[tokio::test]
     async fn discover() {
         let network_id = Hash::new(b"aardvark <3");
-        let (to_app_tx_a, _) = mpsc::channel(512);
-        let (to_app_tx_b, _) = mpsc::channel(512);
+        let (to_app_tx_a, _to_app_rx_a) = mpsc::channel(512);
+        let (to_app_tx_b, _to_app_rx_b) = mpsc::channel(512);
 
         let mut node_a = test_node(network_id.into(), to_app_tx_a).await;
         let mut node_b = test_node(network_id.into(), to_app_tx_b).await;
@@ -468,13 +470,7 @@ mod tests {
         node_a.network.add_peer(node_b_addr).await.unwrap();
         node_b.network.add_peer(node_a_addr).await.unwrap();
 
-        let document = init_document(&mut node_a.operations_store, &node_a.private_key)
-            .await
-            .expect("can init document");
-
-        let _ = node_a.subscribe(&document).await.unwrap();
-
-        node_a.announce(&document).await.unwrap();
+        let document = node_a.create().await.unwrap();
 
         let discovered_document = node_b.discover(document.short_code()).await.unwrap();
 
@@ -520,16 +516,7 @@ mod tests {
         let (from_app_tx_a, from_app_rx_a) = mpsc::channel::<FromApp>(512);
         let (from_app_tx_b, from_app_rx_b) = mpsc::channel::<FromApp>(512);
 
-        let document_a = init_document(&mut node_a.operations_store, &node_a.private_key)
-            .await
-            .expect("can init document");
-
-        node_a
-            .discovered_documents
-            .insert(document_a.short_code(), document_a.clone());
-
-        node_a.subscribe(&document_a).await.unwrap();
-        node_a.announce(&document_a).await.unwrap();
+        let document_a = node_a.create().await.unwrap();
 
         node_a.run(from_app_rx_a).await;
         node_b.run(from_app_rx_b).await;
