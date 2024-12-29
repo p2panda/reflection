@@ -479,10 +479,7 @@ mod tests {
 
         node_a.announce(&document).await.unwrap();
 
-        let discovered_document = node_b
-            .discover(document.short_code())
-            .await
-            .unwrap();
+        let discovered_document = node_b.discover(document.short_code()).await.unwrap();
 
         assert_eq!(discovered_document, document);
     }
