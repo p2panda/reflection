@@ -151,12 +151,12 @@ impl AardvarkApplication {
                 glib::spawn_future_local(async move {
                     while let Some(message) = rx.recv().await {
                         match message {
-                            ToApp::NewDocument(text_document) => {
+                            ToApp::SubscriptionSuccess(text_document) => {
                                 // @TODO: get the short code for this document into the share UI
                                 // component.
                                 println!("new document: {}", text_document.hash())
                             }
-                            ToApp::Message(bytes) => application.ingest_message(bytes),
+                            ToApp::MessageReceived(bytes) => application.ingest_message(bytes),
                         }
                     }
                 });
@@ -227,7 +227,7 @@ impl AardvarkApplication {
         let bytes = self.imp().document.save_incremental();
         let tx = self.imp().tx.clone();
         glib::spawn_future_local(async move {
-            tx.send(FromApp::Message(bytes))
+            tx.send(FromApp::HandleMessage(bytes))
                 .await
                 .expect("sending message to networking backend");
         });

@@ -26,13 +26,13 @@ use crate::operation::{
 use crate::topics::{AardvarkTopics, DiscoveryCode, TextDocument};
 
 pub enum FromApp {
-    Subscribe(ShortCode),
-    Message(Vec<u8>),
+    SubscribeToDocument(ShortCode),
+    HandleMessage(Vec<u8>),
 }
 
 pub enum ToApp {
-    NewDocument(TextDocument),
-    Message(Vec<u8>),
+    SubscriptionSuccess(TextDocument),
+    MessageReceived(Vec<u8>),
 }
 
 pub fn run() -> Result<(
@@ -112,7 +112,7 @@ pub fn run() -> Result<(
                 .expect("node can announce document");
 
             to_app_tx
-                .send(ToApp::NewDocument(document.clone()))
+                .send(ToApp::SubscriptionSuccess(document.clone()))
                 .await
                 .expect("can send on app channel");
 
@@ -168,7 +168,7 @@ impl Node {
         tokio::task::spawn(async move {
             while let Some(message) = from_app.recv().await {
                 match message {
-                    FromApp::Subscribe(short_code) => {
+                    FromApp::SubscribeToDocument(short_code) => {
                         let document = match self.discovered_documents.get(&short_code) {
                             Some(document) => document.clone(),
                             None => {
@@ -179,10 +179,10 @@ impl Node {
                         };
                         self.subscribe(&document).await?;
                         self.to_app_tx
-                            .send(ToApp::NewDocument(document.clone()))
+                            .send(ToApp::SubscriptionSuccess(document.clone()))
                             .await?;
                     }
-                    FromApp::Message(bytes) => self.handle_application_bytes(bytes).await?,
+                    FromApp::HandleMessage(bytes) => self.handle_application_bytes(bytes).await?,
                 }
             }
 
@@ -392,7 +392,7 @@ impl Node {
                                 // Forward the payload up to the app.
                                 if let Some(body) = operation.body {
                                     to_app_tx
-                                    .send(ToApp::Message(body.to_bytes()))
+                                    .send(ToApp::MessageReceived(body.to_bytes()))
                                     .await?;
                                 }
                             }
@@ -538,22 +538,22 @@ mod tests {
         node_b.run(from_app_rx_b).await;
 
         from_app_tx_b
-            .send(FromApp::Subscribe(document_a.short_code()))
+            .send(FromApp::SubscribeToDocument(document_a.short_code()))
             .await
             .unwrap();
 
-        let ToApp::NewDocument(document_a_again) = to_app_rx_b.recv().await.unwrap() else {
+        let ToApp::SubscriptionSuccess(document_a_again) = to_app_rx_b.recv().await.unwrap() else {
             panic!("expected new document enum variant")
         };
 
         assert_eq!(document_a, document_a_again);
 
         from_app_tx_a
-            .send(FromApp::Message(vec![0, 1, 2, 3]))
+            .send(FromApp::HandleMessage(vec![0, 1, 2, 3]))
             .await
             .unwrap();
 
-        let ToApp::Message(bytes) = to_app_rx_b.recv().await.unwrap() else {
+        let ToApp::MessageReceived(bytes) = to_app_rx_b.recv().await.unwrap() else {
             panic!("expected message enum variant")
         };
 
