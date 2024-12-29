@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -39,8 +40,8 @@ pub fn run() -> Result<(
     mpsc::Sender<FromApp>,
     mpsc::Receiver<ToApp>,
 )> {
-    let (to_network, mut from_app) = mpsc::channel::<FromApp>(512);
-    let (to_app, from_network) = mpsc::channel(512);
+    let (from_app_tx, from_app_rx) = mpsc::channel::<FromApp>(512);
+    let (to_app_tx, to_app_rx) = mpsc::channel(512);
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
@@ -91,49 +92,37 @@ pub fn run() -> Result<(
                 .await
                 .expect("network spawning");
 
-            let mut node = Node::new(private_key, network, operations_store, documents_store);
+            let mut node = Node::new(
+                private_key,
+                network,
+                operations_store,
+                documents_store,
+                to_app_tx.clone(),
+            );
 
-            to_app
+            node.discovered_documents
+                .insert(document.short_code(), document.clone());
+
+            node.subscribe_to_document(&document)
+                .await
+                .expect("node can subscribe to document");
+
+            node.announce_document(&document)
+                .await
+                .expect("node can announce document");
+
+            to_app_tx
                 .send(ToApp::NewDocument(document.clone()))
                 .await
                 .expect("can send on app channel");
 
-            let _join_handle: JoinHandle<Result<()>> = tokio::task::spawn(async move {
-                let (mut topic_tx, mut unsubscribe_tx, mut subscribe_task_handle) = node
-                    .subscribe_to_document(&document, to_app.clone())
-                    .await?;
-
-                node.announce_document(&document).await?;
-
-                while let Some(message) = from_app.recv().await {
-                    match message {
-                        FromApp::Subscribe(short_code) => {
-                            unsubscribe_tx.send(()).unwrap(); //@TODO: error handling
-                            let task_result = subscribe_task_handle.await?;
-                            task_result?;
-
-                            let document = node.discover_document(short_code).await?;
-                            (topic_tx, unsubscribe_tx, subscribe_task_handle) = node
-                                .subscribe_to_document(&document, to_app.clone())
-                                .await?;
-
-                            node.announce_document(&document).await?;
-                        }
-                        FromApp::Message(bytes) => {
-                            node.handle_application_bytes(bytes, &document, &mut topic_tx)
-                                .await?
-                        }
-                    }
-                }
-
-                Ok(())
-            });
+            let _join_handle: JoinHandle<Result<()>> = node.run(from_app_rx).await;
 
             shutdown_rx.await.unwrap();
         });
     });
 
-    Ok((shutdown_tx, to_network, from_network))
+    Ok((shutdown_tx, from_app_tx, to_app_rx))
 }
 
 /// Struct encapsulating core application logic such as; discovering and announcing documents,
@@ -143,6 +132,17 @@ pub struct Node {
     network: Network<AardvarkTopics>,
     operations_store: MemoryStore<LogId, AardvarkExtensions>,
     documents_store: TextDocumentStore,
+    discovered_documents: HashMap<ShortCode, TextDocument>,
+    to_app_tx: mpsc::Sender<ToApp>,
+    state: TopicState,
+}
+
+#[derive(Default)]
+pub struct TopicState {
+    topic_tx: Option<mpsc::Sender<ToNetwork>>,
+    unsubscribe_tx: Option<oneshot::Sender<()>>,
+    join_handle: Option<JoinHandle<Result<()>>>,
+    document: Option<TextDocument>,
 }
 
 impl Node {
@@ -151,22 +151,51 @@ impl Node {
         network: Network<AardvarkTopics>,
         operations_store: MemoryStore<LogId, AardvarkExtensions>,
         documents_store: TextDocumentStore,
+        to_app_tx: mpsc::Sender<ToApp>,
     ) -> Self {
         Node {
             private_key,
             network,
             operations_store,
             documents_store,
+            discovered_documents: Default::default(),
+            to_app_tx,
+            state: Default::default(),
         }
     }
 
+    pub async fn run(mut self, mut from_app: mpsc::Receiver<FromApp>) -> JoinHandle<Result<()>> {
+        tokio::task::spawn(async move {
+            while let Some(message) = from_app.recv().await {
+                match message {
+                    FromApp::Subscribe(short_code) => {
+                        let document = match self.discovered_documents.get(&short_code) {
+                            Some(document) => document.clone(),
+                            None => {
+                                let document = self.discover_document(short_code).await?;
+                                self.announce_document(&document).await?;
+                                document
+                            }
+                        };
+                        self.subscribe_to_document(&document).await?;
+                        self.to_app_tx
+                            .send(ToApp::NewDocument(document.clone()))
+                            .await?;
+                    }
+                    FromApp::Message(bytes) => self.handle_application_bytes(bytes).await?,
+                }
+            }
+
+            Ok(())
+        })
+    }
+
     /// Handle application message bytes for a document.
-    pub async fn handle_application_bytes(
-        &mut self,
-        bytes: Vec<u8>,
-        document: &TextDocument,
-        topic_tx: &mut mpsc::Sender<ToNetwork>,
-    ) -> Result<()> {
+    pub async fn handle_application_bytes(&mut self, bytes: Vec<u8>) -> Result<()> {
+        let Some(document) = &self.state.document else {
+            return Err(anyhow::anyhow!("no document subscribed to"));
+        };
+
         // @TODO: set prune flag from the frontend.
         let prune_flag = false;
 
@@ -190,11 +219,18 @@ impl Node {
         let encoded_gossip_operation = encode_gossip_operation(header, body)?;
 
         // Broadcast operation on gossip overlay.
+        let Some(ref mut topic_tx) = self.state.topic_tx else {
+            return Err(anyhow::anyhow!(
+                "no document subscribed to: topic_tx is None"
+            ));
+        };
+
         topic_tx
             .send(ToNetwork::Message {
                 bytes: encoded_gossip_operation,
             })
             .await?;
+
         Ok(())
     }
 
@@ -212,6 +248,8 @@ impl Node {
             topic_rx.recv().await.expect("channel to be open")
         {
             let document: TextDocument = cbor::decode_cbor(&bytes[..])?;
+            self.discovered_documents
+                .insert(document.short_code(), document.clone());
             Ok(document)
         } else {
             Err(anyhow::format_err!(
@@ -252,19 +290,12 @@ impl Node {
     }
 
     /// Subscribe to a document and spawn a task to handle messages arriving from the network.
-    pub async fn subscribe_to_document(
-        &mut self,
-        document: &TextDocument,
-        to_app: mpsc::Sender<ToApp>,
-    ) -> Result<(
-        mpsc::Sender<ToNetwork>, // topic channel
-        oneshot::Sender<()>,     // oneshot unsubscribe channel
-        JoinHandle<Result<()>>,  // task join handle
-    )> {
-        let (topic_tx, topic_rx, ready) = self
-            .network
-            .subscribe(AardvarkTopics::TextDocument(document.clone()))
-            .await?;
+    pub async fn subscribe_to_document(&mut self, document: &TextDocument) -> Result<()> {
+        if let Some(tx) = self.state.unsubscribe_tx.take() {
+            tx.send(()).unwrap(); //@TODO: error handling
+            let task_result = self.state.join_handle.take().unwrap().await?;
+            task_result?;
+        }
 
         // Insert any document we subscribe to into the document store so that sync sessions can
         // correctly occur.
@@ -272,6 +303,11 @@ impl Node {
             .write()
             .authors
             .insert(self.private_key.public_key(), vec![document.clone()]);
+
+        let (topic_tx, topic_rx, ready) = self
+            .network
+            .subscribe(AardvarkTopics::TextDocument(document.clone()))
+            .await?;
 
         let (unsubscribe_tx, unsubscribe_rx) = oneshot::channel();
         let unsubscribe_rx = unsubscribe_rx.shared();
@@ -282,25 +318,30 @@ impl Node {
             println!("network joined for document: {document_clone:?}");
         });
 
-        let document = document.clone();
+        let document_clone = document.clone();
         let documents_store = self.documents_store.clone();
         let operations_store = self.operations_store.clone();
+        let to_app_tx = self.to_app_tx.clone();
 
         // Task for handling operations arriving from the network.
         let join_handle: JoinHandle<Result<()>> = tokio::task::spawn(async move {
             let stream = ReceiverStream::new(topic_rx);
 
-            let stream = stream.filter_map(|event| match event {
-                FromNetwork::GossipMessage { bytes, .. } => match decode_gossip_message(&bytes) {
-                    Ok(result) => Some(result),
-                    Err(err) => {
-                        eprintln!("could not decode gossip message: {err}");
-                        None
-                    }
-                },
-                FromNetwork::SyncMessage {
-                    header, payload, ..
-                } => Some((header, payload)),
+            let stream = stream.filter_map(|event| {
+                println!("{event:?}");
+                match event {
+                    FromNetwork::GossipMessage { bytes, .. } => match decode_gossip_message(&bytes)
+                    {
+                        Ok(result) => Some(result),
+                        Err(err) => {
+                            eprintln!("could not decode gossip message: {err}");
+                            None
+                        }
+                    },
+                    FromNetwork::SyncMessage {
+                        header, payload, ..
+                    } => Some((header, payload)),
+                }
             });
 
             // Decode and ingest the p2panda operations.
@@ -323,6 +364,7 @@ impl Node {
                         return Ok(())
                     }
                     Some(message) = stream.next() => {
+                        println!("{message:?}");
                         match message {
                             Ok(operation) => {
                                 let prune_flag: PruneFlag = operation.header.extract().unwrap_or_default();
@@ -340,22 +382,19 @@ impl Node {
                                         .authors
                                         .entry(operation.header.public_key)
                                         .and_modify(|documents| {
-                                            if !documents.contains(&document) {
-                                                documents.push(document.clone());
+                                            if !documents.contains(&document_clone) {
+                                                documents.push(document_clone.clone());
                                             }
                                         })
-                                        .or_insert(vec![document.clone()]);
+                                        .or_insert(vec![document_clone.clone()]);
                                 };
 
                                 // Forward the payload up to the app.
-                                to_app
-                                    .send(ToApp::Message(
-                                        operation
-                                            .body
-                                            .expect("all operations have a body")
-                                            .to_bytes(),
-                                    ))
+                                if let Some(body) = operation.body {
+                                    to_app_tx
+                                    .send(ToApp::Message(body.to_bytes()))
                                     .await?;
+                                }
                             }
                             Err(err) => {
                                 eprintln!("could not ingest message: {err}");
@@ -366,7 +405,14 @@ impl Node {
             }
         });
 
-        Ok((topic_tx, unsubscribe_tx, join_handle))
+        self.state = TopicState {
+            topic_tx: Some(topic_tx),
+            unsubscribe_tx: Some(unsubscribe_tx),
+            document: Some(document.clone()),
+            join_handle: Some(join_handle),
+        };
+
+        Ok(())
     }
 }
 
@@ -379,11 +425,13 @@ mod tests {
     use tokio::sync::mpsc;
 
     use crate::document::TextDocumentStore;
-    use crate::network::{LogId, Node};
+    use crate::network::{FromApp, LogId, Node};
     use crate::operation::{init_document, AardvarkExtensions};
     use crate::topics::AardvarkTopics;
 
-    async fn test_node(network_id: NetworkId) -> Node {
+    use super::ToApp;
+
+    async fn test_node(network_id: NetworkId, to_app_tx: mpsc::Sender<ToApp>) -> Node {
         let private_key = PrivateKey::new();
 
         let operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
@@ -399,14 +447,23 @@ mod tests {
             .await
             .expect("network spawning");
 
-        Node::new(private_key, network, operations_store, documents_store)
+        Node::new(
+            private_key,
+            network,
+            operations_store,
+            documents_store,
+            to_app_tx,
+        )
     }
 
     #[tokio::test]
     async fn discover_document() {
         let network_id = Hash::new(b"aardvark <3");
-        let mut node_a = test_node(network_id.into()).await;
-        let mut node_b = test_node(network_id.into()).await;
+        let (to_app_tx_a, _) = mpsc::channel(512);
+        let (to_app_tx_b, _) = mpsc::channel(512);
+
+        let mut node_a = test_node(network_id.into(), to_app_tx_a).await;
+        let mut node_b = test_node(network_id.into(), to_app_tx_b).await;
 
         let node_a_addr = node_a.network.endpoint().node_addr().await.unwrap();
         let node_b_addr = node_b.network.endpoint().node_addr().await.unwrap();
@@ -418,12 +475,7 @@ mod tests {
             .await
             .expect("can init document");
 
-        let (to_app, _) = mpsc::channel(512);
-
-        let _ = node_a
-            .subscribe_to_document(&document, to_app)
-            .await
-            .unwrap();
+        let _ = node_a.subscribe_to_document(&document).await.unwrap();
 
         node_a.announce_document(&document).await.unwrap();
 
@@ -438,24 +490,76 @@ mod tests {
     #[tokio::test]
     async fn subscribe_and_unsubscribe() {
         let network_id = Hash::new(b"aardvark <3");
-        let mut node_a = test_node(network_id.into()).await;
+        let (to_app_tx_a, _) = mpsc::channel(512);
+        let mut node_a = test_node(network_id.into(), to_app_tx_a).await;
 
         let document = init_document(&mut node_a.operations_store, &node_a.private_key)
             .await
             .expect("can init document");
 
-        let (to_app, _) = mpsc::channel(512);
+        node_a.subscribe_to_document(&document).await.unwrap();
 
-        let (_, unsubscribe_tx, join_handle) = node_a
-            .subscribe_to_document(&document, to_app)
+        let join_handle = node_a.state.join_handle.unwrap();
+        assert!(!join_handle.is_finished());
+
+        node_a.state.unsubscribe_tx.unwrap().send(()).unwrap();
+        let result = join_handle.await.unwrap();
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn e2e() {
+        let network_id = Hash::new(b"aardvark <3");
+        let (to_app_tx_a, _to_app_rx_a) = mpsc::channel(512);
+        let (to_app_tx_b, mut to_app_rx_b) = mpsc::channel(512);
+
+        let mut node_a = test_node(network_id.into(), to_app_tx_a).await;
+        let node_b = test_node(network_id.into(), to_app_tx_b).await;
+
+        let node_a_addr = node_a.network.endpoint().node_addr().await.unwrap();
+        let node_b_addr = node_b.network.endpoint().node_addr().await.unwrap();
+
+        node_a.network.add_peer(node_b_addr).await.unwrap();
+        node_b.network.add_peer(node_a_addr).await.unwrap();
+
+        let (from_app_tx_a, from_app_rx_a) = mpsc::channel::<FromApp>(512);
+        let (from_app_tx_b, from_app_rx_b) = mpsc::channel::<FromApp>(512);
+
+        let document_a = init_document(&mut node_a.operations_store, &node_a.private_key)
+            .await
+            .expect("can init document");
+
+        node_a
+            .discovered_documents
+            .insert(document_a.short_code(), document_a.clone());
+
+        node_a.subscribe_to_document(&document_a).await.unwrap();
+        node_a.announce_document(&document_a).await.unwrap();
+
+        node_a.run(from_app_rx_a).await;
+        node_b.run(from_app_rx_b).await;
+
+        from_app_tx_b
+            .send(FromApp::Subscribe(document_a.short_code()))
             .await
             .unwrap();
 
-        assert!(!join_handle.is_finished());
-        
-        unsubscribe_tx.send(()).unwrap();
-        let result = join_handle.await.unwrap();
-        
-        assert!(result.is_ok());
+        let ToApp::NewDocument(document_a_again) = to_app_rx_b.recv().await.unwrap() else {
+            panic!("expected new document enum variant")
+        };
+
+        assert_eq!(document_a, document_a_again);
+
+        from_app_tx_a
+            .send(FromApp::Message(vec![0, 1, 2, 3]))
+            .await
+            .unwrap();
+
+        let ToApp::Message(bytes) = to_app_rx_b.recv().await.unwrap() else {
+            panic!("expected message enum variant")
+        };
+
+        assert_eq!(bytes, vec![0, 1, 2, 3])
     }
 }
