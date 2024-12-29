@@ -123,7 +123,7 @@ pub async fn init_document(
     let text_document = TextDocument(private_key.public_key(), timestamp);
 
     let extensions = AardvarkExtensions {
-        prune_flag: None,
+        prune_flag: Some(PruneFlag::new(false)),
         text_document: Some(text_document.clone()),
     };
 
