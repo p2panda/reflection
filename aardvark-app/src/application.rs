@@ -142,6 +142,9 @@ impl AardvarkApplication {
 
             {
                 let application = self.clone();
+
+                let tx = self.imp().tx.clone();
+
                 let mut rx = self
                     .imp()
                     .rx
@@ -149,6 +152,10 @@ impl AardvarkApplication {
                     .expect("rx should be given at this point");
 
                 glib::spawn_future_local(async move {
+                    tx.send(FromApp::CreateDocument)
+                        .await
+                        .expect("app tx channel is open");
+
                     while let Some(message) = rx.recv().await {
                         match message {
                             ToApp::SubscriptionSuccess(text_document) => {

@@ -26,6 +26,7 @@ use crate::operation::{
 use crate::topics::{AardvarkTopics, DiscoveryCode, TextDocument};
 
 pub enum FromApp {
+    CreateDocument,
     SubscribeToDocument(ShortCode),
     HandleMessage(Vec<u8>),
 }
@@ -56,12 +57,7 @@ pub fn run() -> Result<(
             let private_key = PrivateKey::new();
             println!("my public key: {}", private_key.public_key());
 
-            let mut operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
-
-            let document = init_document(&mut operations_store, &private_key)
-                .await
-                .expect("can init document");
-
+            let operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
             let documents_store = TextDocumentStore::default();
             let sync = LogSyncProtocol::new(documents_store.clone(), operations_store.clone());
             let sync_config = SyncConfiguration::<AardvarkTopics>::new(sync);
@@ -92,29 +88,13 @@ pub fn run() -> Result<(
                 .await
                 .expect("network spawning");
 
-            let mut node = Node::new(
+            let node = Node::new(
                 private_key,
                 network,
                 operations_store,
                 documents_store,
                 to_app_tx.clone(),
             );
-
-            node.discovered_documents
-                .insert(document.short_code(), document.clone());
-
-            node.subscribe(&document)
-                .await
-                .expect("node can subscribe to document");
-
-            node.announce(&document)
-                .await
-                .expect("node can announce document");
-
-            to_app_tx
-                .send(ToApp::SubscriptionSuccess(document.clone()))
-                .await
-                .expect("can send on app channel");
 
             let _join_handle: JoinHandle<Result<()>> = node.run(from_app_rx).await;
 
@@ -168,6 +148,7 @@ impl Node {
         tokio::task::spawn(async move {
             while let Some(message) = from_app.recv().await {
                 match message {
+                    FromApp::CreateDocument => self.create().await?,
                     FromApp::SubscribeToDocument(short_code) => {
                         let document = match self.discovered_documents.get(&short_code) {
                             Some(document) => document.clone(),
@@ -229,6 +210,22 @@ impl Node {
             .send(ToNetwork::Message {
                 bytes: encoded_gossip_operation,
             })
+            .await?;
+
+        Ok(())
+    }
+
+    async fn create(&mut self) -> Result<()> {
+        let document = init_document(&mut self.operations_store, &self.private_key).await?;
+
+        self.discovered_documents
+            .insert(document.short_code(), document.clone());
+
+        self.subscribe(&document).await?;
+        self.announce(&document).await?;
+
+        self.to_app_tx
+            .send(ToApp::SubscriptionSuccess(document.clone()))
             .await?;
 
         Ok(())
