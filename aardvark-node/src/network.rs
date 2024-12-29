@@ -103,11 +103,11 @@ pub fn run() -> Result<(
             node.discovered_documents
                 .insert(document.short_code(), document.clone());
 
-            node.subscribe_to_document(&document)
+            node.subscribe(&document)
                 .await
                 .expect("node can subscribe to document");
 
-            node.announce_document(&document)
+            node.announce(&document)
                 .await
                 .expect("node can announce document");
 
@@ -172,12 +172,12 @@ impl Node {
                         let document = match self.discovered_documents.get(&short_code) {
                             Some(document) => document.clone(),
                             None => {
-                                let document = self.discover_document(short_code).await?;
-                                self.announce_document(&document).await?;
+                                let document = self.discover(short_code).await?;
+                                self.announce(&document).await?;
                                 document
                             }
                         };
-                        self.subscribe_to_document(&document).await?;
+                        self.subscribe(&document).await?;
                         self.to_app_tx
                             .send(ToApp::NewDocument(document.clone()))
                             .await?;
@@ -191,7 +191,7 @@ impl Node {
     }
 
     /// Handle application message bytes for a document.
-    pub async fn handle_application_bytes(&mut self, bytes: Vec<u8>) -> Result<()> {
+    async fn handle_application_bytes(&mut self, bytes: Vec<u8>) -> Result<()> {
         let Some(document) = &self.state.document else {
             return Err(anyhow::anyhow!("no document subscribed to"));
         };
@@ -238,7 +238,7 @@ impl Node {
     ///
     /// Note: this method returns a future which may never resolve if no peers in our network are
     /// announcing his document.
-    pub async fn discover_document(&mut self, short_code: ShortCode) -> Result<TextDocument> {
+    async fn discover(&mut self, short_code: ShortCode) -> Result<TextDocument> {
         let (_, mut topic_rx, _) = self
             .network
             .subscribe(AardvarkTopics::DiscoveryCode(DiscoveryCode(short_code)))
@@ -259,7 +259,7 @@ impl Node {
     }
 
     /// Spawn a task which announces documents on a discovery gossip overlay.
-    pub async fn announce_document(&self, document: &TextDocument) -> Result<()> {
+    async fn announce(&self, document: &TextDocument) -> Result<()> {
         let document = document.to_owned();
 
         let (discovery_topic_tx, _, _) = self
@@ -290,7 +290,7 @@ impl Node {
     }
 
     /// Subscribe to a document and spawn a task to handle messages arriving from the network.
-    pub async fn subscribe_to_document(&mut self, document: &TextDocument) -> Result<()> {
+    async fn subscribe(&mut self, document: &TextDocument) -> Result<()> {
         if let Some(tx) = self.state.unsubscribe_tx.take() {
             tx.send(()).unwrap(); //@TODO: error handling
             let task_result = self.state.join_handle.take().unwrap().await?;
@@ -457,7 +457,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn discover_document() {
+    async fn discover() {
         let network_id = Hash::new(b"aardvark <3");
         let (to_app_tx_a, _) = mpsc::channel(512);
         let (to_app_tx_b, _) = mpsc::channel(512);
@@ -475,12 +475,12 @@ mod tests {
             .await
             .expect("can init document");
 
-        let _ = node_a.subscribe_to_document(&document).await.unwrap();
+        let _ = node_a.subscribe(&document).await.unwrap();
 
-        node_a.announce_document(&document).await.unwrap();
+        node_a.announce(&document).await.unwrap();
 
         let discovered_document = node_b
-            .discover_document(document.short_code())
+            .discover(document.short_code())
             .await
             .unwrap();
 
@@ -497,7 +497,7 @@ mod tests {
             .await
             .expect("can init document");
 
-        node_a.subscribe_to_document(&document).await.unwrap();
+        node_a.subscribe(&document).await.unwrap();
 
         let join_handle = node_a.state.join_handle.unwrap();
         assert!(!join_handle.is_finished());
@@ -534,8 +534,8 @@ mod tests {
             .discovered_documents
             .insert(document_a.short_code(), document_a.clone());
 
-        node_a.subscribe_to_document(&document_a).await.unwrap();
-        node_a.announce_document(&document_a).await.unwrap();
+        node_a.subscribe(&document_a).await.unwrap();
+        node_a.announce(&document_a).await.unwrap();
 
         node_a.run(from_app_rx_a).await;
         node_b.run(from_app_rx_b).await;
