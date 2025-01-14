@@ -20,6 +20,7 @@
 
 mod application;
 mod config;
+mod components;
 mod document;
 mod textbuffer;
 mod window;
