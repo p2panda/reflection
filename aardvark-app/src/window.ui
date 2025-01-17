@@ -2,12 +2,33 @@
 <interface>
   <requires lib="gtk" version="4.0"/>
   <requires lib="Adw" version="1.0"/>
+    <menu id="primary_menu">
+    <section>
+      <item>
+        <attribute name="custom">focus-level</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Preferences</attribute>
+        <attribute name="action">app.preferences</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Keyboard Shortcuts</attribute>
+        <attribute name="action">win.show-help-overlay</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_About Aardvark</attribute>
+        <attribute name="action">app.about</attribute>
+      </item>
+    </section>
+  </menu>
   <template class="AardvarkWindow" parent="AdwApplicationWindow">
     <property name="title" translatable="yes">Aardvark</property>
     <property name="default-width">800</property>
     <property name="default-height">600</property>
     <style>
-      <class name="view" />
+      <class name="view"/>
     </style>
     <property name="content">
       <object class="AdwToolbarView">
@@ -30,7 +51,16 @@
                 <property name="primary">True</property>
                 <property name="icon-name">open-menu-symbolic</property>
                 <property name="tooltip-text" translatable="yes">Main Menu</property>
-                <property name="menu-model">primary_menu</property>
+                <property name="popover">
+                  <object class="GtkPopoverMenu">
+                    <property name="menu-model">primary_menu</property>
+                    <child type="focus-level">
+                      <object class="ZoomLevelSelector">
+                        <property name="zoom-level" bind-source="AardvarkWindow" bind-property="zoom-level" bind-flags="sync-create"/>
+                      </object>
+                    </child>
+                  </object>
+                </property>
               </object>
             </child>
             <child type="end">
@@ -107,7 +137,7 @@
           <object class="GtkLabel">
             <property name="label" translatable="true">Share Document</property>
             <style>
-              <class name="title-2" />
+              <class name="title-2"/>
             </style>
           </object>
         </child>
@@ -128,8 +158,8 @@
             <property name="max-width-chars">25</property>
             <property name="label" translatable="true">356702</property>
             <style>
-              <class name="invite-code" />
-              <class name="monospace" />
+              <class name="invite-code"/>
+              <class name="monospace"/>
             </style>
           </object>
         </child>
@@ -141,7 +171,7 @@
             <child>
               <object class="GtkButton">
                 <style>
-                  <class name="pill" />
+                  <class name="pill"/>
                 </style>
 
                 <property name="child">
@@ -158,22 +188,6 @@
       </object>
     </property>
   </object>
-  <menu id="primary_menu">
-    <section>
-      <item>
-        <attribute name="label" translatable="yes">_Preferences</attribute>
-        <attribute name="action">app.preferences</attribute>
-      </item>
-      <item>
-        <attribute name="label" translatable="yes">_Keyboard Shortcuts</attribute>
-        <attribute name="action">win.show-help-overlay</attribute>
-      </item>
-      <item>
-        <attribute name="label" translatable="yes">_About Aardvark</attribute>
-        <attribute name="action">app.about</attribute>
-      </item>
-    </section>
-  </menu>
   <object class="AdwDialog" id="open_document_dialog">
     <property name="can-close">true</property>
     <property name="width-request">320</property>
@@ -182,7 +196,7 @@
     <child>
       <object class="AdwToolbarView">
         <child type="top">
-          <object class="AdwHeaderBar"></object>
+          <object class="AdwHeaderBar"/>
         </child>
 
 
@@ -199,7 +213,7 @@
               <object class="GtkLabel">
                 <property name="label" translatable="true">Open Document</property>
                 <style>
-                  <class name="title-2" />
+                  <class name="title-2"/>
                 </style>
               </object>
             </child>
@@ -241,8 +255,8 @@
                     <property name="label" translatable="true">Open</property>
                     <property name="width-request">140</property>
                     <style>
-                      <class name="pill" />
-                      <class name="suggested-action" />
+                      <class name="pill"/>
+                      <class name="suggested-action"/>
                     </style>
                   </object>
                 </child>
