@@ -108,6 +108,10 @@ jobs:
       - name: Install GTK4 (x86_64)
         if: matrix.arch == 'x86_64'
         run: arch -x86_64 /usr/local/bin/brew install gtk4 || echo ERROR
+        
+      - name: Install GtkSourceView5 (x86_64)
+        if: matrix.arch == 'x86_64'
+        run: arch -x86_64 /usr/local/bin/brew install gtksourceview5 || echo ERROR
 
       - name: Install Libadwaita (x86_64)
         if: matrix.arch == 'x86_64'
@@ -129,18 +133,19 @@ jobs:
           arch -x86_64 /usr/local/bin/brew list cairo
           arch -x86_64 /usr/local/bin/brew list gdk-pixbuf
           arch -x86_64 /usr/local/bin/brew list gtk4
+          arch -x86_64 /usr/local/bin/brew list gtksourceview5
           arch -x86_64 /usr/local/bin/brew list libadwaita
 
           # Link packages individually with error handling
-          for package in pango cairo gdk-pixbuf gtk4 libadwaita; do
+          for package in pango cairo gdk-pixbuf gtk4 gtksourceview5 libadwaita; do
             arch -x86_64 /usr/local/bin/brew link --force $package || true
           done
 
       - name: Install ARM64 dependencies
         if: matrix.arch == 'arm64'
         run: |
-          brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
-          brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita || true
+          brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita gtksourceview5 || true
+          brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita gtksourceview5 || true
 
       - name: Finalize ARM64 setup
         if: matrix.arch == 'arm64'
