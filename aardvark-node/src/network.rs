@@ -1,16 +1,17 @@
 use std::collections::HashMap;
+use std::hash::Hash as StdHash;
 use std::sync::{Arc, RwLock, RwLockWriteGuard};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use iroh_gossip::proto::Config as GossipConfig;
 use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
 use p2panda_discovery::mdns::LocalDiscovery;
+use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork, TopicId};
 use p2panda_store::MemoryStore;
 use p2panda_stream::{DecodeExt, IngestExt};
-use p2panda_sync::log_sync::LogSyncProtocol;
-use p2panda_sync::{TopicMap, TopicQuery};
+use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
+use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::Builder;
 use tokio::sync::{mpsc, oneshot};
@@ -22,7 +23,7 @@ use crate::operation::{
     create_operation, decode_gossip_message, encode_gossip_operation, AardvarkExtensions,
 };
 
-#[derive(Clone, Default, Debug, PartialEq, Eq, std::hash::Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct TextDocument([u8; 32]);
 
 impl TopicQuery for TextDocument {}
@@ -60,7 +61,7 @@ struct TextDocumentStoreInner {
 }
 
 #[async_trait]
-impl TopicMap<TextDocument, HashMap<PublicKey, Vec<LogId>>> for TextDocumentStore {
+impl TopicLogMap<TextDocument, LogId> for TextDocumentStore {
     async fn get(&self, topic: &TextDocument) -> Option<HashMap<PublicKey, Vec<LogId>>> {
         let authors = &self.inner.read().unwrap().authors;
         let mut result = HashMap::<PublicKey, Vec<LogId>>::new();
@@ -114,7 +115,7 @@ pub fn run() -> Result<(
 
             let network = NetworkBuilder::new(network_id.into())
                 .private_key(private_key.clone())
-                .discovery(LocalDiscovery::new().expect("local discovery service"))
+                .discovery(LocalDiscovery::new())
                 .gossip(GossipConfig {
                     // @TODO(adz): This is a temporary workaround to account for Automerge giving
                     // us surprisingly fairly large payloads which break the default gossip message

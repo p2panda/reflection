@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::network::TextDocument;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AardvarkExtensions {
     #[serde(
         rename = "p",
