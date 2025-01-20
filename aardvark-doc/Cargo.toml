@@ -1,0 +1,7 @@
+[package]
+name = "aardvark-doc"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+loro = "1.2.7"
