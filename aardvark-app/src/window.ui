@@ -106,6 +106,7 @@
                     <property name="left-margin">12</property>
                     <property name="right-margin">12</property>
                     <property name="wrap-mode">GTK_WRAP_WORD_CHAR</property>
+                    <property name="indent-width">4</property>
                     <style>
                       <class name="inline"/>
                       <class name="editor"/>
