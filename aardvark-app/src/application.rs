@@ -36,7 +36,6 @@ use crate::{AardvarkTextBuffer, AardvarkWindow};
 mod imp {
     use super::*;
 
-    #[derive(Debug)]
     pub struct AardvarkApplication {
         pub window: OnceCell<AardvarkWindow>,
         // TODO(adz): The CRDT and backend channels will be moved into `aardvark-doc` in the next
@@ -64,7 +63,19 @@ mod imp {
             let public_key = private_key.public_key();
             println!("my public key: {}", public_key);
 
-            let document = TextCrdt::new(public_key.into());
+            let document = TextCrdt::new({
+                // Take first 8 bytes of public key (32 bytes) to determine a unique "peer id"
+                // which is used to keep authors apart inside the text crdt.
+                //
+                // @TODO(adz): This is strictly speaking not collision-resistant but we're limited
+                // here by the 8 bytes / 64 bit from the u64 `PeerId` type from Loro. In practice
+                // this should not really be a problem, but it would be nice if the Loro API would
+                // change some day.
+                let mut buf = [0u8; 8];
+                buf[..8].copy_from_slice(&public_key.as_bytes()[..8]);
+                u64::from_be_bytes(buf)
+            });
+
             let (backend_shutdown, tx, rx) =
                 network::run(private_key).expect("running p2p backend");
 
@@ -168,8 +179,8 @@ impl AardvarkApplication {
             {
                 let application = self.clone();
 
-                let mut document_rx = self.imp().document.subscribe();
-                let mut network_tx = self.imp().tx.clone();
+                let document_rx = self.imp().document.subscribe();
+                let network_tx = self.imp().tx.clone();
 
                 glib::spawn_future_local(async move {
                     while let Ok(event) = document_rx.recv().await {
@@ -179,7 +190,7 @@ impl AardvarkApplication {
                                     break;
                                 }
                             }
-                            TextCrdtEvent::Local(text_delta) => {
+                            TextCrdtEvent::Local(_text_delta) => {
                                 // @TODO(adz): Later we want to apply changes to the text buffer
                                 // here. Something along the lines of:
                                 // application.on_deltas_received(vec![text_delta});
@@ -217,10 +228,8 @@ impl AardvarkApplication {
 
     fn on_remote_message(&self, bytes: Vec<u8>) {
         let document = &self.imp().document;
-
         if let Err(err) = document.apply_encoded_delta(&bytes) {
             eprintln!("received invalid message: {}", err);
-            window.add_toast(adw::Toast::new("The network provided bad data!"));
         }
     }
 
