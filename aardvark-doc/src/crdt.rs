@@ -120,7 +120,7 @@ impl TextCrdt {
     ///             -> Delta Event received via subscription
     ///                 -> Apply delta to text buffer
     /// ```
-    pub fn subscribe(&mut self) -> EventReceiver {
+    pub fn subscribe(&self) -> EventReceiver {
         self.event_rx.clone()
     }
 
@@ -129,8 +129,8 @@ impl TextCrdt {
     /// This text change gets directly committed, causing a local "delta event" which should be
     /// used to update "higher layer" state, like the text buffer. Read
     /// [subscribe](#method.subscribe) for receiving and handling these events.
-    pub fn insert(&mut self, index: usize, chunk: &str) -> Result<(), TextCrdtError> {
-        let doc = self.doc.get_mut();
+    pub fn insert(&self, index: usize, chunk: &str) -> Result<(), TextCrdtError> {
+        let doc = self.doc.borrow_mut();
         let text = doc.get_text(TEXT_CONTAINER_ID);
         text.insert(index, chunk)
             .map_err(|err| TextCrdtError::Local(err))?;
@@ -143,8 +143,8 @@ impl TextCrdt {
     /// This text change gets directly committed, causing a local "delta event" which should be
     /// used to update "higher layer" state, like the text buffer. Read
     /// [subscribe](#method.subscribe) for receiving and handling these events.
-    pub fn remove(&mut self, index: usize, len: usize) -> Result<(), TextCrdtError> {
-        let doc = self.doc.get_mut();
+    pub fn remove(&self, index: usize, len: usize) -> Result<(), TextCrdtError> {
+        let doc = self.doc.borrow_mut();
         let text = doc.get_text(TEXT_CONTAINER_ID);
         text.delete(index, len)
             .map_err(|err| TextCrdtError::Local(err))?;
@@ -155,8 +155,8 @@ impl TextCrdt {
     /// Applies encoded text deltas received from a remote peer.
     ///
     /// Deltas are encoded according to the Loro specification.
-    pub fn apply_encoded_delta(&mut self, bytes: &[u8]) -> Result<(), TextCrdtError> {
-        let doc = self.doc.get_mut();
+    pub fn apply_encoded_delta(&self, bytes: &[u8]) -> Result<(), TextCrdtError> {
+        let doc = self.doc.borrow_mut();
         doc.import_with(bytes, "delta")
             .map_err(|err| TextCrdtError::Imported(err))?;
         Ok(())
@@ -177,7 +177,7 @@ impl TextCrdt {
 
     /// Applies local text changes.
     #[cfg(test)]
-    fn apply_delta(&mut self, delta: TextDelta) -> Result<(), TextCrdtError> {
+    fn apply_delta(&self, delta: TextDelta) -> Result<(), TextCrdtError> {
         match delta {
             TextDelta::Insert { index, chunk } => {
                 self.insert(index, &chunk)?;
@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn from_snapshot() {
-        let mut doc_1 = TextCrdt::new(1);
+        let doc_1 = TextCrdt::new(1);
 
         doc_1.insert(0, "Hello,").unwrap();
         doc_1.insert(6, " World!").unwrap();
@@ -326,7 +326,7 @@ mod tests {
 
     #[tokio::test]
     async fn from_encoded_deltas() {
-        let mut doc_1 = TextCrdt::new(1);
+        let doc_1 = TextCrdt::new(1);
         let rx_1 = doc_1.subscribe();
 
         doc_1.insert(0, "Hello,").unwrap();
@@ -334,7 +334,7 @@ mod tests {
         doc_1.remove(7, 1).unwrap();
         doc_1.insert(7, "W").unwrap();
 
-        let mut doc_2 = TextCrdt::new(2);
+        let doc_2 = TextCrdt::new(2);
 
         for _ in 0..8 {
             if let TextCrdtEvent::LocalEncoded(bytes) = rx_1.recv().await.unwrap() {
@@ -348,7 +348,7 @@ mod tests {
 
     #[tokio::test]
     async fn from_deltas() {
-        let mut doc_1 = TextCrdt::new(1);
+        let doc_1 = TextCrdt::new(1);
         let rx_1 = doc_1.subscribe();
 
         doc_1.insert(0, "Hello").unwrap();
@@ -357,7 +357,7 @@ mod tests {
 
         assert_eq!(doc_1.to_string(), "Huhu!");
 
-        let mut doc_2 = TextCrdt::new(2);
+        let doc_2 = TextCrdt::new(2);
 
         for _ in 0..6 {
             if let TextCrdtEvent::Local(delta) = rx_1.recv().await.unwrap() {
