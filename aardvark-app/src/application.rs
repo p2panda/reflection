@@ -20,16 +20,15 @@
 
 use std::cell::{OnceCell, RefCell};
 
+use aardvark_doc::{TextCrdt, TextCrdtEvent};
 use aardvark_node::network;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib};
 use tokio::sync::{mpsc, oneshot};
-use automerge::PatchAction;
 
 use crate::config::VERSION;
-use crate::document::Document;
 use crate::glib::closure_local;
 use crate::{AardvarkTextBuffer, AardvarkWindow};
 
@@ -46,8 +45,7 @@ mod imp {
         backend_shutdown: oneshot::Sender<()>,
     }
 
-    impl AardvarkApplication {
-    }
+    impl AardvarkApplication {}
 
     #[glib::object_subclass]
     impl ObjectSubclass for AardvarkApplication {
@@ -182,12 +180,8 @@ impl AardvarkApplication {
 
         // Apply remote changes to our local text CRDT
         if let Err(err) = document.load_incremental(&message) {
-            eprintln!(
-                "failed applying text change from remote peer to automerge document: {err}"
-            );
-            window.add_toast(adw::Toast::new(
-                "The network provided bad data!"
-            ));
+            eprintln!("failed applying text change from remote peer to automerge document: {err}");
+            window.add_toast(adw::Toast::new("The network provided bad data!"));
             return;
         }
 
@@ -195,11 +189,7 @@ impl AardvarkApplication {
         for patch in document.diff_incremental() {
             match &patch.action {
                 PatchAction::SpliceText { index, value, .. } => {
-                    buffer.splice(
-                        *index as i32,
-                        0,
-                        value.make_string().as_str(),
-                    );
+                    buffer.splice(*index as i32, 0, value.make_string().as_str());
                 }
                 PatchAction::DeleteSeq { index, length } => {
                     buffer.splice(*index as i32, *length as i32, "");
@@ -210,7 +200,9 @@ impl AardvarkApplication {
 
         // Sanity check that the text buffer and CRDT are in the same state
         if buffer.full_text() != document.text() {
-            window.add_toast(adw::Toast::new("The CRDT and the text view have different states!"));
+            window.add_toast(adw::Toast::new(
+                "The CRDT and the text view have different states!",
+            ));
             // if the state diverged, use the CRDT as the source of truth
             buffer.set_text(&document.text());
         }
