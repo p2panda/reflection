@@ -1,18 +1,24 @@
+name: Build
+
 on:
-  push:
-  #    branches: [main]
   pull_request:
-name: CI
+    branches:
+      - main
+    types:
+      - ready_for_review
+
 jobs:
   flatpak:
-    name: "Flatpak"
+    name: Flatpak
     runs-on: ubuntu-24.04
     container:
       image: bilelmoussaoui/flatpak-github-actions:gnome-47
       options: --privileged
     strategy:
       matrix:
-        arch: [x86_64, aarch64]
+        arch:
+          - x86_64
+          - aarch64
       # Don't fail the whole workflow if one architecture fails
       fail-fast: false
     steps:
@@ -44,7 +50,7 @@ jobs:
   # flatpak run org.p2panda.aardvark
 
   macos:
-    name: "macOS"
+    name: macOS
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -108,7 +114,7 @@ jobs:
       - name: Install GTK4 (x86_64)
         if: matrix.arch == 'x86_64'
         run: arch -x86_64 /usr/local/bin/brew install gtk4 || echo ERROR
-        
+
       - name: Install GtkSourceView5 (x86_64)
         if: matrix.arch == 'x86_64'
         run: arch -x86_64 /usr/local/bin/brew install gtksourceview5 || echo ERROR
