@@ -1,6 +1,6 @@
 mod crdt;
 
-use crate::crdt::TextCrdt;
+pub use crate::crdt::{TextCrdt, TextCrdtError, TextCrdtEvent};
 
 pub struct Document {
     #[allow(dead_code)]
