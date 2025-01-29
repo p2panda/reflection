@@ -2,9 +2,9 @@ use std::cell::RefCell;
 use std::fmt;
 use std::sync::Arc;
 
-use anyhow::Result;
 use loro::event::{Diff, DiffEvent};
 use loro::{EventTriggerKind, ExportMode, LoroDoc, Subscription};
+use thiserror::Error;
 
 /// Identifier of container where we handle the text CRDT in a Loro document.
 ///
@@ -85,11 +85,13 @@ impl TextCrdt {
     /// Use this when restoring an existing, local document (for example when it was stored on your
     /// file system) or when receiving a full snapshot from another peer after joining an existing
     /// document.
-    pub fn from_bytes(peer_id: u64, bytes: &[u8]) -> Result<Self> {
+    pub fn from_bytes(peer_id: u64, bytes: &[u8]) -> Result<Self, TextCrdtError> {
         let crdt = Self::new(peer_id);
         {
             let inner = crdt.doc.borrow_mut();
-            inner.import_with(bytes, "snapshot")?;
+            inner
+                .import_with(bytes, "snapshot")
+                .map_err(|err| TextCrdtError::Imported(err))?;
         }
         Ok(crdt)
     }
@@ -127,10 +129,11 @@ impl TextCrdt {
     /// This text change gets directly committed, causing a local "delta event" which should be
     /// used to update "higher layer" state, like the text buffer. Read [`subscribe`] for receiving
     /// and handling these events.
-    pub fn insert(&mut self, index: usize, chunk: &str) -> Result<()> {
+    pub fn insert(&mut self, index: usize, chunk: &str) -> Result<(), TextCrdtError> {
         let doc = self.doc.get_mut();
         let text = doc.get_text(TEXT_CONTAINER_ID);
-        text.insert(index, chunk)?;
+        text.insert(index, chunk)
+            .map_err(|err| TextCrdtError::Local(err))?;
         doc.commit();
         Ok(())
     }
@@ -140,10 +143,11 @@ impl TextCrdt {
     /// This text change gets directly committed, causing a local "delta event" which should be
     /// used to update "higher layer" state, like the text buffer. Read [`subscribe`] for receiving
     /// and handling these events.
-    pub fn remove(&mut self, index: usize, len: usize) -> Result<()> {
+    pub fn remove(&mut self, index: usize, len: usize) -> Result<(), TextCrdtError> {
         let doc = self.doc.get_mut();
         let text = doc.get_text(TEXT_CONTAINER_ID);
-        text.delete(index, len)?;
+        text.delete(index, len)
+            .map_err(|err| TextCrdtError::Local(err))?;
         doc.commit();
         Ok(())
     }
@@ -151,9 +155,10 @@ impl TextCrdt {
     /// Applies encoded text deltas received from a remote peer.
     ///
     /// Deltas are encoded according to the Loro specification.
-    pub fn apply_encoded_delta(&mut self, bytes: &[u8]) -> Result<()> {
+    pub fn apply_encoded_delta(&mut self, bytes: &[u8]) -> Result<(), TextCrdtError> {
         let doc = self.doc.get_mut();
-        doc.import_with(bytes, "delta")?;
+        doc.import_with(bytes, "delta")
+            .map_err(|err| TextCrdtError::Imported(err))?;
         Ok(())
     }
 
@@ -172,7 +177,7 @@ impl TextCrdt {
 
     /// Applies local text changes.
     #[cfg(test)]
-    fn apply_delta(&mut self, delta: TextDelta) -> Result<()> {
+    fn apply_delta(&mut self, delta: TextDelta) -> Result<(), TextCrdtError> {
         match delta {
             TextDelta::Insert { index, chunk } => {
                 self.insert(index, &chunk)?;
@@ -181,7 +186,6 @@ impl TextCrdt {
                 self.remove(index, len)?;
             }
         }
-
         Ok(())
     }
 }
@@ -290,6 +294,15 @@ fn absolute_deltas(loro_deltas: Vec<loro::TextDelta>) -> Vec<TextDelta> {
     }
 
     deltas
+}
+
+#[derive(Debug, Error)]
+pub enum TextCrdtError {
+    #[error("could not apply local text change: {0}")]
+    Local(loro::LoroError),
+
+    #[error("could not apply imported text change: {0}")]
+    Imported(loro::LoroError),
 }
 
 #[cfg(test)]
