@@ -12,6 +12,7 @@ dependencies = [
  "gettext-rs",
  "gtk4",
  "libadwaita",
+ "p2panda-core",
  "serde",
  "serde_json",
  "sourceview5",

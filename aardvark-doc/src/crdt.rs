@@ -30,9 +30,10 @@ pub struct TextCrdt {
 }
 
 impl TextCrdt {
-    /// Returns new instance managing a text CRDT.
+    /// Returns new instance managing a text CRDT. Use this when creating a new document.
     ///
-    /// Use this when creating a new document.
+    /// The peer id represents the identity of the author applying local changes (that's
+    /// essentially us), it needs be strictly unique.
     pub fn new(peer_id: u64) -> Self {
         let doc = LoroDoc::new();
         doc.set_record_timestamp(false);
@@ -85,6 +86,9 @@ impl TextCrdt {
     /// Use this when restoring an existing, local document (for example when it was stored on your
     /// file system) or when receiving a full snapshot from another peer after joining an existing
     /// document.
+    ///
+    /// The peer id represents the identity of the author applying local changes (that's
+    /// essentially us), it needs be strictly unique.
     pub fn from_bytes(peer_id: u64, bytes: &[u8]) -> Result<Self, TextCrdtError> {
         let crdt = Self::new(peer_id);
         {
