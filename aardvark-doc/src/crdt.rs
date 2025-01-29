@@ -17,9 +17,9 @@ pub type EventReceiver = async_channel::Receiver<TextCrdtEvent>;
 /// Manages a Conflict-free Replicated Data Type (CRDTs) to resolve parallel edits by multiple
 /// authors on the same text document.
 ///
-/// Internally this uses a text CRDT implementation by Loro. This interface serves merely as a
-/// wrapper to bring Loro and it's data into the shape we need, without worrying too much about the
-/// internal details of Loro.
+/// Internally this uses a text CRDT implementation by [Loro](https://www.loro.dev/). This
+/// interface serves merely as a wrapper to bring Loro and it's data into the shape we need,
+/// without worrying too much about the internal details of Loro.
 pub struct TextCrdt {
     doc: RefCell<LoroDoc>,
     event_rx: EventReceiver,
@@ -127,8 +127,8 @@ impl TextCrdt {
     /// Inserts text at the given unicode position.
     ///
     /// This text change gets directly committed, causing a local "delta event" which should be
-    /// used to update "higher layer" state, like the text buffer. Read [`subscribe`] for receiving
-    /// and handling these events.
+    /// used to update "higher layer" state, like the text buffer. Read
+    /// [subscribe](#method.subscribe) for receiving and handling these events.
     pub fn insert(&mut self, index: usize, chunk: &str) -> Result<(), TextCrdtError> {
         let doc = self.doc.get_mut();
         let text = doc.get_text(TEXT_CONTAINER_ID);
@@ -141,8 +141,8 @@ impl TextCrdt {
     /// Removes range of text at the given unicode position with unicode length.
     ///
     /// This text change gets directly committed, causing a local "delta event" which should be
-    /// used to update "higher layer" state, like the text buffer. Read [`subscribe`] for receiving
-    /// and handling these events.
+    /// used to update "higher layer" state, like the text buffer. Read
+    /// [subscribe](#method.subscribe) for receiving and handling these events.
     pub fn remove(&mut self, index: usize, len: usize) -> Result<(), TextCrdtError> {
         let doc = self.doc.get_mut();
         let text = doc.get_text(TEXT_CONTAINER_ID);
@@ -165,8 +165,8 @@ impl TextCrdt {
     /// Exports encoded snapshot of current Text CRDT state.
     ///
     /// This can be used to persist the current state of the text CRDT on the file system or during
-    /// initial sync when a remote peer joins our document. See `[from_bytes]` for the reverse
-    /// method.
+    /// initial sync when a remote peer joins our document. See [from_bytes](#method.from_bytes)
+    /// for the reverse method.
     ///
     /// Snapshots are encoded according to the Loro specification.
     pub fn snapshot(&self) -> Vec<u8> {
