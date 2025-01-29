@@ -14,5 +14,5 @@ p2panda-store = "0.2.0"
 p2panda-stream = "0.2.0"
 p2panda-sync = { version = "0.2.0", features = ["log-sync"] }
 serde = { version = "1.0.215", features = ["derive"] }
-tokio = { version = "1.42.0", features = ["full"] }
+tokio = { version = "1.42.0", features = ["rt", "sync"] }
 tokio-stream = "0.1.17"
