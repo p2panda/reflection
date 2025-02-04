@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tracing::{error, debug};
 
 use crate::operation::{
     AardvarkExtensions, create_operation, decode_gossip_message, encode_gossip_operation,
@@ -197,7 +198,7 @@ impl Network {
 
             tokio::task::spawn(async move {
                 let _ = ready.await;
-                println!("network joined!");
+                debug!("network joined!");
             });
 
             let document_id_clone = document_id.clone();
@@ -206,7 +207,7 @@ impl Network {
                 FromNetwork::GossipMessage { bytes, .. } => match decode_gossip_message(&bytes) {
                     Ok(result) => Some(result),
                     Err(err) => {
-                        eprintln!("could not decode gossip message: {err}");
+                        error!("could not decode gossip message: {err}");
                         None
                     }
                 },
@@ -221,7 +222,7 @@ impl Network {
                 .filter_map(|result| match result {
                     Ok(operation) => Some(operation),
                     Err(err) => {
-                        eprintln!("decode operation error: {err}");
+                        error!("decode operation error: {err}");
                         None
                     }
                 })
@@ -229,7 +230,7 @@ impl Network {
                 .filter_map(|result| match result {
                     Ok(operation) => Some(operation),
                     Err(err) => {
-                        eprintln!("ingest operation error: {err}");
+                        error!("ingest operation error: {err}");
                         None
                     }
                 });
@@ -239,7 +240,7 @@ impl Network {
                 // Process the operations and forward application messages to app layer.
                 while let Some(operation) = stream.next().await {
                     let prune_flag: PruneFlag = operation.header.extract().unwrap_or_default();
-                    println!(
+                    debug!(
                         "received operation from {}, seq_num={}, prune_flag={}",
                         operation.header.public_key,
                         operation.header.seq_num,
@@ -296,7 +297,7 @@ impl Network {
                     )
                     .await?;
 
-                    println!(
+                    debug!(
                         "created operation seq_num={}, prune_flag={}, payload_size={}",
                         header.seq_num,
                         prune_flag,

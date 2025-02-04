@@ -36,6 +36,7 @@ dependencies = [
  "serde",
  "tokio",
  "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
