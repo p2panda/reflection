@@ -15,7 +15,7 @@ use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
 use serde::{Deserialize, Serialize};
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::OnceCell;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -86,8 +86,6 @@ pub struct Network {
 
 struct NetworkInner {
     runtime: Runtime,
-    #[allow(dead_code)]
-    shutdown_tx: OnceCell<oneshot::Sender<()>>,
     operations_store: MemoryStore<LogId, AardvarkExtensions>,
     documents_store: TextDocumentStore,
     network: OnceCell<p2panda_net::Network<TextDocument>>,
@@ -105,10 +103,11 @@ impl Network {
         let operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
         let documents_store = TextDocumentStore::new();
 
-        let runtime = Builder::new_current_thread()
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
             .enable_all()
             .build()
-            .expect("backend runtime ready to spawn tasks");
+            .expect("Could not start tokio runtime");
 
         Network {
             inner: Arc::new(NetworkInner {
@@ -116,14 +115,12 @@ impl Network {
                 documents_store,
                 network: OnceCell::new(),
                 private_key: OnceCell::new(),
-                shutdown_tx: OnceCell::new(),
                 runtime,
             }),
         }
     }
 
     pub fn run(&self, private_key: PrivateKey, network_id: Hash) {
-        let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
         let sync = LogSyncProtocol::new(
             self.inner.documents_store.clone(),
             self.inner.operations_store.clone(),
@@ -135,48 +132,38 @@ impl Network {
             .set(private_key.clone())
             .expect("network can be run only once");
 
-        self.inner
-            .shutdown_tx
-            .set(shutdown_tx)
-            .expect("network can be run only once");
-
         let network_inner_clone = self.inner.clone();
-        std::thread::spawn(move || {
-            let network_inner_clone2 = network_inner_clone.clone();
-            network_inner_clone.runtime.block_on(async move {
-                network_inner_clone2
-                    .network
-                    .get_or_init(|| async {
-                        NetworkBuilder::new(network_id.into())
-                            .private_key(private_key)
-                            .discovery(LocalDiscovery::new())
-                            .gossip(GossipConfig {
-                                // @TODO(adz): This is a temporary workaround to account for Automerge giving
-                                // us surprisingly fairly large payloads which break the default gossip message
-                                // size limit given by iroh-gossip (4092 bytes).
-                                //
-                                // This especially happens if another peer edits a document for the first time
-                                // which already contains some text, even if it's just adding one single
-                                // character. It's also surprising that the 4kb limit is reached even if the
-                                // text itself is less than ca. 100 characters long.
-                                //
-                                // I believe we can fix this by understanding better how Automerge's "diffs"
-                                // are made and possibily using more low-level methods of their library to
-                                // really only send the actual changed text.
-                                //
-                                // Related issue: https://github.com/p2panda/aardvark/issues/11
-                                max_message_size: 512_000,
-                                ..Default::default()
-                            })
-                            .sync(sync_config)
-                            .build()
-                            .await
-                            .expect("network spawning")
-                    })
-                    .await;
-
-                shutdown_rx.await.unwrap();
-            });
+        self.inner.runtime.spawn(async move {
+            network_inner_clone
+                .network
+                .get_or_init(|| async {
+                    NetworkBuilder::new(network_id.into())
+                        .private_key(private_key)
+                        .discovery(LocalDiscovery::new())
+                        .gossip(GossipConfig {
+                            // @TODO(adz): This is a temporary workaround to account for Automerge giving
+                            // us surprisingly fairly large payloads which break the default gossip message
+                            // size limit given by iroh-gossip (4092 bytes).
+                            //
+                            // This especially happens if another peer edits a document for the first time
+                            // which already contains some text, even if it's just adding one single
+                            // character. It's also surprising that the 4kb limit is reached even if the
+                            // text itself is less than ca. 100 characters long.
+                            //
+                            // I believe we can fix this by understanding better how Automerge's "diffs"
+                            // are made and possibily using more low-level methods of their library to
+                            // really only send the actual changed text.
+                            //
+                            // Related issue: https://github.com/p2panda/aardvark/issues/11
+                            max_message_size: 512_000,
+                            ..Default::default()
+                        })
+                        .sync(sync_config)
+                        .build()
+                        .await
+                        .expect("network spawning")
+                })
+                .await;
         });
     }
 
