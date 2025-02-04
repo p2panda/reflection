@@ -80,7 +80,9 @@ impl TopicLogMap<TextDocument, LogId> for TextDocumentStore {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn run() -> Result<(
+pub fn run(
+    private_key: PrivateKey,
+) -> Result<(
     oneshot::Sender<()>,
     mpsc::Sender<Vec<u8>>,
     mpsc::Receiver<Vec<u8>>,
@@ -99,9 +101,6 @@ pub fn run() -> Result<(
         runtime.block_on(async move {
             let network_id = Hash::new(b"aardvark <3");
             let document_id = TextDocument(Hash::new(b"my first doc <3").into());
-
-            let private_key = PrivateKey::new();
-            println!("my public key: {}", private_key.public_key());
 
             let mut operations_store = MemoryStore::<LogId, AardvarkExtensions>::new();
             let documents_store = TextDocumentStore::new();

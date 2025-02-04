@@ -25,6 +25,7 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib};
+use p2panda_core::PrivateKey;
 use tokio::sync::{mpsc, oneshot};
 use automerge::PatchAction;
 
@@ -57,7 +58,10 @@ mod imp {
 
         fn new() -> Self {
             let document = Document::default();
-            let (backend_shutdown, tx, rx) = network::run().expect("running p2p backend");
+            let private_key = PrivateKey::new();
+            let public_key = private_key.public_key();
+
+            let (backend_shutdown, tx, rx) = network::run(private_key).expect("running p2p backend");
 
             AardvarkApplication {
                 document,
