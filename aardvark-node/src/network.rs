@@ -167,6 +167,13 @@ impl Network {
         });
     }
 
+    pub fn shutdown(&self) {
+        let network = self.inner.network.get().expect("network running").clone();
+        self.inner.runtime.block_on(async move {
+            network.shutdown().await.expect("network to shutdown");
+        });
+    }
+
     pub fn get_or_create_document(
         &self,
         document_id: Hash,
