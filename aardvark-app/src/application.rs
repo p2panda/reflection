@@ -25,8 +25,8 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib};
-use p2panda_core::PrivateKey;
-use tokio::sync::{mpsc, oneshot};
+use p2panda_core::{Hash, PrivateKey};
+use tokio::sync::mpsc;
 use automerge::PatchAction;
 
 use crate::config::VERSION;
@@ -37,14 +37,13 @@ use crate::{AardvarkTextBuffer, AardvarkWindow};
 mod imp {
     use super::*;
 
-    #[derive(Debug)]
     pub struct AardvarkApplication {
         pub window: OnceCell<AardvarkWindow>,
         pub document: Document,
         pub tx: mpsc::Sender<Vec<u8>>,
         pub rx: RefCell<Option<mpsc::Receiver<Vec<u8>>>>,
         #[allow(dead_code)]
-        backend_shutdown: oneshot::Sender<()>,
+        network: network::Network,
     }
 
     impl AardvarkApplication {
@@ -60,12 +59,15 @@ mod imp {
             let document = Document::default();
             let private_key = PrivateKey::new();
             let public_key = private_key.public_key();
+            let network = network::Network::new();
+            println!("The public key used: {}", public_key);
 
-            let (backend_shutdown, tx, rx) = network::run(private_key).expect("running p2p backend");
+            network.run(private_key, Hash::new(b"aardvark <3"));
+            let (tx, rx) = network.get_or_create_document(Hash::new(b"some document"));
 
             AardvarkApplication {
                 document,
-                backend_shutdown,
+                network,
                 tx,
                 rx: RefCell::new(Some(rx)),
                 window: OnceCell::new(),
