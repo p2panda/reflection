@@ -42,8 +42,7 @@ mod imp {
         network: network::Network,
     }
 
-    impl AardvarkApplication {
-    }
+    impl AardvarkApplication {}
 
     #[glib::object_subclass]
     impl ObjectSubclass for AardvarkApplication {
@@ -138,8 +137,6 @@ impl AardvarkApplication {
 
     pub fn get_window(&self) -> &AardvarkWindow {
         // Get the current window or create one if necessary
-        self.imp().window.get_or_init(|| {
-            AardvarkWindow::new(self)
-        })
+        self.imp().window.get_or_init(|| AardvarkWindow::new(self))
     }
 }

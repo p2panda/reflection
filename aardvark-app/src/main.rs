@@ -19,8 +19,8 @@
  */
 
 mod application;
-mod config;
 mod components;
+mod config;
 mod textbuffer;
 mod window;
 

@@ -20,8 +20,8 @@
 use std::cell::Cell;
 
 use adw::subclass::prelude::*;
-use gtk::prelude::*;
 use gtk::glib;
+use gtk::prelude::*;
 use sourceview::*;
 
 mod imp {
@@ -75,7 +75,6 @@ glib::wrapper! {
 
 impl ZoomLevelSelector {
     pub fn new() -> Self {
-        glib::Object::builder()
-            .build()
+        glib::Object::builder().build()
     }
 }

@@ -23,10 +23,10 @@ use std::cell;
 use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
 use gtk::prelude::*;
-use gtk::{gio, glib, gdk};
+use gtk::{gdk, gio, glib};
 use sourceview::*;
 
-use crate::{AardvarkTextBuffer, components::ZoomLevelSelector};
+use crate::{components::ZoomLevelSelector, AardvarkTextBuffer};
 
 const BASE_TEXT_FONT_SIZE: f64 = 24.0;
 
@@ -75,29 +75,43 @@ mod imp {
                 window.set_font_scale(0.0);
             });
 
-            klass.add_binding_action(gdk::Key::plus,
-                                     gdk::ModifierType::CONTROL_MASK,
-                                     "window.zoom-in");
-            klass.add_binding_action(gdk::Key::KP_Add,
-                                     gdk::ModifierType::CONTROL_MASK,
-                                     "window.zoom-in");
-            klass.add_binding_action(gdk::Key::minus,
-                                     gdk::ModifierType::CONTROL_MASK,
-                                     "window.zoom-out");
+            klass.add_binding_action(
+                gdk::Key::plus,
+                gdk::ModifierType::CONTROL_MASK,
+                "window.zoom-in",
+            );
+            klass.add_binding_action(
+                gdk::Key::KP_Add,
+                gdk::ModifierType::CONTROL_MASK,
+                "window.zoom-in",
+            );
+            klass.add_binding_action(
+                gdk::Key::minus,
+                gdk::ModifierType::CONTROL_MASK,
+                "window.zoom-out",
+            );
             // gnome-text-editor uses this as well: probably to make it
             // nicer for the US keyboard layout
-            klass.add_binding_action(gdk::Key::equal,
-                                     gdk::ModifierType::CONTROL_MASK,
-                                     "window.zoom-out");
-            klass.add_binding_action(gdk::Key::KP_Subtract,
-                                     gdk::ModifierType::CONTROL_MASK,
-                                     "window.zoom-out");
-            klass.add_binding_action(gdk::Key::_0,
-                                     gdk::ModifierType::CONTROL_MASK,
-                                     "window.zoom-one");
-            klass.add_binding_action(gdk::Key::KP_0,
-                                     gdk::ModifierType::CONTROL_MASK,
-                                     "window.zoom-one");
+            klass.add_binding_action(
+                gdk::Key::equal,
+                gdk::ModifierType::CONTROL_MASK,
+                "window.zoom-out",
+            );
+            klass.add_binding_action(
+                gdk::Key::KP_Subtract,
+                gdk::ModifierType::CONTROL_MASK,
+                "window.zoom-out",
+            );
+            klass.add_binding_action(
+                gdk::Key::_0,
+                gdk::ModifierType::CONTROL_MASK,
+                "window.zoom-one",
+            );
+            klass.add_binding_action(
+                gdk::Key::KP_0,
+                gdk::ModifierType::CONTROL_MASK,
+                "window.zoom-one",
+            );
         }
 
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -115,16 +129,21 @@ mod imp {
 
             self.font_size.set(BASE_TEXT_FONT_SIZE);
             self.obj().set_font_scale(0.0);
-            gtk::style_context_add_provider_for_display (
+            gtk::style_context_add_provider_for_display(
                 &self.obj().display(),
                 &self.css_provider,
-                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION);
+                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+            );
 
-            let scroll_controller = gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
+            let scroll_controller =
+                gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
             scroll_controller.set_propagation_phase(gtk::PropagationPhase::Capture);
             let window = self.obj().clone();
             scroll_controller.connect_scroll(move |scroll, _dx, dy| {
-                if scroll.current_event_state().contains(gdk::ModifierType::CONTROL_MASK) {
+                if scroll
+                    .current_event_state()
+                    .contains(gdk::ModifierType::CONTROL_MASK)
+                {
                     if dy < 0.0 {
                         window.set_font_scale(window.font_scale() + 1.0);
                     } else {
@@ -171,7 +190,8 @@ mod imp {
             let size = (font_size + self.obj().font_scale()).max(1.0);
             self.zoom_level.set(size / font_size);
             self.obj().notify_zoom_level();
-            self.css_provider.load_from_string(&format!( ".sourceview {{ font-size: {size}px; }}"));
+            self.css_provider
+                .load_from_string(&format!(".sourceview {{ font-size: {size}px; }}"));
             self.obj().action_set_enabled("window.zoom-out", size > 1.0);
         }
     }

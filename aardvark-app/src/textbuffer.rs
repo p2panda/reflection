@@ -22,11 +22,11 @@ use glib::subclass::Signal;
 use gtk::glib;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use sourceview::prelude::BufferExt;
+use sourceview::subclass::prelude::*;
+use sourceview::*;
 use std::cell::Cell;
 use std::sync::OnceLock;
-use sourceview::*;
-use sourceview::subclass::prelude::*;
-use sourceview::prelude::BufferExt;
 
 mod imp {
     use super::*;
@@ -51,7 +51,6 @@ mod imp {
                     .param_types([i32::static_type(), i32::static_type(), str::static_type()])
                     .build()]
             })
-
         }
 
         fn constructed(&self) {

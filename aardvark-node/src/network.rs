@@ -10,19 +10,19 @@ use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork, TopicId};
 use p2panda_store::MemoryStore;
 use p2panda_stream::{DecodeExt, IngestExt};
-use p2panda_sync::TopicQuery;
 use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
+use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::{Builder, Runtime};
-use tokio::sync::OnceCell;
 use tokio::sync::mpsc;
+use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{error, debug};
+use tokio_stream::StreamExt;
+use tracing::{debug, error};
 
 use crate::operation::{
-    AardvarkExtensions, create_operation, decode_gossip_message, encode_gossip_operation,
+    create_operation, decode_gossip_message, encode_gossip_operation, AardvarkExtensions,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
