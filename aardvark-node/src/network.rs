@@ -1,16 +1,13 @@
-use std::hash::Hash as StdHash;
 use std::sync::Arc;
 
 use anyhow::Result;
 use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
-use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork, TopicId};
+use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
 use p2panda_store::MemoryStore;
 use p2panda_stream::{DecodeExt, IngestExt};
 use p2panda_sync::log_sync::LogSyncProtocol;
-use p2panda_sync::TopicQuery;
-use serde::{Deserialize, Serialize};
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::OnceCell;
@@ -23,17 +20,7 @@ use crate::operation::{
     create_operation, decode_gossip_message, encode_gossip_operation, AardvarkExtensions,
 };
 use crate::store::{LogId, TextDocumentStore};
-
-#[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct TextDocument([u8; 32]);
-
-impl TopicQuery for TextDocument {}
-
-impl TopicId for TextDocument {
-    fn id(&self) -> [u8; 32] {
-        self.0
-    }
-}
+use crate::topic::TextDocument;
 
 pub struct Network {
     inner: Arc<NetworkInner>,
