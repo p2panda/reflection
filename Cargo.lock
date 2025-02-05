@@ -6,16 +6,13 @@ version = 4
 name = "aardvark"
 version = "0.1.0"
 dependencies = [
+ "aardvark-doc",
  "aardvark-node",
- "anyhow",
  "gettext-rs",
  "gtk4",
  "libadwaita",
- "p2panda-core",
- "serde",
- "serde_json",
  "sourceview5",
- "tokio",
+ "tracing",
  "tracing-subscriber",
 ]
 

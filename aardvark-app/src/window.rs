@@ -20,11 +20,13 @@
 
 use std::cell;
 
+use aardvark_doc::{document::Document, service::Service};
 use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use sourceview::*;
+use std::cell::OnceCell;
 
 use crate::{components::ZoomLevelSelector, AardvarkTextBuffer};
 
@@ -52,6 +54,8 @@ mod imp {
         pub font_scale: cell::Cell<f64>,
         #[property(get, default = 1.0)]
         pub zoom_level: cell::Cell<f64>,
+        #[property(get, construct_only)]
+        pub service: OnceCell<Service>,
     }
 
     #[glib::object_subclass]
@@ -178,6 +182,10 @@ mod imp {
             self.open_document_button.connect_clicked(move |_| {
                 dialog.present(Some(&window));
             });
+
+            //TODO wait for the document to be ready before displaying the buffer
+            // TODO: The user needs to provide a document id
+            buffer.set_document(Document::new(&self.service.get().unwrap(), "some id"));
         }
     }
 
@@ -209,15 +217,11 @@ glib::wrapper! {
 }
 
 impl AardvarkWindow {
-    pub fn new<P: IsA<gtk::Application>>(application: &P) -> Self {
+    pub fn new<P: IsA<gtk::Application>>(application: &P, service: &Service) -> Self {
         glib::Object::builder()
             .property("application", application)
+            .property("service", service)
             .build()
-    }
-
-    pub fn get_text_buffer(&self) -> AardvarkTextBuffer {
-        let window = self.imp();
-        window.text_view.buffer().downcast().unwrap()
     }
 
     pub fn add_toast(&self, toast: adw::Toast) {

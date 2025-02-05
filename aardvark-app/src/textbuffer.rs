@@ -18,22 +18,39 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use glib::subclass::Signal;
-use gtk::glib;
+use aardvark_doc::document::Document;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
+use gtk::{glib, glib::clone};
 use sourceview::prelude::BufferExt;
 use sourceview::subclass::prelude::*;
 use sourceview::*;
-use std::cell::Cell;
-use std::sync::OnceLock;
+use std::cell::{Cell, OnceCell, RefCell};
+use tracing::{error, info};
 
 mod imp {
     use super::*;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, glib::Properties)]
+    #[properties(wrapper_type = super::AardvarkTextBuffer)]
     pub struct AardvarkTextBuffer {
-        pub inhibit_emit_text_change: Cell<bool>,
+        pub inhibit_text_change: Cell<bool>,
+        pub document_handlers: OnceCell<glib::SignalGroup>,
+        #[property(get, set = Self::set_document)]
+        pub document: RefCell<Option<Document>>,
+    }
+
+    impl AardvarkTextBuffer {
+        fn set_document(&self, document: Option<&Document>) {
+            if let Some(document) = document.as_ref() {
+                self.obj().set_inhibit_text_change(true);
+                self.obj().set_text(&document.text());
+                self.obj().set_inhibit_text_change(false);
+            }
+
+            self.document_handlers.get().unwrap().set_target(document);
+            self.document.replace(document.cloned());
+        }
     }
 
     #[glib::object_subclass]
@@ -43,16 +60,8 @@ mod imp {
         type ParentType = sourceview::Buffer;
     }
 
+    #[glib::derived_properties]
     impl ObjectImpl for AardvarkTextBuffer {
-        fn signals() -> &'static [Signal] {
-            static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
-            SIGNALS.get_or_init(|| {
-                vec![Signal::builder("text-change")
-                    .param_types([i32::static_type(), i32::static_type(), str::static_type()])
-                    .build()]
-            })
-        }
-
         fn constructed(&self) {
             let manager = adw::StyleManager::default();
             let buffer = self.obj();
@@ -73,33 +82,93 @@ mod imp {
                     buffer.set_style_scheme(style_scheme().as_ref());
                 }
             ));
+
+            // We could use a signal group to block hanlders
+            let document_handlers = glib::SignalGroup::with_type(Document::static_type());
+            document_handlers.connect_local(
+                "text-inserted",
+                false,
+                clone!(
+                    #[weak]
+                    buffer,
+                    #[upgrade_or]
+                    None,
+                    move |values| {
+                        let pos: i32 = values.get(1).unwrap().get().unwrap();
+                        let text: &str = values.get(2).unwrap().get().unwrap();
+
+                        let mut pos_iter = buffer.iter_at_offset(pos);
+                        buffer.set_inhibit_text_change(true);
+                        buffer.insert(&mut pos_iter, text);
+                        buffer.set_inhibit_text_change(false);
+
+                        None
+                    }
+                ),
+            );
+
+            document_handlers.connect_local(
+                "range-deleted",
+                false,
+                clone!(
+                    #[weak]
+                    buffer,
+                    #[upgrade_or]
+                    None,
+                    move |values| {
+                        let start: i32 = values.get(1).unwrap().get().unwrap();
+                        let end: i32 = values.get(2).unwrap().get().unwrap();
+                        let mut start = buffer.iter_at_offset(start);
+                        let mut end = buffer.iter_at_offset(end);
+                        buffer.set_inhibit_text_change(true);
+                        buffer.delete(&mut start, &mut end);
+                        buffer.set_inhibit_text_change(false);
+
+                        None
+                    }
+                ),
+            );
+
+            self.document_handlers.set(document_handlers).unwrap();
         }
     }
 
     impl TextBufferImpl for AardvarkTextBuffer {
         fn insert_text(&self, iter: &mut gtk::TextIter, new_text: &str) {
             let offset = iter.offset();
-            println!("inserting new text {} at pos {}", new_text, offset);
-            if !self.inhibit_emit_text_change.get() {
-                self.obj()
-                    .emit_by_name::<()>("text-change", &[&offset, &0, &new_text]);
+            info!("inserting new text {} at pos {}", new_text, offset);
+
+            if !self.inhibit_text_change.get() {
+                if let Some(document) = self.document.borrow().as_ref() {
+                    self.document_handlers.get().unwrap().block();
+                    if let Err(error) = document.insert_text(offset, new_text) {
+                        error!("Failed to submit changes to the document: {error}");
+                    }
+                    self.document_handlers.get().unwrap().unblock();
+                }
             }
+
             self.parent_insert_text(iter, new_text);
         }
 
         fn delete_range(&self, start: &mut gtk::TextIter, end: &mut gtk::TextIter) {
             let offset_start = start.offset();
             let offset_end = end.offset();
-            println!(
+            info!(
                 "deleting range at start {} end {}",
                 offset_start, offset_end
             );
-            if !self.inhibit_emit_text_change.get() {
-                self.obj().emit_by_name::<()>(
-                    "text-change",
-                    &[&offset_start, &(offset_end - offset_start), &""],
-                );
+
+            if !self.inhibit_text_change.get() {
+                if let Some(document) = self.document.borrow().as_ref() {
+                    self.document_handlers.get().unwrap().block();
+                    if let Err(error) = document.delete_range(offset_start, offset_end) {
+                        error!("Failed to submit changes to the document: {error}")
+                    }
+                    self.document_handlers.get().unwrap().unblock();
+                }
             }
+
             self.parent_delete_range(start, end);
         }
     }
@@ -117,26 +186,8 @@ impl AardvarkTextBuffer {
         glib::Object::builder().build()
     }
 
-    fn set_inhibit_emit_text_change(&self, inhibit_emit_text_change: bool) {
-        self.imp()
-            .inhibit_emit_text_change
-            .set(inhibit_emit_text_change);
-    }
-
-    pub fn splice(&self, pos: i32, del: i32, text: &str) {
-        if del != 0 {
-            let mut begin = self.iter_at_offset(pos);
-            let mut end = self.iter_at_offset(pos + del);
-            self.set_inhibit_emit_text_change(true);
-            self.delete(&mut begin, &mut end);
-            self.set_inhibit_emit_text_change(false);
-            return;
-        }
-
-        let mut pos_iter = self.iter_at_offset(pos);
-        self.set_inhibit_emit_text_change(true);
-        self.insert(&mut pos_iter, text);
-        self.set_inhibit_emit_text_change(false);
+    fn set_inhibit_text_change(&self, inhibit_text_change: bool) {
+        self.imp().inhibit_text_change.set(inhibit_text_change);
     }
 
     pub fn full_text(&self) -> String {

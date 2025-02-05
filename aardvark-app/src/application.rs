@@ -18,15 +18,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::cell::{OnceCell, RefCell};
-
-use aardvark_node::network;
+use aardvark_doc::service::Service;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
-use gtk::{gio, glib};
-use p2panda_core::{Hash, PrivateKey};
-use tokio::sync::mpsc;
+use gtk::{gio, glib, glib::Properties};
 
 use crate::config::VERSION;
 use crate::AardvarkWindow;
@@ -34,40 +30,21 @@ use crate::AardvarkWindow;
 mod imp {
     use super::*;
 
+    #[derive(Properties, Default)]
+    #[properties(wrapper_type = super::AardvarkApplication)]
     pub struct AardvarkApplication {
-        pub window: OnceCell<AardvarkWindow>,
-        pub tx: mpsc::Sender<Vec<u8>>,
-        pub rx: RefCell<Option<mpsc::Receiver<Vec<u8>>>>,
-        #[allow(dead_code)]
-        network: network::Network,
+        #[property(get)]
+        pub service: Service,
     }
-
-    impl AardvarkApplication {}
 
     #[glib::object_subclass]
     impl ObjectSubclass for AardvarkApplication {
         const NAME: &'static str = "AardvarkApplication";
         type Type = super::AardvarkApplication;
         type ParentType = adw::Application;
-
-        fn new() -> Self {
-            let private_key = PrivateKey::new();
-            let public_key = private_key.public_key();
-            let network = network::Network::new();
-            println!("The public key used: {}", public_key);
-
-            network.run(private_key, Hash::new(b"aardvark <3"));
-            let (tx, rx) = network.get_or_create_document(Hash::new(b"some document"));
-
-            AardvarkApplication {
-                network,
-                tx,
-                rx: RefCell::new(Some(rx)),
-                window: OnceCell::new(),
-            }
-        }
     }
 
+    #[glib::derived_properties]
     impl ObjectImpl for AardvarkApplication {
         fn constructed(&self) {
             self.parent_constructed();
@@ -78,16 +55,19 @@ mod imp {
     }
 
     impl ApplicationImpl for AardvarkApplication {
-        // We connect to the activate callback to create a window when the application has been
-        // launched. Additionally, this callback notifies us when the user tries to launch a
-        // "second instance" of the application. When they try to do that, we'll just present any
-        // existing window.
-        fn activate(&self) {
-            let application = self.obj();
-            let window = application.get_window();
+        fn startup(&self) {
+            self.service.startup();
+            self.parent_startup();
+        }
 
-            // Ask the window manager/compositor to present the window
-            window.clone().upcast::<gtk::Window>().present();
+        fn shutdown(&self) {
+            self.service.shutdown();
+            self.parent_shutdown();
+        }
+
+        fn activate(&self) {
+            let window = AardvarkWindow::new(self.obj().as_ref(), &self.service);
+            window.present();
         }
     }
 
@@ -133,10 +113,5 @@ impl AardvarkApplication {
             .build();
 
         about.present(Some(&window));
-    }
-
-    pub fn get_window(&self) -> &AardvarkWindow {
-        // Get the current window or create one if necessary
-        self.imp().window.get_or_init(|| AardvarkWindow::new(self))
     }
 }
