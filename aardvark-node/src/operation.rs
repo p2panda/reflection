@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::topic::TextDocument;
 
 /// Custom extensions for p2panda header.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AardvarkExtensions {
     /// If flag is true we can remove all previous operations in this log.
     ///
@@ -31,25 +31,43 @@ pub struct AardvarkExtensions {
     /// Can be `None` if this operation indicates that we are creating a new document. In this case
     /// we take the hash of the header itself to derive the document id.
     #[serde(rename = "d")]
-    pub document_id: TextDocument,
+    pub document: Option<TextDocument>,
 }
 
 impl Extension<PruneFlag> for AardvarkExtensions {
-    fn extract(&self) -> Option<PruneFlag> {
-        Some(self.prune_flag.clone())
+    fn extract(header: &Header<Self>) -> Option<PruneFlag> {
+        header
+            .extensions
+            .as_ref()
+            .map(|extensions| extensions.prune_flag.clone())
     }
 }
 
 impl Extension<TextDocument> for AardvarkExtensions {
-    fn extract(&self) -> Option<TextDocument> {
-        Some(self.document_id.clone())
+    fn extract(header: &Header<Self>) -> Option<TextDocument> {
+        // If this is the first operation in the append-only log we use the hash of the header
+        // itself to determine the document id, otherwise use the one mentioned in the header by
+        // subsequent operations.
+        match header.seq_num {
+            0 => Some(header.hash().into()),
+            _ => header
+                .extensions
+                .as_ref()
+                .map(|extensions| extensions.document.clone())
+                .flatten(),
+        }
     }
 }
 
+/// Creates, signs and stores new operation in the author's append-only log.
+///
+/// We maintain one log per author and document. If no document is specified we create a new
+/// operation in a new log. The resulting hash of the header can be used to identify that new
+/// document.
 pub async fn create_operation(
     store: &mut MemoryStore<TextDocument, AardvarkExtensions>,
     private_key: &PrivateKey,
-    document_id: TextDocument,
+    document: Option<TextDocument>,
     body: Option<&[u8]>,
     prune_flag: bool,
 ) -> Result<(Header<AardvarkExtensions>, Option<Body>)> {
@@ -57,7 +75,10 @@ pub async fn create_operation(
 
     let public_key = private_key.public_key();
 
-    let latest_operation = store.latest_operation(&public_key, &document_id).await?;
+    let latest_operation = match document {
+        Some(ref document) => store.latest_operation(&public_key, &document).await?,
+        None => None,
+    };
 
     let (seq_num, backlink) = match latest_operation {
         Some((header, _)) => (header.seq_num + 1, Some(header.hash())),
@@ -70,7 +91,7 @@ pub async fn create_operation(
 
     let extensions = AardvarkExtensions {
         prune_flag: PruneFlag::new(prune_flag),
-        document_id: document_id.clone(),
+        document: document.clone(),
     };
 
     let mut header = Header {
@@ -87,13 +108,14 @@ pub async fn create_operation(
     };
     header.sign(private_key);
 
-    let prune_flag: PruneFlag = header.extract().unwrap_or_default();
+    let log_id: TextDocument = header.extension().expect("document id from our own logs");
+    let prune_flag: PruneFlag = header.extension().unwrap_or_default();
     ingest_operation(
         store,
         header.clone(),
         body.clone(),
         header.to_bytes(),
-        &document_id,
+        &log_id,
         prune_flag.is_set(),
     )
     .await?;

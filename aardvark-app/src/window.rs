@@ -184,7 +184,7 @@ mod imp {
 
             // TODO: wait for the document to be ready before displaying the buffer
             // TODO: The user needs to provide a document id
-            buffer.set_document(Document::new(&self.service.get().unwrap(), "some id"));
+            buffer.set_document(Document::new(&self.service.get().unwrap(), None));
         }
     }
 
