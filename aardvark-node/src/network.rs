@@ -111,7 +111,7 @@ impl Network {
         &self,
         document_id: Hash,
     ) -> (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
-        let document_id = TextDocument(document_id.into());
+        let document: TextDocument = document_id.into();
 
         let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
         let (to_app, from_network) = mpsc::channel(512);
@@ -124,7 +124,7 @@ impl Network {
                 .get_or_init(|| async { unreachable!("network not running") })
                 .await;
             let (topic_tx, topic_rx, ready) = network
-                .subscribe(document_id.clone())
+                .subscribe(document.clone())
                 .await
                 .expect("subscribe to topic");
 
@@ -133,7 +133,7 @@ impl Network {
                 debug!("network joined!");
             });
 
-            let document_id_clone = document_id.clone();
+            let document_id_clone = document.clone();
             let stream = ReceiverStream::new(topic_rx);
             let stream = stream.filter_map(|event| match event {
                 FromNetwork::GossipMessage { bytes, .. } => match decode_gossip_message(&bytes) {
@@ -214,7 +214,7 @@ impl Network {
                     let (header, body) = create_operation(
                         &mut operations_store,
                         &private_key,
-                        document_id.clone(),
+                        document.clone(),
                         Some(&bytes),
                         prune_flag,
                     )
