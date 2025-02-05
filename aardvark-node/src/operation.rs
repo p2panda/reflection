@@ -6,7 +6,7 @@ use p2panda_store::{LogStore, MemoryStore};
 use p2panda_stream::operation::ingest_operation;
 use serde::{Deserialize, Serialize};
 
-use crate::network::TextDocument;
+use crate::topic::TextDocument;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AardvarkExtensions {

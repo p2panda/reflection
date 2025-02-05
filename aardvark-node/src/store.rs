@@ -7,7 +7,7 @@ use p2panda_core::PublicKey;
 use p2panda_sync::log_sync::TopicLogMap;
 use tokio::sync::RwLock;
 
-use crate::network::TextDocument;
+use crate::topic::TextDocument;
 
 #[derive(Clone, Debug)]
 pub struct TextDocumentStore {

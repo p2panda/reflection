@@ -1,16 +1,13 @@
-use std::hash::Hash as StdHash;
 use std::sync::Arc;
 
 use anyhow::Result;
 use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
-use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork, TopicId};
+use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
 use p2panda_store::MemoryStore;
 use p2panda_stream::{DecodeExt, IngestExt};
 use p2panda_sync::log_sync::LogSyncProtocol;
-use p2panda_sync::TopicQuery;
-use serde::{Deserialize, Serialize};
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::OnceCell;
@@ -23,17 +20,7 @@ use crate::operation::{
     create_operation, decode_gossip_message, encode_gossip_operation, AardvarkExtensions,
 };
 use crate::store::{LogId, TextDocumentStore};
-
-#[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct TextDocument([u8; 32]);
-
-impl TopicQuery for TextDocument {}
-
-impl TopicId for TextDocument {
-    fn id(&self) -> [u8; 32] {
-        self.0
-    }
-}
+use crate::topic::TextDocument;
 
 pub struct Network {
     inner: Arc<NetworkInner>,
@@ -124,7 +111,7 @@ impl Network {
         &self,
         document_id: Hash,
     ) -> (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
-        let document_id = TextDocument(document_id.into());
+        let document: TextDocument = document_id.into();
 
         let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
         let (to_app, from_network) = mpsc::channel(512);
@@ -137,7 +124,7 @@ impl Network {
                 .get_or_init(|| async { unreachable!("network not running") })
                 .await;
             let (topic_tx, topic_rx, ready) = network
-                .subscribe(document_id.clone())
+                .subscribe(document.clone())
                 .await
                 .expect("subscribe to topic");
 
@@ -146,7 +133,7 @@ impl Network {
                 debug!("network joined!");
             });
 
-            let document_id_clone = document_id.clone();
+            let document_id_clone = document.clone();
             let stream = ReceiverStream::new(topic_rx);
             let stream = stream.filter_map(|event| match event {
                 FromNetwork::GossipMessage { bytes, .. } => match decode_gossip_message(&bytes) {
@@ -227,7 +214,7 @@ impl Network {
                     let (header, body) = create_operation(
                         &mut operations_store,
                         &private_key,
-                        document_id.clone(),
+                        document.clone(),
                         Some(&bytes),
                         prune_flag,
                     )
