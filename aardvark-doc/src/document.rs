@@ -1,11 +1,12 @@
+use std::cell::{Cell, OnceCell, RefCell};
+use std::sync::OnceLock;
+
 use anyhow::Result;
 use glib::prelude::*;
 use glib::subclass::prelude::*;
 use glib::subclass::Signal;
 use glib::{clone, Properties};
 use p2panda_core::Hash;
-use std::cell::{Cell, OnceCell, RefCell};
-use std::sync::OnceLock;
 
 use crate::crdt::{TextCrdt, TextCrdtEvent, TextDelta};
 use crate::service::Service;
@@ -98,7 +99,7 @@ mod imp {
                 // Take first 8 bytes of public key (32 bytes) to determine a unique "peer id"
                 // which is used to keep authors apart inside the text crdt.
                 //
-                // @TODO(adz): This is strictly speaking not collision-resistant but we're limited
+                // TODO(adz): This is strictly speaking not collision-resistant but we're limited
                 // here by the 8 bytes / 64 bit from the u64 `PeerId` type from Loro. In practice
                 // this should not really be a problem, but it would be nice if the Loro API would
                 // change some day.
@@ -133,7 +134,7 @@ mod imp {
                                 }
                             }
                             TextCrdtEvent::Local(_text_delta) => {
-                                // @TODO(adz): Later we want to apply changes to the text buffer
+                                // TODO(adz): Later we want to apply changes to the text buffer
                                 // here. Something along the lines of:
                                 // application.on_deltas_received(vec![text_delta});
                             }
@@ -176,7 +177,7 @@ impl Document {
         self.imp().splice_text(index, len, "")
     }
 
-    //TODO make this into a property
+    // TODO make this into a property
     pub fn text(&self) -> String {
         self.imp().text()
     }

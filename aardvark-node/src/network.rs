@@ -142,7 +142,7 @@ impl Network {
                         .private_key(private_key)
                         .discovery(LocalDiscovery::new())
                         .gossip(GossipConfig {
-                            // @TODO(adz): This is a temporary workaround to account for Automerge giving
+                            // TODO(adz): This is a temporary workaround to account for Automerge giving
                             // us surprisingly fairly large payloads which break the default gossip message
                             // size limit given by iroh-gossip (4092 bytes).
                             //
@@ -284,7 +284,7 @@ impl Network {
             // Task for handling events coming from the application layer.
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
                 while let Some(bytes) = from_app.recv().await {
-                    // @TODO: set prune flag from the frontend.
+                    // TODO: set prune flag from the frontend.
                     let prune_flag = false;
 
                     // Create the p2panda operations with application message as payload.
