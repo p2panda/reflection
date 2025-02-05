@@ -1,0 +1,184 @@
+use std::cell::{Cell, OnceCell, RefCell};
+use std::sync::OnceLock;
+
+use anyhow::Result;
+use glib::prelude::*;
+use glib::subclass::prelude::*;
+use glib::subclass::Signal;
+use glib::{clone, Properties};
+use p2panda_core::Hash;
+
+use crate::crdt::{TextCrdt, TextCrdtEvent, TextDelta};
+use crate::service::Service;
+
+mod imp {
+    use super::*;
+
+    #[derive(Properties, Default)]
+    #[properties(wrapper_type = super::Document)]
+    pub struct Document {
+        crdt_doc: RefCell<Option<TextCrdt>>,
+        #[property(get, construct_only)]
+        id: OnceCell<String>,
+        #[property(get, set)]
+        ready: Cell<bool>,
+        #[property(get, construct_only)]
+        service: OnceCell<Service>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for Document {
+        const NAME: &'static str = "Document";
+        type Type = super::Document;
+    }
+
+    impl Document {
+        pub fn text(&self) -> String {
+            self.crdt_doc
+                .borrow()
+                .as_ref()
+                .expect("crdt_doc to be set")
+                .to_string()
+        }
+
+        pub fn splice_text(&self, index: i32, delete_len: i32, chunk: &str) -> Result<()> {
+            let mut doc_borrow = self.crdt_doc.borrow_mut();
+            let doc = doc_borrow.as_mut().expect("crdt_doc to be set");
+            if delete_len == 0 {
+                doc.insert(index as usize, chunk)
+                    .expect("update document after text insertion");
+            } else {
+                doc.remove(index as usize, delete_len as usize)
+                    .expect("update document after text removal");
+            }
+
+            Ok(())
+        }
+
+        fn on_remote_message(&self, bytes: Vec<u8>) {
+            let mut doc_borrow = self.crdt_doc.borrow_mut();
+            let doc = doc_borrow.as_mut().expect("crdt_doc to be set");
+            if let Err(err) = doc.apply_encoded_delta(&bytes) {
+                eprintln!("received invalid message: {}", err);
+            }
+        }
+
+        fn emit_text_inserted(&self, index: i32, text: &str) {
+            self.obj()
+                .emit_by_name::<()>("text-inserted", &[&index, &text]);
+        }
+
+        fn emit_range_deleted(&self, index: i32, length: i32) {
+            self.obj()
+                .emit_by_name::<()>("range-deleted", &[&index, &length]);
+        }
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for Document {
+        fn signals() -> &'static [Signal] {
+            static SIGNALS: OnceLock<Vec<Signal>> = OnceLock::new();
+            SIGNALS.get_or_init(|| {
+                vec![
+                    Signal::builder("text-inserted")
+                        .param_types([glib::types::Type::I32, glib::types::Type::STRING])
+                        .build(),
+                    Signal::builder("range-deleted")
+                        .param_types([glib::types::Type::I32, glib::types::Type::I32])
+                        .build(),
+                ]
+            })
+        }
+
+        fn constructed(&self) {
+            let service = self.service.get().unwrap();
+            let (network_tx, mut rx) = service.document(Hash::new(b"some id"));
+            let public_key = service.public_key();
+
+            let crdt_doc = TextCrdt::new({
+                // Take first 8 bytes of public key (32 bytes) to determine a unique "peer id"
+                // which is used to keep authors apart inside the text crdt.
+                //
+                // TODO(adz): This is strictly speaking not collision-resistant but we're limited
+                // here by the 8 bytes / 64 bit from the u64 `PeerId` type from Loro. In practice
+                // this should not really be a problem, but it would be nice if the Loro API would
+                // change some day.
+                let mut buf = [0u8; 8];
+                buf[..8].copy_from_slice(&public_key.as_bytes()[..8]);
+                u64::from_be_bytes(buf)
+            });
+
+            let crdt_doc_rx = crdt_doc.subscribe();
+
+            self.crdt_doc.replace(Some(crdt_doc));
+
+            glib::spawn_future_local(clone!(
+                #[weak(rename_to = this)]
+                self,
+                async move {
+                    while let Some(bytes) = rx.recv().await {
+                        this.on_remote_message(bytes);
+                    }
+                }
+            ));
+
+            glib::spawn_future_local(clone!(
+                #[weak(rename_to = this)]
+                self,
+                async move {
+                    while let Ok(event) = crdt_doc_rx.recv().await {
+                        match event {
+                            TextCrdtEvent::LocalEncoded(bytes) => {
+                                if network_tx.send(bytes).await.is_err() {
+                                    break;
+                                }
+                            }
+                            TextCrdtEvent::Local(_text_delta) => {
+                                // TODO(adz): Later we want to apply changes to the text buffer
+                                // here. Something along the lines of:
+                                // application.on_deltas_received(vec![text_delta});
+                            }
+                            TextCrdtEvent::Remote(text_deltas) => {
+                                for delta in text_deltas {
+                                    match delta {
+                                        TextDelta::Insert { index, chunk } => {
+                                            this.emit_text_inserted(index as i32, &chunk);
+                                        }
+                                        TextDelta::Remove { index, len } => {
+                                            this.emit_range_deleted(index as i32, len as i32);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            ));
+        }
+    }
+}
+
+glib::wrapper! {
+    pub struct Document(ObjectSubclass<imp::Document>);
+}
+impl Document {
+    pub fn new(service: &Service, id: &str) -> Self {
+        glib::Object::builder()
+            .property("service", service)
+            .property("id", id)
+            .build()
+    }
+
+    pub fn insert_text(&self, index: i32, chunk: &str) -> Result<()> {
+        self.imp().splice_text(index, 0, chunk)
+    }
+
+    pub fn delete_range(&self, index: i32, len: i32) -> Result<()> {
+        self.imp().splice_text(index, len, "")
+    }
+
+    // TODO make this into a property
+    pub fn text(&self) -> String {
+        self.imp().text()
+    }
+}

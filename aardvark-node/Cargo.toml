@@ -16,3 +16,4 @@ p2panda-sync = { version = "0.2.0", features = ["log-sync"] }
 serde = { version = "1.0.215", features = ["derive"] }
 tokio = { version = "1.42.0", features = ["rt", "sync"] }
 tokio-stream = "0.1.17"
+tracing = "0.1"
