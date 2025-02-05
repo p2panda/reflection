@@ -142,20 +142,11 @@ impl Network {
                         .private_key(private_key)
                         .discovery(LocalDiscovery::new())
                         .gossip(GossipConfig {
-                            // TODO(adz): This is a temporary workaround to account for Automerge giving
-                            // us surprisingly fairly large payloads which break the default gossip message
-                            // size limit given by iroh-gossip (4092 bytes).
+                            // FIXME: This is a temporary workaround to account for larger delta
+                            // patches (for example when the user Copy & Pastes a big chunk of
+                            // text).
                             //
-                            // This especially happens if another peer edits a document for the first time
-                            // which already contains some text, even if it's just adding one single
-                            // character. It's also surprising that the 4kb limit is reached even if the
-                            // text itself is less than ca. 100 characters long.
-                            //
-                            // I believe we can fix this by understanding better how Automerge's "diffs"
-                            // are made and possibily using more low-level methods of their library to
-                            // really only send the actual changed text.
-                            //
-                            // Related issue: https://github.com/p2panda/aardvark/issues/11
+                            // Related issue: https://github.com/p2panda/aardvark/issues/24
                             max_message_size: 512_000,
                             ..Default::default()
                         })
