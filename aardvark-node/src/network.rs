@@ -49,7 +49,7 @@ impl Network {
             .worker_threads(1)
             .enable_all()
             .build()
-            .expect("Could not start tokio runtime");
+            .expect("single-threaded tokio runtime");
 
         Network {
             inner: Arc::new(NetworkInner {

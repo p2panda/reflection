@@ -1,6 +1,7 @@
 use std::time::SystemTime;
 
 use anyhow::Result;
+use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Body, Extension, Extensions, Header, PrivateKey, PruneFlag};
 use p2panda_store::{LogStore, MemoryStore};
 use p2panda_stream::operation::ingest_operation;
@@ -31,23 +32,6 @@ impl Extension<TextDocument> for AardvarkExtensions {
     fn extract(&self) -> Option<TextDocument> {
         Some(self.document_id.clone())
     }
-}
-
-pub fn encode_gossip_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>
-where
-    E: Extensions + Serialize,
-{
-    let mut bytes = Vec::new();
-    ciborium::into_writer(
-        &(header.to_bytes(), body.map(|body| body.to_bytes())),
-        &mut bytes,
-    )?;
-    Ok(bytes)
-}
-
-pub fn decode_gossip_message(bytes: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>)> {
-    let raw_operation = ciborium::from_reader(bytes)?;
-    Ok(raw_operation)
 }
 
 pub async fn create_operation(
@@ -103,4 +87,17 @@ pub async fn create_operation(
     .await?;
 
     Ok((header, body))
+}
+
+pub fn encode_gossip_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>
+where
+    E: Extensions + Serialize,
+{
+    let bytes = encode_cbor(&(header.to_bytes(), body.map(|body| body.to_bytes())))?;
+    Ok(bytes)
+}
+
+pub fn decode_gossip_message(bytes: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>)> {
+    let result = decode_cbor(bytes)?;
+    Ok(result)
 }
