@@ -18,6 +18,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+use std::cell::{Cell, OnceCell, RefCell};
+
 use aardvark_doc::document::Document;
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
@@ -25,7 +27,6 @@ use gtk::{glib, glib::clone};
 use sourceview::prelude::BufferExt;
 use sourceview::subclass::prelude::*;
 use sourceview::*;
-use std::cell::{Cell, OnceCell, RefCell};
 use tracing::{error, info};
 
 mod imp {

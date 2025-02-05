@@ -103,7 +103,8 @@ impl AardvarkApplication {
     }
 
     fn new_window(&self) {
-        // FIXME: it should be possible to reuse the same service for multiple windows but currently it's not
+        // FIXME: it should be possible to reuse the same service for multiple windows but
+        // currently it's not
         let service = Service::new();
         service.startup();
         let window = AardvarkWindow::new(self, &service);
@@ -118,7 +119,8 @@ impl AardvarkApplication {
             .developer_name("The Aardvark Developers")
             .version(VERSION)
             .developers(vec!["Tobias"])
-            // Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
+            // FIXME: Translators: Replace "translator-credits" with your name/username, and
+            // optionally an email or URL.
             .translator_credits(&gettext("translator-credits"))
             .copyright("© 2024 Tobias")
             .build();

@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::cell;
+use std::cell::{Cell, OnceCell};
 
 use aardvark_doc::{document::Document, service::Service};
 use adw::prelude::AdwDialogExt;
@@ -26,7 +26,6 @@ use adw::subclass::prelude::*;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib};
 use sourceview::*;
-use std::cell::OnceCell;
 
 use crate::{components::ZoomLevelSelector, AardvarkTextBuffer};
 
@@ -49,11 +48,11 @@ mod imp {
         #[template_child]
         pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         pub css_provider: gtk::CssProvider,
-        pub font_size: cell::Cell<f64>,
+        pub font_size: Cell<f64>,
         #[property(get, set = Self::set_font_scale, default = 0.0)]
-        pub font_scale: cell::Cell<f64>,
+        pub font_scale: Cell<f64>,
         #[property(get, default = 1.0)]
-        pub zoom_level: cell::Cell<f64>,
+        pub zoom_level: Cell<f64>,
         #[property(get, construct_only)]
         pub service: OnceCell<Service>,
     }
@@ -162,7 +161,7 @@ mod imp {
 
             let zoom_gesture = gtk::GestureZoom::new();
             let window = self.obj().clone();
-            let prev_delta = std::cell::Cell::new(0.0);
+            let prev_delta = Cell::new(0.0);
             zoom_gesture.connect_scale_changed(move |_, delta| {
                 if prev_delta.get() == delta {
                     return;
@@ -183,7 +182,7 @@ mod imp {
                 dialog.present(Some(&window));
             });
 
-            //TODO wait for the document to be ready before displaying the buffer
+            // TODO: wait for the document to be ready before displaying the buffer
             // TODO: The user needs to provide a document id
             buffer.set_document(Document::new(&self.service.get().unwrap(), "some id"));
         }
