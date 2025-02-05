@@ -1,5 +1,6 @@
 use std::cell::{Cell, OnceCell, RefCell};
 use std::sync::OnceLock;
+use std::str::FromStr;
 
 use anyhow::Result;
 use glib::prelude::*;
@@ -19,7 +20,7 @@ mod imp {
     pub struct Document {
         #[property(name = "text", get = Self::text, type = String)]
         crdt_doc: RefCell<Option<TextCrdt>>,
-        #[property(get, construct_only)]
+        #[property(get, construct_only, set = Self::set_id)]
         id: OnceCell<String>,
         #[property(get, set)]
         ready: Cell<bool>,
@@ -40,6 +41,12 @@ mod imp {
                 .as_ref()
                 .expect("crdt_doc to be set")
                 .to_string()
+        }
+
+        pub fn set_id(&self, id: Option<String>) {
+            if let Some(id) = id {
+                self.id.set(id).expect("Document id can only be set once");
+            }
         }
 
         pub fn splice_text(&self, index: i32, delete_len: i32, chunk: &str) -> Result<()> {
@@ -93,9 +100,15 @@ mod imp {
 
         fn constructed(&self) {
             let service = self.service.get().unwrap();
-            let (network_tx, mut rx) = service.document(Hash::new(b"some id"));
-            let public_key = service.public_key();
+            let (network_tx, mut rx) = if let Some(id) = self.id.get() {
+                service.join_document(Hash::from_str(id).expect("Invalid document id"))
+            } else{
+                let (document_id, network_tx, rx) = service.create_document();
+                self.set_id(Some(document_id.to_hex()));
+                (network_tx, rx)
+            };
 
+            let public_key = service.public_key();
             let crdt_doc = TextCrdt::new({
                 // Take first 8 bytes of public key (32 bytes) to determine a unique "peer id"
                 // which is used to keep authors apart inside the text crdt.
@@ -163,7 +176,7 @@ glib::wrapper! {
     pub struct Document(ObjectSubclass<imp::Document>);
 }
 impl Document {
-    pub fn new(service: &Service, id: &str) -> Self {
+    pub fn new(service: &Service, id: Option<&str>) -> Self {
         glib::Object::builder()
             .property("service", service)
             .property("id", id)

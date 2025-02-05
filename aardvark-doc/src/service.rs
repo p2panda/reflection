@@ -45,8 +45,24 @@ impl Service {
         self.imp().network.shutdown();
     }
 
-    pub(crate) fn document(&self, id: Hash) -> (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
-        self.imp().network.get_or_create_document(id)
+    pub(crate) fn create_document(&self) -> (Hash, mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
+        let (document_id, tx, rx) = self
+            .imp()
+            .network
+            .create_document()
+            .expect("to create document");
+        info!("created new document: {}", document_id.to_hex());
+        (document_id, tx, rx)
+    }
+
+    pub(crate) fn join_document(
+        &self,
+        document_id: Hash,
+    ) -> (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
+        self.imp()
+            .network
+            .join_document(document_id)
+            .expect("to join document")
     }
 
     pub(crate) fn public_key(&self) -> PublicKey {

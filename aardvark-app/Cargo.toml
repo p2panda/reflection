@@ -8,9 +8,9 @@ aardvark-doc = { path = "../aardvark-doc" }
 aardvark-node = { path = "../aardvark-node" }
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
 gtk = { version = "0.9", package = "gtk4", features = ["gnome_47"] }
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 sourceview = { package = "sourceview5", version = "0.9" }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [dependencies.adw]
 package = "libadwaita"

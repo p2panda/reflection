@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag};
+use p2panda_core::{Hash, PrivateKey, PruneFlag};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
@@ -107,12 +107,37 @@ impl Network {
         });
     }
 
-    pub fn get_or_create_document(
+    pub fn create_document(
+        &self,
+    ) -> Result<(Hash, mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
+        let mut operations_store = self.inner.operations_store.clone();
+        let private_key = self.inner.private_key.get().expect("private key to be set");
+
+        let (header, _body) = self.inner.runtime.block_on(async {
+            create_operation(&mut operations_store, private_key, None, None, false).await
+        })?;
+
+        let document: TextDocument = header.extension().expect("document id from our own logs");
+        let document_id = (&document).into();
+
+        let (tx, rx) = self.subscribe(document)?;
+
+        Ok((document_id, tx, rx))
+    }
+
+    pub fn join_document(
         &self,
         document_id: Hash,
-    ) -> (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
-        let document: TextDocument = document_id.into();
+    ) -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
+        let document = document_id.into();
+        let (tx, rx) = self.subscribe(document)?;
+        Ok((tx, rx))
+    }
 
+    fn subscribe(
+        &self,
+        document: TextDocument,
+    ) -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
         let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
         let (to_app, from_network) = mpsc::channel(512);
 
@@ -123,18 +148,13 @@ impl Network {
                 .network
                 .get_or_init(|| async { unreachable!("network not running") })
                 .await;
-            let (topic_tx, topic_rx, ready) = network
+
+            let (document_tx, document_rx, _gossip_ready) = network
                 .subscribe(document.clone())
                 .await
                 .expect("subscribe to topic");
 
-            tokio::task::spawn(async move {
-                let _ = ready.await;
-                debug!("network joined!");
-            });
-
-            let document_id_clone = document.clone();
-            let stream = ReceiverStream::new(topic_rx);
+            let stream = ReceiverStream::new(document_rx);
             let stream = stream.filter_map(|event| match event {
                 FromNetwork::GossipMessage { bytes, .. } => match decode_gossip_message(&bytes) {
                     Ok(result) => Some(result),
@@ -168,10 +188,11 @@ impl Network {
                 });
 
             let documents_store = network_inner.documents_store.clone();
+            let document_clone = document.clone();
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
                 // Process the operations and forward application messages to app layer.
                 while let Some(operation) = stream.next().await {
-                    let prune_flag: PruneFlag = operation.header.extract().unwrap_or_default();
+                    let prune_flag: PruneFlag = operation.header.extension().unwrap_or_default();
                     debug!(
                         "received operation from {}, seq_num={}, prune_flag={}",
                         operation.header.public_key,
@@ -181,7 +202,7 @@ impl Network {
 
                     // When we discover a new author we need to add them to our "document store".
                     documents_store
-                        .add_author(document_id_clone.clone(), operation.header.public_key)
+                        .add_author(document_clone.clone(), operation.header.public_key)
                         .await?;
 
                     // Forward the payload up to the app.
@@ -202,7 +223,7 @@ impl Network {
             let private_key = network_inner
                 .private_key
                 .get()
-                .expect("no private key set")
+                .expect("private key to be set")
                 .clone();
             // Task for handling events coming from the application layer.
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
@@ -214,7 +235,7 @@ impl Network {
                     let (header, body) = create_operation(
                         &mut operations_store,
                         &private_key,
-                        document.clone(),
+                        Some(document.clone()),
                         Some(&bytes),
                         prune_flag,
                     )
@@ -230,7 +251,7 @@ impl Network {
                     let encoded_gossip_operation = encode_gossip_operation(header, body)?;
 
                     // Broadcast operation on gossip overlay.
-                    topic_tx
+                    document_tx
                         .send(ToNetwork::Message {
                             bytes: encoded_gossip_operation,
                         })
@@ -241,6 +262,6 @@ impl Network {
             });
         });
 
-        (to_network, from_network)
+        Ok((to_network, from_network))
     }
 }
