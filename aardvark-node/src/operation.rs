@@ -9,8 +9,16 @@ use serde::{Deserialize, Serialize};
 
 use crate::topic::TextDocument;
 
+/// Custom extensions for p2panda header.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct AardvarkExtensions {
+    /// If flag is true we can remove all previous operations in this log.
+    ///
+    /// This usually indicates that a "snapshot" has been inserted into the body of this operation,
+    /// containing all required state to reconstruct the full version including all previous edits
+    /// of this document.
+    ///
+    /// In our case of a text-editor, this would be the encoded payload of a state-based CRDT.
     #[serde(
         rename = "p",
         skip_serializing_if = "PruneFlag::is_not_set",
@@ -18,6 +26,10 @@ pub struct AardvarkExtensions {
     )]
     pub prune_flag: PruneFlag,
 
+    /// Identifier of the text document this operation relates to.
+    ///
+    /// Can be `None` if this operation indicates that we are creating a new document. In this case
+    /// we take the hash of the header itself to derive the document id.
     #[serde(rename = "d")]
     pub document_id: TextDocument,
 }
