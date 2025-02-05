@@ -3,14 +3,14 @@ use p2panda_core::{Hash, PrivateKey, PublicKey};
 use tokio::sync::mpsc;
 use tracing::info;
 
-use aardvark_node::network;
+use aardvark_node::Network;
 
 mod imp {
     use super::*;
 
     #[derive(Default)]
     pub struct Service {
-        pub network: network::Network,
+        pub network: Network,
         pub private_key: PrivateKey,
     }
 
