@@ -1,16 +1,14 @@
-use std::collections::HashMap;
 use std::hash::Hash as StdHash;
-use std::sync::{Arc, RwLock, RwLockWriteGuard};
+use std::sync::Arc;
 
 use anyhow::Result;
-use async_trait::async_trait;
-use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag, PublicKey};
+use p2panda_core::{Extension, Hash, PrivateKey, PruneFlag};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork, TopicId};
 use p2panda_store::MemoryStore;
 use p2panda_stream::{DecodeExt, IngestExt};
-use p2panda_sync::log_sync::{LogSyncProtocol, TopicLogMap};
+use p2panda_sync::log_sync::LogSyncProtocol;
 use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 use tokio::runtime::{Builder, Runtime};
@@ -24,6 +22,7 @@ use tracing::{debug, error};
 use crate::operation::{
     create_operation, decode_gossip_message, encode_gossip_operation, AardvarkExtensions,
 };
+use crate::store::{LogId, TextDocumentStore};
 
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct TextDocument([u8; 32]);
@@ -33,51 +32,6 @@ impl TopicQuery for TextDocument {}
 impl TopicId for TextDocument {
     fn id(&self) -> [u8; 32] {
         self.0
-    }
-}
-
-type LogId = TextDocument;
-
-#[derive(Clone, Debug)]
-struct TextDocumentStore {
-    inner: Arc<RwLock<TextDocumentStoreInner>>,
-}
-
-impl TextDocumentStore {
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(RwLock::new(TextDocumentStoreInner {
-                authors: HashMap::new(),
-            })),
-        }
-    }
-
-    pub fn write(&self) -> RwLockWriteGuard<TextDocumentStoreInner> {
-        self.inner.write().expect("acquire write lock")
-    }
-}
-
-#[derive(Clone, Debug)]
-struct TextDocumentStoreInner {
-    authors: HashMap<PublicKey, Vec<TextDocument>>,
-}
-
-#[async_trait]
-impl TopicLogMap<TextDocument, LogId> for TextDocumentStore {
-    async fn get(&self, topic: &TextDocument) -> Option<HashMap<PublicKey, Vec<LogId>>> {
-        let authors = &self.inner.read().unwrap().authors;
-        let mut result = HashMap::<PublicKey, Vec<LogId>>::new();
-
-        for (public_key, text_documents) in authors {
-            if text_documents.contains(topic) {
-                result
-                    .entry(*public_key)
-                    .and_modify(|logs| logs.push(topic.clone()))
-                    .or_insert(vec![topic.clone()]);
-            }
-        }
-
-        Some(result)
     }
 }
 
@@ -239,18 +193,9 @@ impl Network {
                     );
 
                     // When we discover a new author we need to add them to our "document store".
-                    {
-                        let mut write_lock = documents_store.write();
-                        write_lock
-                            .authors
-                            .entry(operation.header.public_key)
-                            .and_modify(|documents| {
-                                if !documents.contains(&document_id_clone) {
-                                    documents.push(document_id_clone.clone());
-                                }
-                            })
-                            .or_insert(vec![document_id_clone.clone()]);
-                    };
+                    documents_store
+                        .add_author(document_id_clone.clone(), operation.header.public_key)
+                        .await?;
 
                     // Forward the payload up to the app.
                     to_app
