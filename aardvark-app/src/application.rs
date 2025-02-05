@@ -96,7 +96,18 @@ impl AardvarkApplication {
         let about_action = gio::ActionEntry::builder("about")
             .activate(move |app: &Self, _, _| app.show_about())
             .build();
-        self.add_action_entries([quit_action, about_action]);
+        let new_window_action = gio::ActionEntry::builder("new-window")
+            .activate(move |app: &Self, _, _| app.new_window())
+            .build();
+        self.add_action_entries([quit_action, about_action, new_window_action]);
+    }
+
+    fn new_window(&self) {
+        // FIXME: it should be possible to reuse the same service for multiple windows but currently it's not
+        let service = Service::new();
+        service.startup();
+        let window = AardvarkWindow::new(self, &service);
+        window.present();
     }
 
     fn show_about(&self) {
