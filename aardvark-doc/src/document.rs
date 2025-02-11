@@ -17,6 +17,7 @@ mod imp {
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
+        #[property(name = "text", get = Self::text, type = String)]
         crdt_doc: RefCell<Option<TextCrdt>>,
         #[property(get, construct_only)]
         id: OnceCell<String>,
@@ -175,10 +176,5 @@ impl Document {
 
     pub fn delete_range(&self, index: i32, len: i32) -> Result<()> {
         self.imp().splice_text(index, len, "")
-    }
-
-    // TODO make this into a property
-    pub fn text(&self) -> String {
-        self.imp().text()
     }
 }
