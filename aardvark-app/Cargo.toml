@@ -2,6 +2,11 @@
 name = "aardvark"
 version = "0.1.0"
 edition = "2021"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "Julian Sparber <julian@sparber.net>"
+]
 
 [dependencies]
 aardvark-doc = { path = "../aardvark-doc" }

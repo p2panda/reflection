@@ -1,3 +1,4 @@
+pub static APP_ID: &str = @APP_ID@;
 pub static VERSION: &str = @VERSION@;
 pub static GETTEXT_PACKAGE: &str = @GETTEXT_PACKAGE@;
 pub static LOCALEDIR: &str = @LOCALEDIR@;

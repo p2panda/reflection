@@ -2,6 +2,11 @@
 name = "aardvark-node"
 version = "0.1.0"
 edition = "2021"
+authors = [
+  "adz <x12@adz.garden>",
+  "sandreae <contact@samandreae.com>",
+  "Julian Sparber <julian@sparber.net>"
+]
 
 [dependencies]
 anyhow = "1.0.94"

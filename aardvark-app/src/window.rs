@@ -1,6 +1,6 @@
 /* window.rs
  *
- * Copyright 2024 Tobias
+ * Copyright 2024 The Aardvark Developers
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
