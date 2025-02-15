@@ -2,6 +2,11 @@
 name = "aardvark-doc"
 version = "0.1.0"
 edition = "2021"
+authors = [
+  "adz <x12@adz.garden>",
+  "Julian Sparber <julian@sparber.net>"
+]
+
 
 [dependencies]
 async-channel = "2.3.1"

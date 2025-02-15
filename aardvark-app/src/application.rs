@@ -1,6 +1,6 @@
 /* application.rs
  *
- * Copyright 2024 Tobias
+ * Copyright 2024 The Aardvark Developers
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@ use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib, glib::Properties};
 
-use crate::config::VERSION;
+use crate::config;
 use crate::AardvarkWindow;
 
 mod imp {
@@ -115,14 +115,29 @@ impl AardvarkApplication {
         let window = self.active_window().unwrap();
         let about = adw::AboutDialog::builder()
             .application_name("Aardvark")
-            .application_icon("org.p2panda.aardvark")
+            .application_icon(config::APP_ID)
+            .license_type(gtk::License::Gpl30)
+            .website("https://github.com/p2panda/aardvark")
+            .issue_url("https://github.com/p2panda/aardvark/issues")
+            .support_url("https://matrix.to/#/#aardvark:gnome.org")
+            .version(config::VERSION)
+            .copyright(gettext("© 2024-2025 The Aardvark Team"))
             .developer_name("The Aardvark Developers")
-            .version(VERSION)
-            .developers(vec!["Tobias"])
-            // FIXME: Translators: Replace "translator-credits" with your name/username, and
-            // optionally an email or URL.
-            .translator_credits(&gettext("translator-credits"))
-            .copyright("© 2024 Tobias")
+            .developers(vec![
+                "ada-magicat",
+                "Alyssa Ross",
+                "adz",
+                "Dominic Letz",
+                "Jonas Dreßler",
+                "Julian Sparber",
+                "Sebastian Wick",
+                "Silvio Tomatis",
+                "Sam Andreae",
+                "Tobias Bernard",
+                "glyph",
+            ])
+            .designers(vec!["Tobias Bernard"])
+            .translator_credits(gettext("translator-credits"))
             .build();
 
         about.present(Some(&window));
