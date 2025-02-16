@@ -7,7 +7,7 @@ use p2panda_store::{LogStore, MemoryStore};
 use p2panda_stream::operation::{ingest_operation, IngestResult};
 use serde::{Deserialize, Serialize};
 
-use crate::topic::Document;
+use crate::document::Document;
 
 /// Custom extensions for p2panda header.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,8 +53,7 @@ impl Extension<Document> for AardvarkExtensions {
             _ => header
                 .extensions
                 .as_ref()
-                .map(|extensions| extensions.document.clone())
-                .flatten(),
+                .and_then(|extensions| extensions.document),
         }
     }
 }
@@ -76,7 +75,7 @@ pub async fn create_operation(
     let public_key = private_key.public_key();
 
     let latest_operation = match document {
-        Some(ref document) => store.latest_operation(&public_key, &document).await?,
+        Some(ref document) => store.latest_operation(&public_key, document).await?,
         None => None,
     };
 
@@ -91,7 +90,7 @@ pub async fn create_operation(
 
     let extensions = AardvarkExtensions {
         prune_flag: PruneFlag::new(prune_flag),
-        document: document.clone(),
+        document,
     };
 
     let mut header = Header {

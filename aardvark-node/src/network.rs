@@ -5,14 +5,16 @@ use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
 use p2panda_stream::{DecodeExt, IngestExt};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::error;
 
+use crate::document::Document;
 use crate::operation::{decode_gossip_message, encode_gossip_operation, AardvarkExtensions};
 use crate::store::OperationStore;
-use crate::topic::Document;
 
+#[derive(Clone)]
 pub struct Network {
     operation_store: OperationStore,
     network: p2panda_net::Network<Document>,
@@ -34,7 +36,6 @@ impl Network {
                 //
                 // Related issue: https://github.com/p2panda/aardvark/issues/24
                 max_message_size: 512_000,
-                ..Default::default()
             })
             .sync(sync_config)
             .build()
@@ -63,8 +64,7 @@ impl Network {
 
         // Join a gossip overlay with peers who are interested in the same document and start sync
         // with them.
-        let (document_tx, document_rx, _gossip_ready) =
-            self.network.subscribe(document.clone()).await?;
+        let (document_tx, document_rx, _gossip_ready) = self.network.subscribe(document).await?;
 
         let stream = ReceiverStream::new(document_rx);
 
@@ -84,7 +84,7 @@ impl Network {
         });
 
         // Decode p2panda operations (they are encoded in CBOR).
-        let mut stream = stream.decode().filter_map(|result| match result {
+        let stream = stream.decode().filter_map(|result| match result {
             Ok(operation) => Some(operation),
             Err(err) => {
                 error!("decoding operation failed: {err}");
@@ -112,7 +112,7 @@ impl Network {
             });
 
         // Send checked and ingested operations for this document to application layer.
-        tokio::task::spawn(async move {
+        let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
             while let Some(operation) = stream.next().await {
                 to_app.send(operation).await?;
             }
@@ -121,7 +121,7 @@ impl Network {
 
         // Receive operations from application layer and forward them into gossip overlay for this
         // document.
-        tokio::task::spawn(async move {
+        let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
             while let Some(operation) = from_app.recv().await {
                 let encoded_gossip_operation =
                     encode_gossip_operation(operation.header, operation.body)?;
