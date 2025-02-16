@@ -57,21 +57,23 @@ impl Node {
     }
 
     pub fn run(&self, private_key: PrivateKey, network_id: Hash) {
-        self.inner
-            .private_key
-            .set(private_key.clone())
-            .expect("network can be run only once");
-
-        let sync = LogSyncProtocol::new(
-            self.inner.document_store.clone(),
-            self.inner.operation_store.clone(),
-        );
-        let sync_config = SyncConfiguration::<Document>::new(sync);
+        let sync_config = {
+            let sync = LogSyncProtocol::new(
+                self.inner.document_store.clone(),
+                self.inner.operation_store.clone(),
+            );
+            SyncConfiguration::<Document>::new(sync)
+        };
 
         let operation_store = self.inner.operation_store.clone();
-
         let inner = self.inner.clone();
+
         self.inner.runtime.spawn(async move {
+            inner
+                .private_key
+                .set(private_key.clone())
+                .expect("network can be run only once");
+
             inner
                 .network
                 .get_or_init(|| async {
