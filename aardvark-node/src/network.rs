@@ -97,11 +97,12 @@ impl Network {
         // - Validate operation- and log integrity and authenticity
         // - De-duplicate already known operations
         // - Out-of-order buffering
+        // - Pruning when flag is set
         // - Persist operation in store
         let mut stream = stream
             // NOTE(adz): The persisting part should happen later, we want to check the payload on
             // application layer first. In general "ingest" does too much at once and is
-            // inflexible.
+            // inflexible. Related issue: https://github.com/p2panda/p2panda/issues/696
             .ingest(self.operation_store.clone(), 128)
             .filter_map(|result| match result {
                 Ok(operation) => Some(operation),
