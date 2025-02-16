@@ -206,14 +206,9 @@ impl Network {
                         .await?;
 
                     // Forward the payload up to the app.
-                    to_app
-                        .send(
-                            operation
-                                .body
-                                .expect("all operations have a body")
-                                .to_bytes(),
-                        )
-                        .await?;
+                    if let Some(body) = operation.body {
+                        to_app.send(body.to_bytes()).await?;
+                    }
                 }
 
                 Ok(())
