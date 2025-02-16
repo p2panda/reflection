@@ -4,20 +4,29 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use p2panda_core::PublicKey;
+use p2panda_store::MemoryStore;
 use p2panda_sync::log_sync::TopicLogMap;
 use tokio::sync::RwLock;
 
+use crate::operation::AardvarkExtensions;
 use crate::topic::TextDocument;
 
+pub type LogId = TextDocument;
+
 #[derive(Clone, Debug)]
-pub struct TextDocumentStore {
-    inner: Arc<RwLock<TextDocumentStoreInner>>,
+pub struct DocumentStore {
+    inner: Arc<RwLock<DocumentStoreInner>>,
 }
 
-impl TextDocumentStore {
+#[derive(Debug)]
+struct DocumentStoreInner {
+    authors: HashMap<PublicKey, Vec<TextDocument>>,
+}
+
+impl DocumentStore {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(TextDocumentStoreInner {
+            inner: Arc::new(RwLock::new(DocumentStoreInner {
                 authors: HashMap::new(),
             })),
         }
@@ -38,15 +47,8 @@ impl TextDocumentStore {
     }
 }
 
-#[derive(Clone, Debug)]
-struct TextDocumentStoreInner {
-    authors: HashMap<PublicKey, Vec<TextDocument>>,
-}
-
-pub type LogId = TextDocument;
-
 #[async_trait]
-impl TopicLogMap<TextDocument, LogId> for TextDocumentStore {
+impl TopicLogMap<TextDocument, LogId> for DocumentStore {
     async fn get(&self, topic: &TextDocument) -> Option<HashMap<PublicKey, Vec<LogId>>> {
         let store = &self.inner.read().await;
         let mut result = HashMap::<PublicKey, Vec<TextDocument>>::new();
@@ -63,3 +65,5 @@ impl TopicLogMap<TextDocument, LogId> for TextDocumentStore {
         Some(result)
     }
 }
+
+pub type OperationStore = MemoryStore<LogId, AardvarkExtensions>;
