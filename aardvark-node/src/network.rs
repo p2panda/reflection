@@ -14,7 +14,7 @@ use crate::document::Document;
 use crate::operation::{decode_gossip_message, encode_gossip_operation, AardvarkExtensions};
 use crate::store::OperationStore;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Network {
     operation_store: OperationStore,
     network: p2panda_net::Network<Document>,

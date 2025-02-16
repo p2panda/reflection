@@ -80,12 +80,12 @@ impl Node {
 
             inner
                 .network
-                .get_or_init(|| async {
+                .set(
                     Network::spawn(network_id, private_key, sync_config, operation_store)
                         .await
-                        .expect("networking backend")
-                })
-                .await;
+                        .expect("networking backend"),
+                )
+                .expect("network can be run only once");
         });
     }
 
