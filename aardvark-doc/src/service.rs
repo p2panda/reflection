@@ -34,9 +34,10 @@ impl Service {
 
     pub fn startup(&self) {
         let private_key = self.imp().private_key.clone();
+        let network_id = b"aardvark <3";
         info!("my public key: {}", private_key.public_key());
 
-        self.imp().node.run(private_key, Hash::new(b"aardvark <3"));
+        self.imp().node.run(private_key, Hash::new(network_id));
     }
 
     pub fn shutdown(&self) {
