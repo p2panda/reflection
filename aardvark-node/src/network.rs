@@ -4,19 +4,17 @@ use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
 use p2panda_stream::{DecodeExt, IngestExt};
-use p2panda_sync::log_sync::LogSyncProtocol;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::error;
 
 use crate::operation::{decode_gossip_message, encode_gossip_operation, AardvarkExtensions};
-use crate::store::{DocumentStore, OperationStore};
+use crate::store::OperationStore;
 use crate::topic::Document;
 
 pub struct Network {
     operation_store: OperationStore,
-    document_store: DocumentStore,
     network: p2panda_net::Network<Document>,
 }
 
@@ -24,12 +22,9 @@ impl Network {
     pub async fn spawn(
         network_id: Hash,
         private_key: PrivateKey,
+        sync_config: SyncConfiguration<Document>,
         operation_store: OperationStore,
-        document_store: DocumentStore,
     ) -> Result<Self> {
-        let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone());
-        let sync_config = SyncConfiguration::<Document>::new(sync);
-
         let network = NetworkBuilder::new(network_id.into())
             .private_key(private_key)
             .discovery(LocalDiscovery::new())
@@ -47,7 +42,6 @@ impl Network {
 
         Ok(Self {
             operation_store,
-            document_store,
             network,
         })
     }

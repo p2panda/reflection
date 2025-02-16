@@ -1,5 +1,7 @@
 use anyhow::Result;
 use p2panda_core::{Hash, PrivateKey, PruneFlag};
+use p2panda_net::SyncConfiguration;
+use p2panda_sync::log_sync::LogSyncProtocol;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::OnceCell;
@@ -53,13 +55,17 @@ impl Node {
             .expect("network can be run only once");
 
         self.runtime.spawn(async move {
+            let sync =
+                LogSyncProtocol::new(self.document_store.clone(), self.operation_store.clone());
+            let sync_config = SyncConfiguration::<Document>::new(sync);
+
             self.network
                 .get_or_init(|| async {
                     Network::spawn(
                         network_id,
                         private_key,
+                        sync_config,
                         self.operation_store.clone(),
-                        self.document_store.clone(),
                     )
                     .await
                     .expect("networking backend")
