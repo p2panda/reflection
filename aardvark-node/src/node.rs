@@ -14,6 +14,10 @@ use crate::network::Network;
 use crate::operation::create_operation;
 use crate::store::{DocumentStore, OperationStore};
 
+pub type NodeSender = mpsc::Sender<Vec<u8>>;
+
+pub type NodeReceiver = mpsc::Receiver<Vec<u8>>;
+
 pub struct Node {
     inner: Arc<NodeInner>,
 }
@@ -92,9 +96,7 @@ impl Node {
         });
     }
 
-    pub fn create_document(
-        &self,
-    ) -> Result<(Hash, mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
+    pub fn create_document(&self) -> Result<(Hash, NodeSender, NodeReceiver)> {
         let private_key = self.inner.private_key.get().expect("private key");
 
         let mut operation_store = self.inner.operation_store.clone();
@@ -113,19 +115,13 @@ impl Node {
         Ok((document_id, tx, rx))
     }
 
-    pub fn join_document(
-        &self,
-        document_id: Hash,
-    ) -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
+    pub fn join_document(&self, document_id: Hash) -> Result<(NodeSender, NodeReceiver)> {
         let document = document_id.into();
         let (tx, rx) = self.subscribe(document)?;
         Ok((tx, rx))
     }
 
-    fn subscribe(
-        &self,
-        document: Document,
-    ) -> Result<(mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>)> {
+    fn subscribe(&self, document: Document) -> Result<(NodeSender, NodeReceiver)> {
         let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
         let (to_app, from_network) = mpsc::channel(512);
 

@@ -4,4 +4,4 @@ mod node;
 mod operation;
 mod store;
 
-pub use node::Node;
+pub use node::{Node, NodeReceiver, NodeSender};
