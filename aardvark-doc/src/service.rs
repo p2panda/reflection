@@ -3,14 +3,14 @@ use p2panda_core::{Hash, PrivateKey, PublicKey};
 use tokio::sync::mpsc;
 use tracing::info;
 
-use aardvark_node::Network;
+use aardvark_node::Node;
 
 mod imp {
     use super::*;
 
     #[derive(Default)]
     pub struct Service {
-        pub network: Network,
+        pub node: Node,
         pub private_key: PrivateKey,
     }
 
@@ -36,19 +36,17 @@ impl Service {
         let private_key = self.imp().private_key.clone();
         info!("my public key: {}", private_key.public_key());
 
-        self.imp()
-            .network
-            .run(private_key, Hash::new(b"aardvark <3"));
+        self.imp().node.run(private_key, Hash::new(b"aardvark <3"));
     }
 
     pub fn shutdown(&self) {
-        self.imp().network.shutdown();
+        self.imp().node.shutdown();
     }
 
     pub(crate) fn create_document(&self) -> (Hash, mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
         let (document_id, tx, rx) = self
             .imp()
-            .network
+            .node
             .create_document()
             .expect("to create document");
         info!("created new document: {}", document_id.to_hex());
@@ -60,7 +58,7 @@ impl Service {
         document_id: Hash,
     ) -> (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
         self.imp()
-            .network
+            .node
             .join_document(document_id)
             .expect("to join document")
     }
