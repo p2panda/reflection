@@ -127,7 +127,14 @@ impl Node {
 
         let inner = self.inner.clone();
         let _result: JoinHandle<Result<()>> = self.inner.runtime.spawn(async move {
-            let network = inner.network.get().expect("running network");
+            let network = inner
+                .network
+                // Allow concurrent calls by awaiting network instance as it might be still
+                // in process of initialisation.
+                .get_or_init(|| async {
+                    unreachable!("network was initialised in `run` method");
+                })
+                .await;
 
             let (document_tx, mut document_rx) = network.subscribe(document).await?;
 
