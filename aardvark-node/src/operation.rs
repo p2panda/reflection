@@ -2,12 +2,12 @@ use std::time::SystemTime;
 
 use anyhow::Result;
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Body, Extension, Extensions, Header, PrivateKey, PruneFlag};
+use p2panda_core::{Body, Extension, Extensions, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::{LogStore, MemoryStore};
-use p2panda_stream::operation::ingest_operation;
+use p2panda_stream::operation::{ingest_operation, IngestResult};
 use serde::{Deserialize, Serialize};
 
-use crate::topic::TextDocument;
+use crate::document::Document;
 
 /// Custom extensions for p2panda header.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -31,7 +31,7 @@ pub struct AardvarkExtensions {
     /// Can be `None` if this operation indicates that we are creating a new document. In this case
     /// we take the hash of the header itself to derive the document id.
     #[serde(rename = "d")]
-    pub document: Option<TextDocument>,
+    pub document: Option<Document>,
 }
 
 impl Extension<PruneFlag> for AardvarkExtensions {
@@ -43,8 +43,8 @@ impl Extension<PruneFlag> for AardvarkExtensions {
     }
 }
 
-impl Extension<TextDocument> for AardvarkExtensions {
-    fn extract(header: &Header<Self>) -> Option<TextDocument> {
+impl Extension<Document> for AardvarkExtensions {
+    fn extract(header: &Header<Self>) -> Option<Document> {
         // If this is the first operation in the append-only log we use the hash of the header
         // itself to determine the document id, otherwise use the one mentioned in the header by
         // subsequent operations.
@@ -53,8 +53,7 @@ impl Extension<TextDocument> for AardvarkExtensions {
             _ => header
                 .extensions
                 .as_ref()
-                .map(|extensions| extensions.document.clone())
-                .flatten(),
+                .and_then(|extensions| extensions.document),
         }
     }
 }
@@ -65,18 +64,18 @@ impl Extension<TextDocument> for AardvarkExtensions {
 /// operation in a new log. The resulting hash of the header can be used to identify that new
 /// document.
 pub async fn create_operation(
-    store: &mut MemoryStore<TextDocument, AardvarkExtensions>,
+    store: &mut MemoryStore<Document, AardvarkExtensions>,
     private_key: &PrivateKey,
-    document: Option<TextDocument>,
+    document: Option<Document>,
     body: Option<&[u8]>,
     prune_flag: bool,
-) -> Result<(Header<AardvarkExtensions>, Option<Body>)> {
+) -> Result<Operation<AardvarkExtensions>> {
     let body = body.map(Body::new);
 
     let public_key = private_key.public_key();
 
     let latest_operation = match document {
-        Some(ref document) => store.latest_operation(&public_key, &document).await?,
+        Some(ref document) => store.latest_operation(&public_key, document).await?,
         None => None,
     };
 
@@ -91,7 +90,7 @@ pub async fn create_operation(
 
     let extensions = AardvarkExtensions {
         prune_flag: PruneFlag::new(prune_flag),
-        document: document.clone(),
+        document,
     };
 
     let mut header = Header {
@@ -108,9 +107,9 @@ pub async fn create_operation(
     };
     header.sign(private_key);
 
-    let log_id: TextDocument = header.extension().expect("document id from our own logs");
+    let log_id: Document = header.extension().expect("document id from our own logs");
     let prune_flag: PruneFlag = header.extension().unwrap_or_default();
-    ingest_operation(
+    let result = ingest_operation(
         store,
         header.clone(),
         body.clone(),
@@ -120,7 +119,11 @@ pub async fn create_operation(
     )
     .await?;
 
-    Ok((header, body))
+    let IngestResult::Complete(operation) = result else {
+        panic!("we should never need to re-order our own operations")
+    };
+
+    Ok(operation)
 }
 
 pub fn encode_gossip_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>

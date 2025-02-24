@@ -4,62 +4,66 @@ use std::sync::Arc;
 use anyhow::Result;
 use async_trait::async_trait;
 use p2panda_core::PublicKey;
+use p2panda_store::MemoryStore;
 use p2panda_sync::log_sync::TopicLogMap;
 use tokio::sync::RwLock;
 
-use crate::topic::TextDocument;
+use crate::document::Document;
+use crate::operation::AardvarkExtensions;
+
+pub type LogId = Document;
 
 #[derive(Clone, Debug)]
-pub struct TextDocumentStore {
-    inner: Arc<RwLock<TextDocumentStoreInner>>,
+pub struct DocumentStore {
+    inner: Arc<RwLock<DocumentStoreInner>>,
 }
 
-impl TextDocumentStore {
+#[derive(Debug)]
+struct DocumentStoreInner {
+    authors: HashMap<PublicKey, Vec<Document>>,
+}
+
+impl DocumentStore {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(TextDocumentStoreInner {
+            inner: Arc::new(RwLock::new(DocumentStoreInner {
                 authors: HashMap::new(),
             })),
         }
     }
 
-    pub async fn add_author(&self, document_id: TextDocument, public_key: PublicKey) -> Result<()> {
+    pub async fn add_author(&self, document: Document, public_key: PublicKey) -> Result<()> {
         let mut store = self.inner.write().await;
         store
             .authors
             .entry(public_key)
             .and_modify(|documents| {
-                if !documents.contains(&document_id) {
-                    documents.push(document_id.clone());
+                if !documents.contains(&document) {
+                    documents.push(document);
                 }
             })
-            .or_insert(vec![document_id]);
+            .or_insert(vec![document]);
         Ok(())
     }
 }
 
-#[derive(Clone, Debug)]
-struct TextDocumentStoreInner {
-    authors: HashMap<PublicKey, Vec<TextDocument>>,
-}
-
-pub type LogId = TextDocument;
-
 #[async_trait]
-impl TopicLogMap<TextDocument, LogId> for TextDocumentStore {
-    async fn get(&self, topic: &TextDocument) -> Option<HashMap<PublicKey, Vec<LogId>>> {
+impl TopicLogMap<Document, LogId> for DocumentStore {
+    async fn get(&self, topic: &Document) -> Option<HashMap<PublicKey, Vec<LogId>>> {
         let store = &self.inner.read().await;
-        let mut result = HashMap::<PublicKey, Vec<TextDocument>>::new();
+        let mut result = HashMap::<PublicKey, Vec<Document>>::new();
 
-        for (public_key, text_documents) in &store.authors {
-            if text_documents.contains(topic) {
+        for (public_key, documents) in &store.authors {
+            if documents.contains(topic) {
                 result
                     .entry(*public_key)
-                    .and_modify(|logs| logs.push(topic.clone()))
-                    .or_insert(vec![topic.clone()]);
+                    .and_modify(|logs| logs.push(*topic))
+                    .or_insert(vec![*topic]);
             }
         }
 
         Some(result)
     }
 }
+
+pub type OperationStore = MemoryStore<LogId, AardvarkExtensions>;
