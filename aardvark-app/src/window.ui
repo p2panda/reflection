@@ -156,12 +156,10 @@
           </object>
         </child>
         <child>
-          <object class="GtkLabel">
+          <object class="GtkLabel" id="share_code_label">
             <property name="wrap">True</property>
             <property name="wrap-mode">char</property>
-            <property name="justify">GTK_JUSTIFY_CENTER</property>
-            <property name="max-width-chars">25</property>
-            <property name="label" translatable="true">356702</property>
+            <property name="max-width-chars">26</property>
             <style>
               <class name="invite-code"/>
               <class name="monospace"/>
@@ -174,7 +172,7 @@
             <property name="margin-top">6</property>
 
             <child>
-              <object class="GtkButton">
+              <object class="GtkButton" id="copy_code_button">
                 <style>
                   <class name="pill"/>
                 </style>

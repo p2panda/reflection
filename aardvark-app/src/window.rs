@@ -47,6 +47,10 @@ mod imp {
         pub open_document_dialog: TemplateChild<adw::Dialog>,
         #[template_child]
         pub toast_overlay: TemplateChild<adw::ToastOverlay>,
+        #[template_child]
+        pub share_code_label: TemplateChild<gtk::Label>,
+        #[template_child]
+        pub copy_code_button: TemplateChild<gtk::Button>,
         pub css_provider: gtk::CssProvider,
         pub font_size: Cell<f64>,
         #[property(get, set = Self::set_font_scale, default = 0.0)]
@@ -184,7 +188,27 @@ mod imp {
 
             // TODO: wait for the document to be ready before displaying the buffer
             // TODO: The user needs to provide a document id
-            buffer.set_document(Document::new(&self.service.get().unwrap(), None));
+            let document = Document::new(&self.service.get().unwrap(), None);
+            buffer.set_document(&document);
+            let document_id = document.id();
+            let formated = document_id.chars()
+                .enumerate()
+                .flat_map(|(i, c)| {
+                    if i != 0 && i % 4 == 0 {
+                        Some(' ')
+                    } else {
+                        None
+                    }
+                    .into_iter()
+                    .chain(std::iter::once(c))
+                })
+            .collect::<String>();
+            self.share_code_label.set_text(&formated);
+
+            self.copy_code_button.connect_clicked(move |button| {
+                let clipboard = button.display().clipboard();
+                clipboard.set(&formated);
+            });
         }
     }
 
