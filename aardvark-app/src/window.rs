@@ -24,7 +24,7 @@ use aardvark_doc::{document::Document, service::Service};
 use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
 use gtk::prelude::*;
-use gtk::{gdk, gio, glib};
+use gtk::{gdk, gio, glib, glib::clone};
 use sourceview::*;
 
 use crate::{components::ZoomLevelSelector, AardvarkTextBuffer};
@@ -42,6 +42,8 @@ mod imp {
         #[template_child]
         pub text_view: TemplateChild<sourceview::View>,
         #[template_child]
+        pub open_dialog_document_button: TemplateChild<gtk::Button>,
+        #[template_child]
         pub open_document_button: TemplateChild<gtk::Button>,
         #[template_child]
         pub open_document_dialog: TemplateChild<adw::Dialog>,
@@ -51,6 +53,8 @@ mod imp {
         pub share_code_label: TemplateChild<gtk::Label>,
         #[template_child]
         pub copy_code_button: TemplateChild<gtk::Button>,
+        #[template_child]
+        pub open_document_entry: TemplateChild<gtk::Entry>,
         pub css_provider: gtk::CssProvider,
         pub font_size: Cell<f64>,
         #[property(get, set = Self::set_font_scale, default = 0.0)]
@@ -182,33 +186,40 @@ mod imp {
 
             let window = self.obj().clone();
             let dialog = self.open_document_dialog.clone();
-            self.open_document_button.connect_clicked(move |_| {
+            self.open_dialog_document_button.connect_clicked(move |_| {
                 dialog.present(Some(&window));
             });
 
-            // TODO: wait for the document to be ready before displaying the buffer
-            // TODO: The user needs to provide a document id
-            let document = Document::new(&self.service.get().unwrap(), None);
-            buffer.set_document(&document);
-            let document_id = document.id();
-            let formated = document_id.chars()
-                .enumerate()
-                .flat_map(|(i, c)| {
-                    if i != 0 && i % 4 == 0 {
-                        Some(' ')
-                    } else {
-                        None
-                    }
-                    .into_iter()
-                    .chain(std::iter::once(c))
-                })
-            .collect::<String>();
-            self.share_code_label.set_text(&formated);
-
-            self.copy_code_button.connect_clicked(move |button| {
+            self.copy_code_button.connect_clicked(clone!(#[weak(rename_to = this)] self, #[weak] buffer, move |button| {
+                let document_id = this.format_document_id(buffer.document());
                 let clipboard = button.display().clipboard();
-                clipboard.set(&formated);
-            });
+                clipboard.set(&document_id);
+            }));
+
+            self.open_document_button.connect_clicked(clone!(#[weak(rename_to = this)] self, #[weak] buffer, move |_| {
+                let document_id: String = this.open_document_entry.text().chars()
+                .filter(|c| c.is_digit(16))
+                .collect();
+
+                let document = Document::new(this.service.get().unwrap(), Some(&document_id));
+                buffer.set_document(&document);
+                this.open_document_dialog.close();
+            }));
+
+            self.open_document_entry.connect_text_notify(clone!(#[weak(rename_to = this)] self, move |_| {
+                let input_len = this.open_document_entry.text().chars()
+                .filter(|c| c.is_digit(16))
+                .count();
+
+                this.open_document_button.set_sensitive(input_len == 64);
+            }));
+
+            buffer.connect_document_notify(clone!(#[weak(rename_to = this)] self, move |buffer| {
+                this.document_changed(buffer.document());
+            }));
+
+            let document = Document::new(self.service.get().unwrap(), None);
+            buffer.set_document(&document);
         }
     }
 
@@ -224,6 +235,31 @@ mod imp {
             self.css_provider
                 .load_from_string(&format!(".sourceview {{ font-size: {size}px; }}"));
             self.obj().action_set_enabled("window.zoom-out", size > 1.0);
+        }
+
+        fn document_changed(&self, document: Option<Document>) {
+            let document_id = self.format_document_id(document);
+            self.share_code_label.set_text(&document_id);
+        }
+
+        fn format_document_id(&self, document: Option<Document>) -> String {
+            if let Some(document) = document {
+                let document_id = document.id();
+                document_id.chars()
+                    .enumerate()
+                    .flat_map(|(i, c)| {
+                        if i != 0 && i % 4 == 0 {
+                            Some(' ')
+                        } else {
+                            None
+                        }
+                        .into_iter()
+                        .chain(std::iter::once(c))
+                    })
+                .collect::<String>()
+            } else {
+                "".to_string()
+            }
         }
     }
 

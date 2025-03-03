@@ -39,7 +39,7 @@
         <child type="top">
           <object class="AdwHeaderBar">
             <child type="start">
-              <object class="GtkButton" id="open_document_button">
+              <object class="GtkButton" id="open_dialog_document_button">
                 <property name="child">
                   <object class="AdwButtonContent">
                     <property name="icon-name">document-open-symbolic</property>
@@ -195,6 +195,7 @@
     <property name="can-close">true</property>
     <property name="width-request">320</property>
     <property name="height-request">300</property>
+    <property name="default-widget">open_document_button</property>
 
     <child>
       <object class="AdwToolbarView">
@@ -233,11 +234,12 @@
 
 
             <child>
-              <object class="GtkEntry" id="entry_row">
-                <property name="placeholder-text" translatable="true">000000</property>
-                <property name="max-width-chars">7</property>
+              <object class="GtkEntry" id="open_document_entry">
+                <property name="placeholder-text" translatable="true">0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000</property>
+                <property name="max-width-chars">26</property>
                 <property name="halign">center</property>
                 <property name="margin-top">12</property>
+                <property name="activates-default">True</property>
 
                 <style>
                   <class name="invite-code-entry"/>
@@ -254,9 +256,10 @@
                 <property name="margin-top">12</property>
 
                 <child>
-                  <object class="GtkButton">
+                  <object class="GtkButton" id="open_document_button">
                     <property name="label" translatable="true">Open</property>
                     <property name="width-request">140</property>
+                    <property name="sensitive">False</property>
                     <style>
                       <class name="pill"/>
                       <class name="suggested-action"/>
