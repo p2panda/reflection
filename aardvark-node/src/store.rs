@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -20,7 +20,7 @@ pub struct DocumentStore {
 
 #[derive(Debug)]
 struct DocumentStoreInner {
-    authors: HashMap<PublicKey, Vec<Document>>,
+    authors: HashMap<PublicKey, HashSet<Document>>,
 }
 
 impl DocumentStore {
@@ -38,11 +38,9 @@ impl DocumentStore {
             .authors
             .entry(public_key)
             .and_modify(|documents| {
-                if !documents.contains(&document) {
-                    documents.push(document);
-                }
+                documents.insert(document);
             })
-            .or_insert(vec![document]);
+            .or_insert(HashSet::from([document]));
         Ok(())
     }
 }
