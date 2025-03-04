@@ -8,10 +8,11 @@ use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
+use tracing::warn;
 
 use crate::document::Document;
 use crate::network::Network;
-use crate::operation::create_operation;
+use crate::operation::{create_operation, validate_document_operation};
 use crate::store::{DocumentStore, OperationStore};
 
 pub type NodeSender = mpsc::Sender<Vec<u8>>;
@@ -161,6 +162,16 @@ impl Node {
             let document_store = inner.document_store.clone();
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
                 while let Some(operation) = document_rx.recv().await {
+                    // Validation for our custom "document" extension.
+                    if let Err(err) = validate_document_operation(&operation, &document) {
+                        warn!(
+                            public_key = %operation.header.public_key,
+                            seq_num = %operation.header.seq_num,
+                            "{err}"
+                        );
+                        continue;
+                    }
+
                     // When we discover a new author we need to add them to our document store.
                     document_store
                         .add_author(document, operation.header.public_key)
