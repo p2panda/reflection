@@ -216,7 +216,7 @@ pub enum TextCrdtEvent {
     /// We've locally inserted or removed text.
     ///
     /// Use this to apply changes to your local text buffer, etc.
-    Local(TextDelta),
+    Local(Vec<TextDelta>),
 
     /// Same as `Local` but in encoded form, including additional information like a vector clock,
     /// so we can send that delta over the wire to other peers.
@@ -235,15 +235,9 @@ pub enum TextCrdtEvent {
 }
 
 impl TextCrdtEvent {
-    fn from_deltas(triggered_by: EventTriggerKind, mut deltas: Vec<TextDelta>) -> Self {
+    fn from_deltas(triggered_by: EventTriggerKind, deltas: Vec<TextDelta>) -> Self {
         match triggered_by {
-            EventTriggerKind::Local => {
-                // Since we're committing inserts and removals directly on local changes, we can assure
-                // that there's only one delta given. As soon as we're changing the commit logic we
-                // need to revisit this.
-                assert_eq!(deltas.len(), 1, "local updates have exactly one delta");
-                Self::Local(deltas.pop().expect("one delta"))
-            }
+            EventTriggerKind::Local => Self::Local(deltas),
             EventTriggerKind::Import => Self::Remote(deltas),
             EventTriggerKind::Checkout => unimplemented!("document checkouts are not supported"),
         }
@@ -366,8 +360,8 @@ mod tests {
         let doc_2 = TextCrdt::new(2);
 
         for _ in 0..6 {
-            if let TextCrdtEvent::Local(delta) = rx_1.recv().await.unwrap() {
-                doc_2.apply_delta(delta).unwrap();
+            if let TextCrdtEvent::Local(deltas) = rx_1.recv().await.unwrap() {
+                doc_2.apply_delta(deltas.get(0).unwrap().clone()).unwrap();
             }
         }
 
