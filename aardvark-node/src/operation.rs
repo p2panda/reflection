@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Body, Extension, Extensions, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::{LogStore, MemoryStore};
@@ -45,9 +45,23 @@ impl Extension<PruneFlag> for AardvarkExtensions {
 
 impl Extension<Document> for AardvarkExtensions {
     fn extract(header: &Header<Self>) -> Option<Document> {
+        // Check if header mentions an document.
+        let document = header
+            .extensions
+            .as_ref()
+            .and_then(|extensions| extensions.document);
+        if document.is_some() {
+            return document;
+        }
+
+        // No document was mentioned, we must be creating a new document.
+        //
         // If this is the first operation in the append-only log we use the hash of the header
-        // itself to determine the document id, otherwise use the one mentioned in the header by
-        // subsequent operations.
+        // itself to determine the document id.
+        //
+        // Subsequent operations will continue to mention it, if this is not the case we have an
+        // invalid operation. In this case we return `None` here and our validation logic will
+        // fail.
         match header.seq_num {
             0 => Some(header.hash().into()),
             _ => header
@@ -124,6 +138,28 @@ pub async fn create_operation(
     };
 
     Ok(operation)
+}
+
+pub fn validate_document_operation(
+    operation: &Operation<AardvarkExtensions>,
+    expected_document: &Document,
+) -> Result<()> {
+    let given_document: Option<Document> = operation.header.extension();
+    match given_document {
+        Some(given_document) => {
+            if &given_document != expected_document {
+                bail!(
+                    "document id mismatch (expected: {}, received: {})",
+                    expected_document,
+                    given_document
+                );
+            }
+        }
+        None => {
+            bail!("document id missing (expected: {})", expected_document);
+        }
+    }
+    Ok(())
 }
 
 pub fn encode_gossip_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>

@@ -8,10 +8,11 @@ use tokio::runtime::{Builder, Runtime};
 use tokio::sync::mpsc;
 use tokio::sync::OnceCell;
 use tokio::task::JoinHandle;
+use tracing::warn;
 
 use crate::document::Document;
 use crate::network::Network;
-use crate::operation::create_operation;
+use crate::operation::{create_operation, validate_document_operation};
 use crate::store::{DocumentStore, OperationStore};
 
 pub type NodeSender = mpsc::Sender<Vec<u8>>;
@@ -110,6 +111,14 @@ impl Node {
             .expect("document id from our own logs");
         let document_id = (&document).into();
 
+        // Add ourselves as an author to the document store.
+        self.inner.runtime.block_on(async {
+            self.inner
+                .document_store
+                .add_author(document, private_key.public_key())
+                .await
+        })?;
+
         let (tx, rx) = self.subscribe(document)?;
 
         Ok((document_id, tx, rx))
@@ -124,6 +133,16 @@ impl Node {
     fn subscribe(&self, document: Document) -> Result<(NodeSender, NodeReceiver)> {
         let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
         let (to_app, from_network) = mpsc::channel(512);
+
+        let private_key = self.inner.private_key.get().expect("private key").clone();
+
+        // Add ourselves as an author to the document store.
+        self.inner.runtime.block_on(async {
+            self.inner
+                .document_store
+                .add_author(document, private_key.public_key())
+                .await
+        })?;
 
         let inner = self.inner.clone();
         let _result: JoinHandle<Result<()>> = self.inner.runtime.spawn(async move {
@@ -143,7 +162,17 @@ impl Node {
             let document_store = inner.document_store.clone();
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
                 while let Some(operation) = document_rx.recv().await {
-                    // When we discover a new author we need to add them to our "document store".
+                    // Validation for our custom "document" extension.
+                    if let Err(err) = validate_document_operation(&operation, &document) {
+                        warn!(
+                            public_key = %operation.header.public_key,
+                            seq_num = %operation.header.seq_num,
+                            "{err}"
+                        );
+                        continue;
+                    }
+
+                    // When we discover a new author we need to add them to our document store.
                     document_store
                         .add_author(document, operation.header.public_key)
                         .await?;
@@ -159,7 +188,6 @@ impl Node {
 
             // Task for handling events coming from the application layer.
             let mut operation_store = inner.operation_store.clone();
-            let private_key = inner.private_key.get().expect("private key").clone();
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
                 while let Some(bytes) = from_app.recv().await {
                     // TODO: set prune flag from the frontend.
