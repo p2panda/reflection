@@ -8,6 +8,8 @@
 .invite-code-entry {
   border-radius: 15px;
   padding: 15px 20px;
+  min-width: 350px;
+  min-height: 120px;
 }
 
 .user-counter {

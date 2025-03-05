@@ -27,7 +27,10 @@ use gtk::prelude::*;
 use gtk::{gdk, gio, glib, glib::clone};
 use sourceview::*;
 
-use crate::{components::ZoomLevelSelector, AardvarkTextBuffer};
+use crate::{
+    AardvarkTextBuffer,
+    components::{MultilineEntry, ZoomLevelSelector},
+};
 
 const BASE_TEXT_FONT_SIZE: f64 = 24.0;
 
@@ -56,7 +59,7 @@ mod imp {
         #[template_child]
         pub copy_code_button: TemplateChild<gtk::Button>,
         #[template_child]
-        pub open_document_entry: TemplateChild<gtk::Entry>,
+        pub open_document_entry: TemplateChild<gtk::TextView>,
         pub css_provider: gtk::CssProvider,
         pub font_size: Cell<f64>,
         #[property(get, set = Self::set_font_scale, default = 0.0)]
@@ -75,6 +78,7 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             ZoomLevelSelector::static_type();
+            MultilineEntry::static_type();
 
             klass.bind_template();
 
@@ -192,34 +196,115 @@ mod imp {
                 dialog.present(Some(&window));
             });
 
-            self.copy_code_button.connect_clicked(clone!(#[weak(rename_to = this)] self, #[weak] buffer, move |button| {
-                let document_id = this.format_document_id(buffer.document());
-                let clipboard = button.display().clipboard();
-                clipboard.set(&document_id);
-                this.share_popover.popdown();
-            }));
+            self.copy_code_button.connect_clicked(clone!(
+                #[weak(rename_to = this)]
+                self,
+                #[weak]
+                buffer,
+                move |button| {
+                    let document_id = this.format_document_id(buffer.document());
+                    let clipboard = button.display().clipboard();
+                    clipboard.set(&document_id);
+                    this.share_popover.popdown();
+                }
+            ));
 
-            self.open_document_button.connect_clicked(clone!(#[weak(rename_to = this)] self, #[weak] buffer, move |_| {
-                let document_id: String = this.open_document_entry.text().chars()
-                .filter(|c| c.is_digit(16))
-                .collect();
+            self.open_document_button.connect_clicked(clone!(
+                #[weak(rename_to = this)]
+                self,
+                #[weak]
+                buffer,
+                move |_| {
+                    let open_document_buffer = this.open_document_entry.buffer();
+                    let document_id: String = open_document_buffer
+                        .text(
+                            &open_document_buffer.start_iter(),
+                            &open_document_buffer.end_iter(),
+                            false,
+                        )
+                        .chars()
+                        .filter(|c| c.is_digit(16))
+                        .collect();
 
-                let document = Document::new(this.service.get().unwrap(), Some(&document_id));
-                buffer.set_document(&document);
-                this.open_document_dialog.close();
-            }));
+                    let document = Document::new(this.service.get().unwrap(), Some(&document_id));
+                    buffer.set_document(&document);
+                    this.open_document_dialog.close();
+                }
+            ));
 
-            self.open_document_entry.connect_text_notify(clone!(#[weak(rename_to = this)] self, move |_| {
-                let input_len = this.open_document_entry.text().chars()
-                .filter(|c| c.is_digit(16))
-                .count();
+            self.open_document_entry.buffer().connect_changed(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |_| {
+                    let buffer = this.open_document_entry.buffer();
+                    let input_len = buffer
+                        .text(&buffer.start_iter(), &buffer.end_iter(), false)
+                        .chars()
+                        .filter(|c| c.is_digit(16))
+                        .count();
 
-                this.open_document_button.set_sensitive(input_len == 64);
-            }));
+                    this.open_document_button.set_sensitive(input_len == 64);
+                }
+            ));
 
-            buffer.connect_document_notify(clone!(#[weak(rename_to = this)] self, move |buffer| {
-                this.document_changed(buffer.document());
-            }));
+            self.open_document_entry
+                .buffer()
+                .connect_insert_text(|buffer, pos, new_text| {
+                    let mut prev_char: Option<char> = None;
+                    let filterd_text: String = new_text
+                        .chars()
+                        .filter(|c| {
+                            if c.is_digit(16) {
+                                prev_char = None;
+                                true
+                            } else if c == &' ' && prev_char != Some(' ') {
+                                prev_char = Some(' ');
+                                true
+                            } else {
+                                false
+                            }
+                        })
+                        .collect();
+
+                    let mut before_iter = pos.clone();
+                    let before_char = if before_iter.backward_char() {
+                        Some(before_iter.char())
+                    } else {
+                        None
+                    };
+                    let after_char = Some(pos.char());
+
+                    let trimmed_text = if before_char == Some(' ') && after_char == Some(' ') {
+                        filterd_text.trim()
+                    } else if before_char == Some(' ') {
+                        filterd_text.trim_start()
+                    } else if after_char == Some(' ') {
+                        filterd_text.trim_end()
+                    } else {
+                        &filterd_text
+                    };
+
+                    let input_len = buffer
+                        .text(&buffer.start_iter(), &buffer.end_iter(), false)
+                        .chars()
+                        .filter(|c| c.is_digit(16))
+                        .count();
+
+                    if trimmed_text.len() == 0 || (input_len >= 64 && trimmed_text != " ") {
+                        buffer.stop_signal_emission_by_name("insert-text");
+                    } else if new_text != trimmed_text {
+                        buffer.stop_signal_emission_by_name("insert-text");
+                        buffer.insert(pos, &trimmed_text);
+                    }
+                });
+
+            buffer.connect_document_notify(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |buffer| {
+                    this.document_changed(buffer.document());
+                }
+            ));
 
             let document = Document::new(self.service.get().unwrap(), None);
             buffer.set_document(&document);
@@ -248,7 +333,8 @@ mod imp {
         fn format_document_id(&self, document: Option<Document>) -> String {
             if let Some(document) = document {
                 let document_id = document.id();
-                document_id.chars()
+                document_id
+                    .chars()
                     .enumerate()
                     .flat_map(|(i, c)| {
                         if i != 0 && i % 4 == 0 {
@@ -259,7 +345,7 @@ mod imp {
                         .into_iter()
                         .chain(std::iter::once(c))
                     })
-                .collect::<String>()
+                    .collect::<String>()
             } else {
                 "".to_string()
             }
