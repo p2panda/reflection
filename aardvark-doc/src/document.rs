@@ -1,6 +1,6 @@
 use std::cell::{Cell, OnceCell, RefCell};
-use std::sync::OnceLock;
 use std::str::FromStr;
+use std::sync::OnceLock;
 
 use anyhow::Result;
 use glib::prelude::*;
@@ -102,7 +102,7 @@ mod imp {
             let service = self.service.get().unwrap();
             let (network_tx, mut rx) = if let Some(id) = self.id.get() {
                 service.join_document(Hash::from_str(id).expect("Invalid document id"))
-            } else{
+            } else {
                 let (document_id, network_tx, rx) = service.create_document();
                 self.set_id(Some(document_id.to_hex()));
                 (network_tx, rx)
@@ -147,10 +147,9 @@ mod imp {
                                     break;
                                 }
                             }
-                            TextCrdtEvent::Local(_text_delta) => {
+                            TextCrdtEvent::Local(_text_deltas) => {
                                 // TODO(adz): Later we want to apply changes to the text buffer
-                                // here. Something along the lines of:
-                                // application.on_deltas_received(vec![text_delta});
+                                // here.
                             }
                             TextCrdtEvent::Remote(text_deltas) => {
                                 for delta in text_deltas {
