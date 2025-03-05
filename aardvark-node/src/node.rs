@@ -240,6 +240,11 @@ impl Node {
                             snapshot_bytes,
                             delta_bytes,
                         } => {
+                            // Append an operation to our "snapshot" log and set the prune flag to
+                            // true. This will remove previous snapshots.
+                            //
+                            // Snapshots are not broadcasted on the gossip overlay as they would be
+                            // too large. Peers will sync them up when they join the document.
                             create_operation(
                                 &mut operation_store,
                                 &private_key,
@@ -254,7 +259,9 @@ impl Node {
                             // flag to true.
                             //
                             // This signals removing all previous "delta" operations now. This is
-                            // some sort of garbage collection whenever we snapshot.
+                            // some sort of garbage collection whenever we snapshot. Snapshots
+                            // already contain all history, there is no need to keep duplicate
+                            // "delta" data around.
                             let operation = create_operation(
                                 &mut operation_store,
                                 &private_key,
