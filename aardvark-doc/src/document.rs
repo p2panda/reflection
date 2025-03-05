@@ -176,7 +176,6 @@ mod imp {
                             }
                             TextCrdtEvent::Remote(text_deltas) => {
                                 for delta in text_deltas {
-                                    println!("{:?}", delta);
                                     match delta {
                                         TextDelta::Insert { index, chunk } => {
                                             this.emit_text_inserted(index as i32, &chunk);
