@@ -14,7 +14,7 @@
         "--device=dri",
         "--socket=wayland",
         "--env=RUST_BACKTRACE=1",
-        "--env=RUST_LOG=aardvark_app=INFO,aardvark_doc=INFO,aardvark_node=INFO"
+        "--env=RUST_LOG=aardvark=INFO,aardvark_doc=INFO,aardvark_node=INFO"
     ],
     "build-options" : {
         "append-path" : "/usr/lib/sdk/rust-stable/bin",
