@@ -50,6 +50,8 @@ mod imp {
         #[template_child]
         pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
+        pub share_popover: TemplateChild<gtk::Popover>,
+        #[template_child]
         pub share_code_label: TemplateChild<gtk::Label>,
         #[template_child]
         pub copy_code_button: TemplateChild<gtk::Button>,
@@ -194,6 +196,7 @@ mod imp {
                 let document_id = this.format_document_id(buffer.document());
                 let clipboard = button.display().clipboard();
                 clipboard.set(&document_id);
+                this.share_popover.popdown();
             }));
 
             self.open_document_button.connect_clicked(clone!(#[weak(rename_to = this)] self, #[weak] buffer, move |_| {
