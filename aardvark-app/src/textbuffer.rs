@@ -84,7 +84,7 @@ mod imp {
                 }
             ));
 
-            // We could use a signal group to block hanlders
+            // We could use a signal group to block handlers
             let document_handlers = glib::SignalGroup::with_type(Document::static_type());
             document_handlers.connect_local(
                 "text-inserted",

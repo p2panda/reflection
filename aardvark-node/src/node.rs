@@ -12,10 +12,31 @@ use tracing::warn;
 
 use crate::document::Document;
 use crate::network::Network;
-use crate::operation::{create_operation, validate_document_operation};
+use crate::operation::{create_operation, validate_operation, LogType};
 use crate::store::{DocumentStore, OperationStore};
 
-pub type NodeSender = mpsc::Sender<Vec<u8>>;
+pub enum NodeCommand {
+    /// Broadcast a "text delta" on the gossip overlay.
+    ///
+    /// This should be used to inform all subscribed peers about small changes to the text
+    /// document (Delta-Based CRDT).
+    Delta { bytes: Vec<u8> },
+
+    /// Same as [`NodeCommand::Delta`] next to persisting a whole snapshot and pruning.
+    ///
+    /// Snapshots contain the whole text document history and are much larger than deltas. This
+    /// data will only be sent to newly incoming peers via the sync protocol.
+    ///
+    /// Since a snapshot contains all data we need to reliably reconcile documents (it is a
+    /// State-Based CRDT) this command prunes all our logs and removes past snapshot- and delta
+    /// operations.
+    DeltaWithSnapshot {
+        delta_bytes: Vec<u8>,
+        snapshot_bytes: Vec<u8>,
+    },
+}
+
+pub type NodeSender = mpsc::Sender<NodeCommand>;
 
 pub type NodeReceiver = mpsc::Receiver<Vec<u8>>;
 
@@ -102,7 +123,15 @@ impl Node {
 
         let mut operation_store = self.inner.operation_store.clone();
         let operation = self.inner.runtime.block_on(async {
-            create_operation(&mut operation_store, private_key, None, None, false).await
+            create_operation(
+                &mut operation_store,
+                private_key,
+                LogType::Snapshot,
+                None,
+                None,
+                false,
+            )
+            .await
         })?;
 
         let document: Document = operation
@@ -131,7 +160,7 @@ impl Node {
     }
 
     fn subscribe(&self, document: Document) -> Result<(NodeSender, NodeReceiver)> {
-        let (to_network, mut from_app) = mpsc::channel::<Vec<u8>>(512);
+        let (to_network, mut from_app) = mpsc::channel::<NodeCommand>(512);
         let (to_app, from_network) = mpsc::channel(512);
 
         let private_key = self.inner.private_key.get().expect("private key").clone();
@@ -163,7 +192,7 @@ impl Node {
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
                 while let Some(operation) = document_rx.recv().await {
                     // Validation for our custom "document" extension.
-                    if let Err(err) = validate_document_operation(&operation, &document) {
+                    if let Err(err) = validate_operation(&operation, &document) {
                         warn!(
                             public_key = %operation.header.public_key,
                             seq_num = %operation.header.seq_num,
@@ -189,22 +218,57 @@ impl Node {
             // Task for handling events coming from the application layer.
             let mut operation_store = inner.operation_store.clone();
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
-                while let Some(bytes) = from_app.recv().await {
-                    // TODO: set prune flag from the frontend.
-                    let prune_flag = false;
-
+                while let Some(command) = from_app.recv().await {
                     // Create the p2panda operations with application message as payload.
-                    let operation = create_operation(
-                        &mut operation_store,
-                        &private_key,
-                        Some(document),
-                        Some(&bytes),
-                        prune_flag,
-                    )
-                    .await?;
+                    match command {
+                        NodeCommand::Delta { bytes } => {
+                            // Append one operation to our "ephemeral" delta log.
+                            let operation = create_operation(
+                                &mut operation_store,
+                                &private_key,
+                                LogType::Delta,
+                                Some(document),
+                                Some(&bytes),
+                                false,
+                            )
+                            .await?;
 
-                    // Broadcast operation on gossip overlay.
-                    document_tx.send(operation).await?;
+                            // Broadcast operation on gossip overlay.
+                            document_tx.send(operation).await?;
+                        }
+                        NodeCommand::DeltaWithSnapshot {
+                            snapshot_bytes,
+                            delta_bytes,
+                        } => {
+                            create_operation(
+                                &mut operation_store,
+                                &private_key,
+                                LogType::Snapshot,
+                                Some(document),
+                                Some(&snapshot_bytes),
+                                true,
+                            )
+                            .await?;
+
+                            // Append an operation to our "ephemeral" delta log and set the prune
+                            // flag to true.
+                            //
+                            // This signals removing all previous "delta" operations now. This is
+                            // some sort of garbage collection whenever we snapshot.
+                            let operation = create_operation(
+                                &mut operation_store,
+                                &private_key,
+                                LogType::Delta,
+                                Some(document),
+                                Some(&delta_bytes),
+                                true,
+                            )
+                            .await?;
+
+                            // Broadcast operation on gossip overlay.
+                            document_tx.send(operation).await?;
+                        }
+                    };
                 }
 
                 Ok(())

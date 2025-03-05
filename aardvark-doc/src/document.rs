@@ -2,6 +2,7 @@ use std::cell::{Cell, OnceCell, RefCell};
 use std::str::FromStr;
 use std::sync::OnceLock;
 
+use aardvark_node::NodeCommand;
 use anyhow::Result;
 use glib::prelude::*;
 use glib::subclass::prelude::*;
@@ -13,13 +14,15 @@ use crate::crdt::{TextCrdt, TextCrdtEvent, TextDelta};
 use crate::service::Service;
 
 mod imp {
+    use std::rc::Rc;
+
     use super::*;
 
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
         #[property(name = "text", get = Self::text, type = String)]
-        crdt_doc: RefCell<Option<TextCrdt>>,
+        crdt_doc: Rc<RefCell<Option<TextCrdt>>>,
         #[property(get, construct_only, set = Self::set_id)]
         id: OnceCell<String>,
         #[property(get, set)]
@@ -136,14 +139,34 @@ mod imp {
                 }
             ));
 
+            let crdt_doc = self.crdt_doc.clone();
+
             glib::spawn_future_local(clone!(
                 #[weak(rename_to = this)]
                 self,
                 async move {
                     while let Ok(event) = crdt_doc_rx.recv().await {
                         match event {
-                            TextCrdtEvent::LocalEncoded(bytes) => {
-                                if network_tx.send(bytes).await.is_err() {
+                            TextCrdtEvent::LocalEncoded(delta_bytes) => {
+                                // Broadcast a "text delta" to all peers and persist the snapshot.
+                                //
+                                // TODO(adz): We should consider persisting the snapshot every x
+                                // times or x seconds, not sure yet what logic makes the most
+                                // sense.
+                                let snapshot_bytes = crdt_doc
+                                    .borrow()
+                                    .as_ref()
+                                    .expect("crdt_doc to be set")
+                                    .snapshot();
+
+                                if network_tx
+                                    .send(NodeCommand::DeltaWithSnapshot {
+                                        snapshot_bytes,
+                                        delta_bytes,
+                                    })
+                                    .await
+                                    .is_err()
+                                {
                                     break;
                                 }
                             }

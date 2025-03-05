@@ -1,9 +1,8 @@
 use glib::subclass::prelude::*;
 use p2panda_core::{Hash, PrivateKey, PublicKey};
-use tokio::sync::mpsc;
 use tracing::info;
 
-use aardvark_node::Node;
+use aardvark_node::{Node, NodeReceiver, NodeSender};
 
 mod imp {
     use super::*;
@@ -44,7 +43,7 @@ impl Service {
         self.imp().node.shutdown();
     }
 
-    pub(crate) fn create_document(&self) -> (Hash, mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
+    pub(crate) fn create_document(&self) -> (Hash, NodeSender, NodeReceiver) {
         let (document_id, tx, rx) = self
             .imp()
             .node
@@ -54,10 +53,7 @@ impl Service {
         (document_id, tx, rx)
     }
 
-    pub(crate) fn join_document(
-        &self,
-        document_id: Hash,
-    ) -> (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) {
+    pub(crate) fn join_document(&self, document_id: Hash) -> (NodeSender, NodeReceiver) {
         self.imp()
             .node
             .join_document(document_id)
