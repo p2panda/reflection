@@ -1,0 +1,165 @@
+use std::cell::{Cell, OnceCell};
+use std::sync::Mutex;
+
+use glib::Properties;
+use glib::prelude::*;
+use glib::subclass::prelude::*;
+use p2panda_core::PublicKey;
+
+pub const COLORS: [(&str, &str); 15] = [
+    ("Yellow", "#faf387"),
+    ("Orange", "#ffc885"),
+    ("Red", "#f99085"),
+    ("Pink", "#fcaed5"),
+    ("Purple", "#f39bf2"),
+    ("Violet", "#b797f3"),
+    ("Blue", "#99c1f1"),
+    ("Cyan", "#99f1ec"),
+    ("Green", "#97f1aa"),
+    ("Khaki", "#f6e7c0"),
+    ("Brown", "#d9c0ab"),
+    ("Silver", "#deddda"),
+    ("Gray", "#c0bfbc"),
+    ("Black", "#9a9996"),
+    ("Gold", "#ead688"),
+];
+
+pub const EMOJIS: [(&str, &str); 41] = [
+    ("🐵", "Monkey"),
+    ("🐶", "Dog"),
+    ("🐱", "Cat"),
+    ("🦊", "Fox"),
+    ("🐺", "Wolf"),
+    ("🦝", "Raccoon"),
+    ("🦁", "Lion"),
+    ("🐯", "Tiger"),
+    ("🐷", "Pig"),
+    ("🐴", "Horse"),
+    ("🦄", "Unicorn"),
+    ("🦓", "Zebra"),
+    ("🫎", "Moose"),
+    ("🐔", "Chicken"),
+    ("🐼", "Panda"),
+    ("🐻", "Bear"),
+    ("🐻‍❄️", "Polar Bear"),
+    ("🐨", "Koala"),
+    ("🐸", "Frog"),
+    ("🐹", "Hamster"),
+    ("🐰", "Rabbit"),
+    ("🐮", "Cow"),
+    ("🐝", "Bee"),
+    ("🐢", "Turtle"),
+    ("🐏", "Ram"),
+    ("🐳", "Whale"),
+    ("🐙", "Octopus"),
+    ("🦀", "Crab"),
+    ("🐌", "Snail"),
+    ("🪲", "Beetle"),
+    ("🐞", "Ladybug"),
+    ("🦈", "Shark"),
+    ("🦭", "Seal"),
+    ("🐟", "Fish"),
+    ("🦆", "Duck"),
+    ("🦥", "Sloth"),
+    ("🦫", "Beaver"),
+    ("🐪", "Camel"),
+    ("🦍", "Gorilla"),
+    ("🦣", "Mammooth"),
+    ("🐃", "Buffalo"),
+];
+
+mod imp {
+    use super::*;
+
+    #[derive(Properties, Default)]
+    #[properties(wrapper_type = super::Author)]
+    pub struct Author {
+        #[property(name = "name", get = Self::name, type = String)]
+        #[property(name = "emoji", get = Self::emoji, type = String)]
+        #[property(name = "color", get = Self::color, type = String)]
+        pub public_key: OnceCell<PublicKey>,
+        #[property(get)]
+        pub last_seen: Mutex<Option<glib::DateTime>>,
+        #[property(get, default = true)]
+        pub is_online: Cell<bool>,
+        #[property(get)]
+        pub is_this_device: Cell<bool>,
+    }
+
+    #[glib::object_subclass]
+    impl ObjectSubclass for Author {
+        const NAME: &'static str = "Author";
+        type Type = super::Author;
+    }
+
+    #[glib::derived_properties]
+    impl ObjectImpl for Author {}
+
+    impl Author {
+        fn name(&self) -> String {
+            let bytes = self.public_key.get().unwrap().as_bytes();
+            let selector_color = bytes[..(bytes.len() / 2)]
+                .iter()
+                .fold(0u8, |acc, b| acc ^ b) as usize
+                % COLORS.len();
+            let selector_emoji = bytes[(bytes.len() / 2)..]
+                .iter()
+                .fold(0u8, |acc, b| acc ^ b) as usize
+                % EMOJIS.len();
+            format!("{} {}", COLORS[selector_color].0, EMOJIS[selector_emoji].1)
+        }
+
+        fn emoji(&self) -> String {
+            let bytes = self.public_key.get().unwrap().as_bytes();
+            let selector_emoji = bytes[(bytes.len() / 2)..]
+                .iter()
+                .fold(0u8, |acc, b| acc ^ b) as usize
+                % EMOJIS.len();
+            EMOJIS[selector_emoji].0.to_string()
+        }
+
+        fn color(&self) -> String {
+            let bytes = self.public_key.get().unwrap().as_bytes();
+            let selector_color = bytes[..(bytes.len() / 2)]
+                .iter()
+                .fold(0u8, |acc, b| acc ^ b) as usize
+                % COLORS.len();
+            COLORS[selector_color].0.to_string()
+        }
+    }
+}
+
+glib::wrapper! {
+    pub struct Author(ObjectSubclass<imp::Author>);
+}
+impl Author {
+    pub fn new(public_key: PublicKey) -> Self {
+        let obj: Self = glib::Object::new();
+
+        obj.imp().public_key.set(public_key).unwrap();
+        obj.imp().is_online.set(true);
+        obj
+    }
+
+    pub fn for_this_device(public_key: PublicKey) -> Self {
+        let obj = Self::new(public_key);
+
+        obj.imp().is_this_device.set(true);
+        obj.imp().is_online.set(true);
+        obj
+    }
+
+    pub(crate) fn public_key(&self) -> &PublicKey {
+        self.imp().public_key.get().unwrap()
+    }
+
+    pub(crate) fn set_is_online(&self, is_online: bool) {
+        let was_online = self.imp().is_online.get();
+        self.imp().is_online.set(is_online);
+        if !is_online && was_online {
+            *self.imp().last_seen.lock().unwrap() = glib::DateTime::now_local().ok();
+            self.notify_last_seen();
+        }
+        self.notify_is_online();
+    }
+}

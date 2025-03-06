@@ -25,6 +25,7 @@ dependencies = [
  "aardvark-node",
  "anyhow",
  "async-channel",
+ "gio",
  "glib",
  "loro",
  "p2panda-core",
