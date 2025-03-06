@@ -74,14 +74,14 @@ mod imp {
             }
         }
 
-        fn emit_text_inserted(&self, index: i32, text: &str) {
+        fn emit_text_inserted(&self, pos: i32, text: &str) {
             self.obj()
-                .emit_by_name::<()>("text-inserted", &[&index, &text]);
+                .emit_by_name::<()>("text-inserted", &[&pos, &text]);
         }
 
-        fn emit_range_deleted(&self, index: i32, length: i32) {
+        fn emit_range_deleted(&self, start: i32, end: i32) {
             self.obj()
-                .emit_by_name::<()>("range-deleted", &[&index, &length]);
+                .emit_by_name::<()>("range-deleted", &[&start, &end]);
         }
     }
 
@@ -181,7 +181,7 @@ mod imp {
                                             this.emit_text_inserted(index as i32, &chunk);
                                         }
                                         TextDelta::Remove { index, len } => {
-                                            this.emit_range_deleted(index as i32, len as i32);
+                                            this.emit_range_deleted(index as i32, (index + len) as i32);
                                         }
                                     }
                                 }
@@ -209,7 +209,7 @@ impl Document {
         self.imp().splice_text(index, 0, chunk)
     }
 
-    pub fn delete_range(&self, index: i32, len: i32) -> Result<()> {
-        self.imp().splice_text(index, len, "")
+    pub fn delete_range(&self, index: i32, end: i32) -> Result<()> {
+        self.imp().splice_text(index, end - index, "")
     }
 }
