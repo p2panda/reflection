@@ -1,3 +1,5 @@
+pub mod author;
+pub mod authors;
 pub mod document;
 pub mod service;
 

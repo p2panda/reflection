@@ -13,6 +13,7 @@ use loro::{ExportMode, LoroDoc, event::Diff};
 use p2panda_core::{HashError, PublicKey};
 use tracing::error;
 
+use crate::authors::Authors;
 use crate::service::Service;
 
 #[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
@@ -52,6 +53,8 @@ mod imp {
         ready: Cell<bool>,
         #[property(get, construct_only)]
         service: OnceCell<Service>,
+        #[property(get)]
+        authors: Authors,
     }
 
     #[glib::object_subclass]
@@ -295,6 +298,10 @@ mod imp {
                     }
                 }
             ));
+
+            // Add ourself to the list of authors
+            self.authors
+                .add_this_device(self.obj().service().public_key());
         }
     }
 }
@@ -331,11 +338,17 @@ impl SubscribableDocument for DocumentHandle {
         }
     }
 
-    fn authors_joined(&self, _: Vec<PublicKey>) {
-        todo!()
+    fn authors_joined(&self, authors: Vec<PublicKey>) {
+        if let Some(document) = self.0.upgrade() {
+            for author in authors.into_iter() {
+                document.authors().add_or_update(author, true);
+            }
+        }
     }
 
-    fn author_set_online(&self, _: PublicKey, _: bool) {
-        todo!()
+    fn author_set_online(&self, author: PublicKey, is_online: bool) {
+        if let Some(document) = self.0.upgrade() {
+            document.authors().add_or_update(author, is_online);
+        }
     }
 }
