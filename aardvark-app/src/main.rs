@@ -21,6 +21,7 @@
 mod application;
 mod components;
 mod config;
+mod connection_popover;
 mod system_settings;
 mod textbuffer;
 mod window;
@@ -35,6 +36,7 @@ use tracing_subscriber::prelude::*;
 
 use self::application::AardvarkApplication;
 use self::config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
+use self::connection_popover::ConnectionPopover;
 use self::textbuffer::AardvarkTextBuffer;
 use self::window::AardvarkWindow;
 

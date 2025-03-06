@@ -33,7 +33,7 @@ use gtk::{gdk, gio, glib, glib::clone};
 use sourceview::*;
 
 use crate::{
-    AardvarkApplication, AardvarkTextBuffer,
+    AardvarkApplication, AardvarkTextBuffer, ConnectionPopover,
     components::{MultilineEntry, ZoomLevelSelector},
 };
 
@@ -65,6 +65,10 @@ mod imp {
         pub copy_code_button: TemplateChild<gtk::Button>,
         #[template_child]
         pub open_document_entry: TemplateChild<gtk::TextView>,
+        #[template_child]
+        pub connection_button: TemplateChild<gtk::MenuButton>,
+        #[template_child]
+        pub connection_button_label: TemplateChild<gtk::Label>,
         pub css_provider: gtk::CssProvider,
         pub font_size: Cell<f64>,
         #[property(get, set = Self::set_font_scale, default = 0.0)]
@@ -367,6 +371,21 @@ mod imp {
                 .downcast::<AardvarkTextBuffer>()
                 .unwrap()
                 .set_document(&document);
+            let authors = document.authors();
+            self.connection_button
+                .set_popover(Some(&ConnectionPopover::new(&authors)));
+            // TODO: we need to do the same as fractal to allow gettext string substitution
+            //self.connection_button.set_tooltip_text(gettext!("{} People Connected", authors.n_items()));
+            authors.connect_items_changed(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |authors, _, _, _| {
+                    this.connection_button_label
+                        .set_label(&format!("{}", authors.n_items()));
+                }
+            ));
+            self.connection_button_label
+                .set_label(&format!("{}", authors.n_items()));
             self.document.replace(Some(document));
 
             self.obj().notify("document");
