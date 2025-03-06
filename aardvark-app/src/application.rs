@@ -24,8 +24,8 @@ use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib, glib::Properties};
 
-use crate::config;
 use crate::AardvarkWindow;
+use crate::config;
 
 mod imp {
     use super::*;
@@ -66,8 +66,7 @@ mod imp {
         }
 
         fn activate(&self) {
-            let window = AardvarkWindow::new(self.obj().as_ref(), &self.service);
-            window.present();
+            self.obj().new_window();
         }
     }
 
@@ -89,6 +88,13 @@ impl AardvarkApplication {
             .build()
     }
 
+    pub fn window_for_document_id(&self, document_id: &str) -> Option<crate::AardvarkWindow> {
+        self.windows()
+            .into_iter()
+            .filter_map(|window| window.downcast::<super::AardvarkWindow>().ok())
+            .find(|window| window.document().id() == document_id)
+    }
+
     fn setup_gactions(&self) {
         let quit_action = gio::ActionEntry::builder("quit")
             .activate(move |app: &Self, _, _| app.quit())
@@ -103,11 +109,7 @@ impl AardvarkApplication {
     }
 
     fn new_window(&self) {
-        // FIXME: it should be possible to reuse the same service for multiple windows but
-        // currently it's not
-        let service = Service::new();
-        service.startup();
-        let window = AardvarkWindow::new(self, &service);
+        let window = AardvarkWindow::new(self, &self.imp().service);
         window.present();
     }
 
