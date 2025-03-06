@@ -15,3 +15,27 @@
 .user-counter {
   font-weight: bold;
 }
+
+.connection-popover > contents {
+  padding: 0px;
+}
+
+.avatar {
+  min-width: 46px;
+  min-height: 46px;
+  border-radius: 32px;
+  font-size: 32px;
+}
+
+.connection-popover list {
+ margin: 9px 3px;
+}
+
+.this-device-pill {
+  border-radius: 9px;
+	padding: 3px 6px;
+	background-color: color-mix(in srgb, var(--accent-bg-color) 25%, transparent);
+	color: var(--accent-color);
+	font-weight: 700;
+	font-size: 9px;
+}

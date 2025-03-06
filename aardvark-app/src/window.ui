@@ -75,22 +75,28 @@
               </object>
             </child>
             <child type="end">
-              <object class="GtkBox">
+              <object class="GtkMenuButton" id="connection_button">
                 <property name="margin-end">6</property>
+                <style>
+                  <class name="flat"/>
+                </style>
                 <child>
-                  <object class="GtkImage">
-                    <property name="margin-end">6</property>
-                    <property name="icon-name">system-users-symbolic</property>
-                    <property name="tooltip-text" translatable="yes">34 People Connected</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="label">34</property>
-                    <property name="vexpand">False</property>
-                    <style>
-                      <class name="user-counter"/>
-                    </style>
+                  <object class="GtkBox">
+                    <child>
+                      <object class="GtkImage">
+                        <property name="margin-end">6</property>
+                        <property name="icon-name">system-users-symbolic</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkLabel" id="connection_button_label">
+                        <property name="label">34</property>
+                        <property name="vexpand">False</property>
+                        <style>
+                          <class name="user-counter"/>
+                        </style>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
