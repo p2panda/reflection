@@ -137,40 +137,40 @@ mod imp {
     impl TextBufferImpl for AardvarkTextBuffer {
         fn insert_text(&self, iter: &mut gtk::TextIter, new_text: &str) {
             let offset = iter.offset();
-            info!("inserting new text {} at pos {}", new_text, offset);
 
             if !self.inhibit_text_change.get() {
                 if let Some(document) = self.document.borrow().as_ref() {
-                    self.document_handlers.get().unwrap().block();
                     if let Err(error) = document.insert_text(offset, new_text) {
                         error!("Failed to submit changes to the document: {error}");
                     }
-                    self.document_handlers.get().unwrap().unblock();
                 }
-            }
+            } else {
+                // Only insert text received from the CRDT document
+                info!("inserting new text {} at pos {}", new_text, offset);
 
-            self.parent_insert_text(iter, new_text);
+                self.parent_insert_text(iter, new_text);
+            }
         }
 
         fn delete_range(&self, start: &mut gtk::TextIter, end: &mut gtk::TextIter) {
             let offset_start = start.offset();
             let offset_end = end.offset();
-            info!(
-                "deleting range at start {} end {}",
-                offset_start, offset_end
-            );
 
             if !self.inhibit_text_change.get() {
                 if let Some(document) = self.document.borrow().as_ref() {
-                    self.document_handlers.get().unwrap().block();
                     if let Err(error) = document.delete_range(offset_start, offset_end) {
                         error!("Failed to submit changes to the document: {error}")
                     }
-                    self.document_handlers.get().unwrap().unblock();
                 }
-            }
+            } else {
+                // Only delete text received from the CRDT document
+                info!(
+                    "deleting range at start {} end {}",
+                    offset_start, offset_end
+                );
 
-            self.parent_delete_range(start, end);
+                self.parent_delete_range(start, end);
+            }
         }
     }
 
