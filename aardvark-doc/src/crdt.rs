@@ -246,7 +246,7 @@ impl TextCrdtEvent {
 
 /// Loro supports all sorts of CRDTs (Lists, Maps, Counters, etc.), this method extracts only the
 /// deltas related to collaborative text editing of our known text container.
-fn extract_text_deltas(diff_event: DiffEvent<'_>) -> Vec<loro::TextDelta> {
+fn extract_text_deltas(diff_event: DiffEvent<'_>) -> Vec<Vec<loro::TextDelta>> {
     diff_event
         .events
         .into_iter()
@@ -261,7 +261,6 @@ fn extract_text_deltas(diff_event: DiffEvent<'_>) -> Vec<loro::TextDelta> {
                 None
             }
         })
-        .flatten()
         .collect()
 }
 
@@ -274,23 +273,27 @@ fn extract_text_deltas(diff_event: DiffEvent<'_>) -> Vec<loro::TextDelta> {
 /// exact position for every text insertion and removal.
 ///
 /// Read more: https://quilljs.com/docs/delta/
-fn absolute_deltas(loro_deltas: Vec<loro::TextDelta>) -> Vec<TextDelta> {
+fn absolute_deltas(loro_deltas: Vec<Vec<loro::TextDelta>>) -> Vec<TextDelta> {
     let mut deltas = Vec::new();
     let mut index = 0;
 
-    for loro_delta in loro_deltas {
-        let delta = match loro_delta {
-            loro::TextDelta::Retain { retain, .. } => {
-                index += retain;
-                continue;
-            }
-            loro::TextDelta::Insert { insert, .. } => TextDelta::Insert {
-                index,
-                chunk: insert,
-            },
-            loro::TextDelta::Delete { delete } => TextDelta::Remove { index, len: delete },
-        };
-        deltas.push(delta);
+    for commit in loro_deltas {
+        println!("------ COMMIT ------");
+        for loro_delta in commit {
+            let delta = match loro_delta {
+                loro::TextDelta::Retain { retain, .. } => {
+                    index += retain;
+                    continue;
+                }
+                loro::TextDelta::Insert { insert, .. } => TextDelta::Insert {
+                    index,
+                    chunk: insert,
+                },
+                loro::TextDelta::Delete { delete } => TextDelta::Remove { index, len: delete },
+            };
+            println!("delta: {:?}", delta);
+            deltas.push(delta);
+        }
     }
 
     deltas
