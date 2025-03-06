@@ -170,26 +170,18 @@ mod imp {
                                     break;
                                 }
                             }
-                            TextCrdtEvent::Local(text_deltas) => {
+                            TextCrdtEvent::Local(text_deltas)
+                            | TextCrdtEvent::Remote(text_deltas) => {
                                 for delta in text_deltas {
                                     match delta {
                                         TextDelta::Insert { index, chunk } => {
                                             this.emit_text_inserted(index as i32, &chunk);
                                         }
                                         TextDelta::Remove { index, len } => {
-                                            this.emit_range_deleted(index as i32, (index + len) as i32);
-                                        }
-                                    }
-                                }
-                            }
-                            TextCrdtEvent::Remote(text_deltas) => {
-                                for delta in text_deltas {
-                                    match delta {
-                                        TextDelta::Insert { index, chunk } => {
-                                            this.emit_text_inserted(index as i32, &chunk);
-                                        }
-                                        TextDelta::Remove { index, len } => {
-                                            this.emit_range_deleted(index as i32, (index + len) as i32);
+                                            this.emit_range_deleted(
+                                                index as i32,
+                                                (index + len) as i32,
+                                            );
                                         }
                                     }
                                 }
