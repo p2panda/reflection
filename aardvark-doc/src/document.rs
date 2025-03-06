@@ -181,7 +181,7 @@ mod imp {
                                             this.emit_text_inserted(index as i32, &chunk);
                                         }
                                         TextDelta::Remove { index, len } => {
-                                            this.emit_range_deleted(index as i32, len as i32);
+                                            this.emit_range_deleted(index as i32, (index + len) as i32);
                                         }
                                     }
                                 }
@@ -209,7 +209,7 @@ impl Document {
         self.imp().splice_text(index, 0, chunk)
     }
 
-    pub fn delete_range(&self, index: i32, len: i32) -> Result<()> {
-        self.imp().splice_text(index, len, "")
+    pub fn delete_range(&self, index: i32, end: i32) -> Result<()> {
+        self.imp().splice_text(index, end - index, "")
     }
 }
