@@ -18,17 +18,18 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::cell::{Cell, OnceCell};
+use std::cell::{Cell, OnceCell, RefCell};
 
 use aardvark_doc::{document::Document, service::Service};
 use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
+use gettextrs::gettext;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib, glib::clone};
 use sourceview::*;
 
 use crate::{
-    AardvarkTextBuffer,
+    AardvarkApplication, AardvarkTextBuffer,
     components::{MultilineEntry, ZoomLevelSelector},
 };
 
@@ -68,6 +69,8 @@ mod imp {
         pub zoom_level: Cell<f64>,
         #[property(get, construct_only)]
         pub service: OnceCell<Service>,
+        #[property(get, type = Document)]
+        document: RefCell<Option<Document>>,
     }
 
     #[glib::object_subclass]
@@ -199,10 +202,8 @@ mod imp {
             self.copy_code_button.connect_clicked(clone!(
                 #[weak(rename_to = this)]
                 self,
-                #[weak]
-                buffer,
                 move |button| {
-                    let document_id = this.format_document_id(buffer.document());
+                    let document_id = Self::format_document_id(&this.obj().document().id());
                     let clipboard = button.display().clipboard();
                     clipboard.set(&document_id);
                     this.share_popover.popdown();
@@ -212,8 +213,6 @@ mod imp {
             self.open_document_button.connect_clicked(clone!(
                 #[weak(rename_to = this)]
                 self,
-                #[weak]
-                buffer,
                 move |_| {
                     let open_document_buffer = this.open_document_entry.buffer();
                     let document_id: String = open_document_buffer
@@ -226,8 +225,19 @@ mod imp {
                         .filter(|c| c.is_digit(16))
                         .collect();
 
-                    let document = Document::new(this.service.get().unwrap(), Some(&document_id));
-                    buffer.set_document(&document);
+                    let app = this
+                        .obj()
+                        .application()
+                        .and_then(|app| app.downcast::<AardvarkApplication>().ok())
+                        .expect("Application needs to be a AardvarkApplication");
+
+                    if let Some(window) = app.window_for_document_id(&document_id) {
+                        window.present();
+                    } else {
+                        let document =
+                            Document::new(this.service.get().unwrap(), Some(&document_id));
+                        this.set_document(document);
+                    }
                     this.open_document_dialog.close();
                 }
             ));
@@ -237,13 +247,32 @@ mod imp {
                 self,
                 move |_| {
                     let buffer = this.open_document_entry.buffer();
-                    let input_len = buffer
+                    let input: String = buffer
                         .text(&buffer.start_iter(), &buffer.end_iter(), false)
                         .chars()
                         .filter(|c| c.is_digit(16))
-                        .count();
+                        .collect();
 
-                    this.open_document_button.set_sensitive(input_len == 64);
+                    this.open_document_button.set_sensitive(input.len() == 64);
+
+                    let existing = if input.len() == 64 {
+                        let app = this
+                            .obj()
+                            .application()
+                            .and_then(|app| app.downcast::<AardvarkApplication>().ok())
+                            .expect("Application needs to be a AardvarkApplication");
+                        app.window_for_document_id(&input)
+                    } else {
+                        None
+                    };
+
+                    if existing.is_some() {
+                        this.open_document_button
+                            .set_label(&gettext("Switch to Existing Window"));
+                    } else {
+                        this.open_document_button
+                            .set_label(&gettext("Open Document"));
+                    }
                 }
             ));
 
@@ -298,16 +327,8 @@ mod imp {
                     }
                 });
 
-            buffer.connect_document_notify(clone!(
-                #[weak(rename_to = this)]
-                self,
-                move |buffer| {
-                    this.document_changed(buffer.document());
-                }
-            ));
-
             let document = Document::new(self.service.get().unwrap(), None);
-            buffer.set_document(&document);
+            self.set_document(document);
         }
     }
 
@@ -325,30 +346,33 @@ mod imp {
             self.obj().action_set_enabled("window.zoom-out", size > 1.0);
         }
 
-        fn document_changed(&self, document: Option<Document>) {
-            let document_id = self.format_document_id(document);
+        fn set_document(&self, document: Document) {
+            let document_id = Self::format_document_id(&document.id());
             self.share_code_label.set_text(&document_id);
+            self.text_view
+                .buffer()
+                .downcast::<AardvarkTextBuffer>()
+                .unwrap()
+                .set_document(&document);
+            self.document.replace(Some(document));
+
+            self.obj().notify("document");
         }
 
-        fn format_document_id(&self, document: Option<Document>) -> String {
-            if let Some(document) = document {
-                let document_id = document.id();
-                document_id
-                    .chars()
-                    .enumerate()
-                    .flat_map(|(i, c)| {
-                        if i != 0 && i % 4 == 0 {
-                            Some(' ')
-                        } else {
-                            None
-                        }
-                        .into_iter()
-                        .chain(std::iter::once(c))
-                    })
-                    .collect::<String>()
-            } else {
-                "".to_string()
-            }
+        fn format_document_id(document_id: &str) -> String {
+            document_id
+                .chars()
+                .enumerate()
+                .flat_map(|(i, c)| {
+                    if i != 0 && i % 4 == 0 {
+                        Some(' ')
+                    } else {
+                        None
+                    }
+                    .into_iter()
+                    .chain(std::iter::once(c))
+                })
+                .collect::<String>()
         }
     }
 
