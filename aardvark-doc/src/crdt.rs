@@ -275,23 +275,26 @@ fn extract_text_deltas(diff_event: DiffEvent<'_>) -> Vec<Vec<loro::TextDelta>> {
 /// Read more: https://quilljs.com/docs/delta/
 fn absolute_deltas(loro_deltas: Vec<Vec<loro::TextDelta>>) -> Vec<TextDelta> {
     let mut deltas = Vec::new();
-    let mut index = 0;
 
     for commit in loro_deltas {
-        println!("------ COMMIT ------");
+        let mut index = 0;
         for loro_delta in commit {
             let delta = match loro_delta {
                 loro::TextDelta::Retain { retain, .. } => {
                     index += retain;
                     continue;
                 }
-                loro::TextDelta::Insert { insert, .. } => TextDelta::Insert {
-                    index,
-                    chunk: insert,
-                },
+                loro::TextDelta::Insert { insert, .. } => {
+                    let len = insert.len();
+                    let result = TextDelta::Insert {
+                        index,
+                        chunk: insert,
+                    };
+                    index += len;
+                    result
+                }
                 loro::TextDelta::Delete { delete } => TextDelta::Remove { index, len: delete },
             };
-            println!("delta: {:?}", delta);
             deltas.push(delta);
         }
     }
