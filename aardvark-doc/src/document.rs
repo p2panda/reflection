@@ -74,14 +74,14 @@ mod imp {
             }
         }
 
-        fn emit_text_inserted(&self, index: i32, text: &str) {
+        fn emit_text_inserted(&self, pos: i32, text: &str) {
             self.obj()
-                .emit_by_name::<()>("text-inserted", &[&index, &text]);
+                .emit_by_name::<()>("text-inserted", &[&pos, &text]);
         }
 
-        fn emit_range_deleted(&self, index: i32, length: i32) {
+        fn emit_range_deleted(&self, start: i32, end: i32) {
             self.obj()
-                .emit_by_name::<()>("range-deleted", &[&index, &length]);
+                .emit_by_name::<()>("range-deleted", &[&start, &end]);
         }
     }
 
@@ -170,18 +170,18 @@ mod imp {
                                     break;
                                 }
                             }
-                            TextCrdtEvent::Local(_text_deltas) => {
-                                // TODO(adz): Later we want to apply changes to the text buffer
-                                // here.
-                            }
-                            TextCrdtEvent::Remote(text_deltas) => {
+                            TextCrdtEvent::Local(text_deltas)
+                            | TextCrdtEvent::Remote(text_deltas) => {
                                 for delta in text_deltas {
                                     match delta {
                                         TextDelta::Insert { index, chunk } => {
                                             this.emit_text_inserted(index as i32, &chunk);
                                         }
                                         TextDelta::Remove { index, len } => {
-                                            this.emit_range_deleted(index as i32, (index + len) as i32);
+                                            this.emit_range_deleted(
+                                                index as i32,
+                                                (index + len) as i32,
+                                            );
                                         }
                                     }
                                 }
