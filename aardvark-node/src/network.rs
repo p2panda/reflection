@@ -16,7 +16,7 @@ use crate::store::OperationStore;
 
 const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
 
-const BOOTSTRAP_NODE_ID: &str = "265c1d43f994777af5333b6a82918bc612dff19a42c1325509d65277bc66ff01";
+const BOOTSTRAP_NODE_ID: &str = "88f3d9b27652e51447a784abf9e47f887e5b1f5c6fc89f8e348e18ceecb7bc65";
 
 #[derive(Clone, Debug)]
 pub struct Network {
