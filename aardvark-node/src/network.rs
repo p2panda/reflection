@@ -6,12 +6,12 @@ use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
 use p2panda_stream::{DecodeExt, IngestExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
 use crate::document::Document;
-use crate::operation::{decode_gossip_message, encode_gossip_operation, AardvarkExtensions};
+use crate::operation::{AardvarkExtensions, decode_gossip_message, encode_gossip_operation};
 use crate::store::OperationStore;
 
 #[derive(Clone, Debug)]

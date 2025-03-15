@@ -29,8 +29,8 @@ use std::path::PathBuf;
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 use self::application::AardvarkApplication;
 use self::config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
