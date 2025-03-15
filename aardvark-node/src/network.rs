@@ -6,13 +6,17 @@ use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
 use p2panda_stream::{DecodeExt, IngestExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
 use crate::document::Document;
-use crate::operation::{decode_gossip_message, encode_gossip_operation, AardvarkExtensions};
+use crate::operation::{AardvarkExtensions, decode_gossip_message, encode_gossip_operation};
 use crate::store::OperationStore;
+
+const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
+
+const BOOTSTRAP_NODE_ID: &str = "265c1d43f994777af5333b6a82918bc612dff19a42c1325509d65277bc66ff01";
 
 #[derive(Clone, Debug)]
 pub struct Network {
@@ -30,6 +34,12 @@ impl Network {
         let network = NetworkBuilder::new(network_id.into())
             .private_key(private_key)
             .discovery(LocalDiscovery::new())
+            .relay(RELAY_URL.parse().expect("relay url is fine"), false, 0)
+            .direct_address(
+                BOOTSTRAP_NODE_ID.parse().expect("public key is fine"),
+                vec![],
+                None,
+            )
             .gossip(GossipConfig {
                 // FIXME: This is a temporary workaround to account for larger delta patches (for
                 // example when the user Copy & Pastes a big chunk of text).
