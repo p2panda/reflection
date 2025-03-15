@@ -1,11 +1,11 @@
 use std::hash::Hash as StdHash;
 use std::time::SystemTime;
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Body, Extension, Extensions, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::LogStore;
-use p2panda_stream::operation::{ingest_operation, IngestResult};
+use p2panda_stream::operation::{IngestResult, ingest_operation};
 use serde::{Deserialize, Serialize};
 
 use crate::document::Document;

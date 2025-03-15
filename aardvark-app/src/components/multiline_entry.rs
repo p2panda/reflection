@@ -1,4 +1,4 @@
-use gtk::{glib, subclass::prelude::*, prelude::*, gdk};
+use gtk::{gdk, glib, prelude::*, subclass::prelude::*};
 
 mod imp {
     use super::*;
@@ -18,20 +18,18 @@ mod imp {
     }
 
     impl ObjectImpl for MultilineEntry {
-        fn constructed (&self) {
+        fn constructed(&self) {
             let key_events = gtk::EventControllerKey::new();
             key_events.connect_key_pressed(|controller, key, _, modifier| {
-                    if modifier.is_empty() && (key == gdk::Key::Return || key == gdk::Key::KP_Enter)
-                    {
-                        if let Some(widget) = controller.widget() {
-                            widget.activate_default();
-                        }
-                        glib::Propagation::Stop
-                    } else {
-                        glib::Propagation::Proceed
+                if modifier.is_empty() && (key == gdk::Key::Return || key == gdk::Key::KP_Enter) {
+                    if let Some(widget) = controller.widget() {
+                        widget.activate_default();
                     }
+                    glib::Propagation::Stop
+                } else {
+                    glib::Propagation::Proceed
                 }
-            );
+            });
             self.obj().add_controller(key_events);
         }
     }

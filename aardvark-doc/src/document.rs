@@ -5,9 +5,9 @@ use std::sync::OnceLock;
 use aardvark_node::NodeCommand;
 use anyhow::Result;
 use glib::prelude::*;
-use glib::subclass::prelude::*;
 use glib::subclass::Signal;
-use glib::{clone, Properties};
+use glib::subclass::prelude::*;
+use glib::{Properties, clone};
 use p2panda_core::Hash;
 
 use crate::crdt::{TextCrdt, TextCrdtEvent, TextDelta};
