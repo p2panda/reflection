@@ -5,14 +5,14 @@ use p2panda_core::{Hash, PrivateKey};
 use p2panda_net::SyncConfiguration;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use tokio::runtime::{Builder, Runtime};
-use tokio::sync::mpsc;
 use tokio::sync::OnceCell;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::warn;
 
 use crate::document::Document;
 use crate::network::Network;
-use crate::operation::{create_operation, validate_operation, LogType};
+use crate::operation::{LogType, create_operation, validate_operation};
 use crate::store::{DocumentStore, OperationStore};
 
 pub enum NodeCommand {
@@ -102,12 +102,12 @@ impl Node {
 
             inner
                 .network
-                .set(
+                .get_or_init(|| async {
                     Network::spawn(network_id, private_key, sync_config, operation_store)
                         .await
-                        .expect("networking backend"),
-                )
-                .expect("network can be run only once");
+                        .expect("networking backend")
+                })
+                .await;
         });
     }
 
