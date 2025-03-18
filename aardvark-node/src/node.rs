@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tracing::warn;
 
-use crate::document::Document;
+use crate::document::DocumentId;
 use crate::network::Network;
 use crate::operation::{LogType, create_operation, validate_operation};
 use crate::store::{DocumentStore, OperationStore};
@@ -88,7 +88,7 @@ impl Node {
                 self.inner.document_store.clone(),
                 self.inner.operation_store.clone(),
             );
-            SyncConfiguration::<Document>::new(sync)
+            SyncConfiguration::<DocumentId>::new(sync)
         };
 
         let operation_store = self.inner.operation_store.clone();
@@ -118,7 +118,7 @@ impl Node {
         });
     }
 
-    pub fn create_document(&self) -> Result<(Hash, NodeSender, NodeReceiver)> {
+    pub fn create_document(&self) -> Result<(DocumentId, NodeSender, NodeReceiver)> {
         let private_key = self.inner.private_key.get().expect("private key");
 
         let mut operation_store = self.inner.operation_store.clone();
@@ -134,32 +134,31 @@ impl Node {
             .await
         })?;
 
-        let document: Document = operation
+        let document_id: DocumentId = operation
             .header
             .extension()
             .expect("document id from our own logs");
-        let document_id = (&document).into();
 
         // Add ourselves as an author to the document store.
         self.inner.runtime.block_on(async {
             self.inner
                 .document_store
-                .add_author(document, private_key.public_key())
+                .add_author(document_id, private_key.public_key())
                 .await
         })?;
 
-        let (tx, rx) = self.subscribe(document)?;
+        let (tx, rx) = self.subscribe(document_id)?;
 
         Ok((document_id, tx, rx))
     }
 
-    pub fn join_document(&self, document_id: Hash) -> Result<(NodeSender, NodeReceiver)> {
+    pub fn join_document(&self, document_id: DocumentId) -> Result<(NodeSender, NodeReceiver)> {
         let document = document_id.into();
         let (tx, rx) = self.subscribe(document)?;
         Ok((tx, rx))
     }
 
-    fn subscribe(&self, document: Document) -> Result<(NodeSender, NodeReceiver)> {
+    fn subscribe(&self, document_id: DocumentId) -> Result<(NodeSender, NodeReceiver)> {
         let (to_network, mut from_app) = mpsc::channel::<NodeCommand>(512);
         let (to_app, from_network) = mpsc::channel(512);
 
@@ -169,7 +168,7 @@ impl Node {
         self.inner.runtime.block_on(async {
             self.inner
                 .document_store
-                .add_author(document, private_key.public_key())
+                .add_author(document_id, private_key.public_key())
                 .await
         })?;
 
@@ -184,7 +183,7 @@ impl Node {
                 })
                 .await;
 
-            let (document_tx, mut document_rx) = network.subscribe(document).await?;
+            let (document_tx, mut document_rx) = network.subscribe(document_id).await?;
 
             // Process the operations and forward application messages to app layer. This is where
             // we "materialize" our application state from incoming "application events".
@@ -192,7 +191,7 @@ impl Node {
             let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
                 while let Some(operation) = document_rx.recv().await {
                     // Validation for our custom "document" extension.
-                    if let Err(err) = validate_operation(&operation, &document) {
+                    if let Err(err) = validate_operation(&operation, &document_id) {
                         warn!(
                             public_key = %operation.header.public_key,
                             seq_num = %operation.header.seq_num,
@@ -203,7 +202,7 @@ impl Node {
 
                     // When we discover a new author we need to add them to our document store.
                     document_store
-                        .add_author(document, operation.header.public_key)
+                        .add_author(document_id, operation.header.public_key)
                         .await?;
 
                     // Forward the payload up to the app.
@@ -227,7 +226,7 @@ impl Node {
                                 &mut operation_store,
                                 &private_key,
                                 LogType::Delta,
-                                Some(document),
+                                Some(document_id),
                                 Some(&bytes),
                                 false,
                             )
@@ -249,7 +248,7 @@ impl Node {
                                 &mut operation_store,
                                 &private_key,
                                 LogType::Snapshot,
-                                Some(document),
+                                Some(document_id),
                                 Some(&snapshot_bytes),
                                 true,
                             )
@@ -266,7 +265,7 @@ impl Node {
                                 &mut operation_store,
                                 &private_key,
                                 LogType::Delta,
-                                Some(document),
+                                Some(document_id),
                                 Some(&delta_bytes),
                                 true,
                             )

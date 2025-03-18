@@ -19,8 +19,12 @@
  */
 
 use std::cell::{Cell, OnceCell, RefCell};
+use std::str::FromStr;
 
-use aardvark_doc::{document::Document, service::Service};
+use aardvark_doc::{
+    document::{Document, DocumentId},
+    service::Service,
+};
 use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
@@ -215,15 +219,18 @@ mod imp {
                 self,
                 move |_| {
                     let open_document_buffer = this.open_document_entry.buffer();
-                    let document_id: String = open_document_buffer
-                        .text(
-                            &open_document_buffer.start_iter(),
-                            &open_document_buffer.end_iter(),
-                            false,
-                        )
-                        .chars()
-                        .filter(|c| c.is_digit(16))
-                        .collect();
+                    let document_id = DocumentId::from_str(
+                        &open_document_buffer
+                            .text(
+                                &open_document_buffer.start_iter(),
+                                &open_document_buffer.end_iter(),
+                                false,
+                            )
+                            .chars()
+                            .filter(|c| c.is_digit(16))
+                            .collect::<String>(),
+                    )
+                    .expect("valid document id");
 
                     let app = this
                         .obj()
@@ -253,15 +260,21 @@ mod imp {
                         .filter(|c| c.is_digit(16))
                         .collect();
 
-                    this.open_document_button.set_sensitive(input.len() == 64);
+                    let document_id = if input.len() == 64 {
+                        DocumentId::from_str(&input).ok()
+                    } else {
+                        None
+                    };
+                    this.open_document_button
+                        .set_sensitive(document_id.is_some());
 
-                    let existing = if input.len() == 64 {
+                    let existing = if let Some(document_id) = document_id {
                         let app = this
                             .obj()
                             .application()
                             .and_then(|app| app.downcast::<AardvarkApplication>().ok())
                             .expect("Application needs to be a AardvarkApplication");
-                        app.window_for_document_id(&input)
+                        app.window_for_document_id(&document_id)
                     } else {
                         None
                     };
@@ -359,8 +372,9 @@ mod imp {
             self.obj().notify("document");
         }
 
-        fn format_document_id(document_id: &str) -> String {
+        fn format_document_id(document_id: &DocumentId) -> String {
             document_id
+                .to_string()
                 .chars()
                 .enumerate()
                 .flat_map(|(i, c)| {
