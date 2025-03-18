@@ -1,17 +1,38 @@
 use std::cell::{Cell, OnceCell, RefCell};
+use std::fmt;
 use std::str::FromStr;
 use std::sync::OnceLock;
 
 use aardvark_node::NodeCommand;
+
+use aardvark_node::document::DocumentId as DocumentIdNode;
 use anyhow::Result;
 use glib::prelude::*;
 use glib::subclass::Signal;
 use glib::subclass::prelude::*;
 use glib::{Properties, clone};
-use p2panda_core::Hash;
+use p2panda_core::HashError;
 
 use crate::crdt::{TextCrdt, TextCrdtEvent, TextDelta};
 use crate::service::Service;
+
+#[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
+#[boxed_type(name = "AardvarkDocumentId", nullable)]
+pub struct DocumentId(pub DocumentIdNode);
+
+impl FromStr for DocumentId {
+    type Err = HashError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(DocumentId(DocumentIdNode::from_str(value)?))
+    }
+}
+
+impl fmt::Display for DocumentId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 mod imp {
     use std::rc::Rc;
@@ -24,7 +45,7 @@ mod imp {
         #[property(name = "text", get = Self::text, type = String)]
         crdt_doc: Rc<RefCell<Option<TextCrdt>>>,
         #[property(get, construct_only, set = Self::set_id)]
-        id: OnceCell<String>,
+        id: OnceCell<DocumentId>,
         #[property(get, set)]
         ready: Cell<bool>,
         #[property(get, construct_only)]
@@ -46,7 +67,7 @@ mod imp {
                 .to_string()
         }
 
-        pub fn set_id(&self, id: Option<String>) {
+        fn set_id(&self, id: Option<DocumentId>) {
             if let Some(id) = id {
                 self.id.set(id).expect("Document id can only be set once");
             }
@@ -105,11 +126,11 @@ mod imp {
             self.parent_constructed();
 
             let service = self.service.get().unwrap();
-            let (network_tx, mut rx) = if let Some(id) = self.id.get() {
-                service.join_document(Hash::from_str(id).expect("Invalid document id"))
+            let (network_tx, mut rx) = if let Some(document_id) = self.id.get() {
+                service.join_document(document_id)
             } else {
                 let (document_id, network_tx, rx) = service.create_document();
-                self.set_id(Some(document_id.to_hex()));
+                self.set_id(Some(document_id));
                 (network_tx, rx)
             };
 
@@ -200,7 +221,7 @@ glib::wrapper! {
     pub struct Document(ObjectSubclass<imp::Document>);
 }
 impl Document {
-    pub fn new(service: &Service, id: Option<&str>) -> Self {
+    pub fn new(service: &Service, id: Option<&DocumentId>) -> Self {
         glib::Object::builder()
             .property("service", service)
             .property("id", id)

@@ -1,4 +1,4 @@
-mod document;
+pub mod document;
 mod network;
 mod node;
 mod operation;

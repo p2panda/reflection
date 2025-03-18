@@ -4,6 +4,8 @@ use tracing::info;
 
 use aardvark_node::{Node, NodeReceiver, NodeSender};
 
+use crate::document::DocumentId;
+
 mod imp {
     use super::*;
 
@@ -43,20 +45,20 @@ impl Service {
         self.imp().node.shutdown();
     }
 
-    pub(crate) fn create_document(&self) -> (Hash, NodeSender, NodeReceiver) {
+    pub(crate) fn create_document(&self) -> (DocumentId, NodeSender, NodeReceiver) {
         let (document_id, tx, rx) = self
             .imp()
             .node
             .create_document()
             .expect("to create document");
-        info!("created new document: {}", document_id.to_hex());
-        (document_id, tx, rx)
+        info!("created new document: {}", document_id);
+        (DocumentId(document_id), tx, rx)
     }
 
-    pub(crate) fn join_document(&self, document_id: Hash) -> (NodeSender, NodeReceiver) {
+    pub(crate) fn join_document(&self, document_id: &DocumentId) -> (NodeSender, NodeReceiver) {
         self.imp()
             .node
-            .join_document(document_id)
+            .join_document(document_id.0)
             .expect("to join document")
     }
 

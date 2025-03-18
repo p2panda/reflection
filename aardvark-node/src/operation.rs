@@ -8,7 +8,7 @@ use p2panda_store::LogStore;
 use p2panda_stream::operation::{IngestResult, ingest_operation};
 use serde::{Deserialize, Serialize};
 
-use crate::document::Document;
+use crate::document::DocumentId;
 use crate::store::{LogId, OperationStore};
 
 /// Custom extensions for p2panda header.
@@ -42,7 +42,7 @@ pub struct AardvarkExtensions {
     /// Can be `None` if this operation indicates that we are creating a new document. In this case
     /// we take the hash of the header itself to derive the document id.
     #[serde(rename = "d")]
-    pub document: Option<Document>,
+    pub document: Option<DocumentId>,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
@@ -70,8 +70,8 @@ impl Extension<LogType> for AardvarkExtensions {
     }
 }
 
-impl Extension<Document> for AardvarkExtensions {
-    fn extract(header: &Header<Self>) -> Option<Document> {
+impl Extension<DocumentId> for AardvarkExtensions {
+    fn extract(header: &Header<Self>) -> Option<DocumentId> {
         // Check if header mentions an document.
         let document = header
             .extensions
@@ -102,7 +102,7 @@ impl Extension<Document> for AardvarkExtensions {
 impl Extension<LogId> for AardvarkExtensions {
     fn extract(header: &Header<Self>) -> Option<LogId> {
         let log_type: Option<LogType> = header.extension();
-        let document: Option<Document> = header.extension();
+        let document: Option<DocumentId> = header.extension();
 
         if let (Some(log_type), Some(document)) = (log_type, document) {
             Some(LogId::new(log_type, &document))
@@ -120,7 +120,7 @@ pub async fn create_operation(
     store: &mut OperationStore,
     private_key: &PrivateKey,
     log_type: LogType,
-    document: Option<Document>,
+    document: Option<DocumentId>,
     body: Option<&[u8]>,
     prune_flag: bool,
 ) -> Result<Operation<AardvarkExtensions>> {
@@ -165,7 +165,7 @@ pub async fn create_operation(
     };
     header.sign(private_key);
 
-    let document: Document = header.extension().expect("document id from our own logs");
+    let document: DocumentId = header.extension().expect("document id from our own logs");
     let log_id = LogId::new(log_type, &document);
 
     let result = ingest_operation(
@@ -188,9 +188,9 @@ pub async fn create_operation(
 /// Custom validation for our own operation headers.
 pub fn validate_operation(
     operation: &Operation<AardvarkExtensions>,
-    expected_document: &Document,
+    expected_document: &DocumentId,
 ) -> Result<()> {
-    let given_document: Option<Document> = operation.header.extension();
+    let given_document: Option<DocumentId> = operation.header.extension();
     match given_document {
         Some(given_document) => {
             if &given_document != expected_document {

@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use aardvark_doc::service::Service;
+use aardvark_doc::{document::DocumentId, service::Service};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
@@ -89,11 +89,14 @@ impl AardvarkApplication {
             .build()
     }
 
-    pub fn window_for_document_id(&self, document_id: &str) -> Option<crate::AardvarkWindow> {
+    pub fn window_for_document_id(
+        &self,
+        document_id: &DocumentId,
+    ) -> Option<crate::AardvarkWindow> {
         self.windows()
             .into_iter()
             .filter_map(|window| window.downcast::<super::AardvarkWindow>().ok())
-            .find(|window| window.document().id() == document_id)
+            .find(|window| &window.document().id() == document_id)
     }
 
     fn setup_gactions(&self) {
