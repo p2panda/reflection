@@ -2,9 +2,7 @@ use glib::subclass::prelude::*;
 use p2panda_core::{Hash, PrivateKey, PublicKey};
 use tracing::info;
 
-use aardvark_node::{Node, NodeReceiver, NodeSender};
-
-use crate::document::DocumentId;
+use aardvark_node::Node;
 
 mod imp {
     use super::*;
@@ -45,21 +43,8 @@ impl Service {
         self.imp().node.shutdown();
     }
 
-    pub(crate) fn create_document(&self) -> (DocumentId, NodeSender, NodeReceiver) {
-        let (document_id, tx, rx) = self
-            .imp()
-            .node
-            .create_document()
-            .expect("to create document");
-        info!("created new document: {}", document_id);
-        (DocumentId(document_id), tx, rx)
-    }
-
-    pub(crate) fn join_document(&self, document_id: &DocumentId) -> (NodeSender, NodeReceiver) {
-        self.imp()
-            .node
-            .join_document(document_id.0)
-            .expect("to join document")
+    pub(crate) fn node(&self) -> &Node {
+        &self.imp().node
     }
 
     pub(crate) fn public_key(&self) -> PublicKey {
