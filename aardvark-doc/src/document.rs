@@ -1,6 +1,7 @@
 use std::cell::{Cell, OnceCell};
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::sync::OnceLock;
 
 use aardvark_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
@@ -8,10 +9,10 @@ use anyhow::Result;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
+use loro::{ExportMode, LoroDoc, event::Diff};
 use p2panda_core::{HashError, PublicKey};
 use tracing::error;
 
-use crate::crdt::{TextCrdt, TextCrdtEvent, TextDelta};
 use crate::service::Service;
 
 #[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
@@ -33,13 +34,18 @@ impl fmt::Display for DocumentId {
 }
 
 mod imp {
+    /// Identifier of container where we handle the text CRDT in a Loro document.
+    ///
+    /// Loro documents can contain multiple different CRDT types in one document.
+    const TEXT_CONTAINER_ID: &str = "document";
+
     use super::*;
 
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
         #[property(name = "text", get = Self::text, type = String)]
-        crdt_doc: OnceCell<TextCrdt>,
+        crdt_doc: OnceCell<LoroDoc>,
         #[property(get, construct_only, set = Self::set_id)]
         id: OnceCell<DocumentId>,
         #[property(get, set)]
@@ -56,7 +62,11 @@ mod imp {
 
     impl Document {
         pub fn text(&self) -> String {
-            self.crdt_doc.get().expect("crdt_doc to be set").to_string()
+            self.crdt_doc
+                .get()
+                .expect("crdt_doc to be set")
+                .get_text(TEXT_CONTAINER_ID)
+                .to_string()
         }
 
         fn set_id(&self, id: Option<DocumentId>) {
@@ -67,22 +77,26 @@ mod imp {
 
         pub fn splice_text(&self, index: i32, delete_len: i32, chunk: &str) -> Result<()> {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
+            let text = doc.get_text(TEXT_CONTAINER_ID);
 
             if delete_len == 0 {
-                doc.insert(index as usize, chunk)
+                text.insert(index as usize, chunk)
                     .expect("update document after text insertion");
             } else {
-                doc.remove(index as usize, delete_len as usize)
+                text.delete(index as usize, delete_len as usize)
                     .expect("update document after text removal");
             }
+
+            doc.commit();
 
             Ok(())
         }
 
+        /// Apply changes to the CRDT from a message received from another peer
         pub fn on_remote_message(&self, bytes: &[u8]) {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
 
-            if let Err(err) = doc.apply_encoded_delta(&bytes) {
+            if let Err(err) = doc.import_with(bytes, "delta") {
                 eprintln!("received invalid message: {}", err);
             }
         }
@@ -122,6 +136,119 @@ mod imp {
                 ),
             );
         }
+
+        fn setup_loro_document(&self) {
+            let public_key = self.obj().service().public_key();
+            let obj = self.obj();
+            let doc = LoroDoc::new();
+            // The peer id represents the identity of the author applying local changes (that's
+            // essentially us), it needs be strictly unique.
+            doc.set_peer_id({
+                // Take first 8 bytes of public key (32 bytes) to determine a unique "peer id"
+                // which is used to keep authors apart inside the text crdt.
+                //
+                // TODO(adz): This is strictly speaking not collision-resistant but we're limited
+                // here by the 8 bytes / 64 bit from the u64 `PeerId` type from Loro. In practice
+                // this should not really be a problem, but it would be nice if the Loro API would
+                // change some day.
+                let mut buf = [0u8; 8];
+                buf[..8].copy_from_slice(&public_key.as_bytes()[..8]);
+                u64::from_be_bytes(buf)
+            })
+            .expect("set peer id for new document");
+
+            let text = doc.get_text(TEXT_CONTAINER_ID);
+            doc.subscribe(
+                &text.id(),
+                Arc::new(clone!(
+                    #[weak]
+                    obj,
+                    move |loro_event| {
+                        let text_deltas = loro_event.events.into_iter().filter_map(|event| {
+                            if event.is_unknown {
+                                return None;
+                            }
+
+                            // Loro supports all sorts of CRDTs (Lists, Maps, Counters, etc.),
+                            // extract only text deltas.
+                            if let Diff::Text(loro_deltas) = event.diff {
+                                Some(loro_deltas)
+                            } else {
+                                None
+                            }
+                        });
+
+                        // Loro's text deltas are represented as QuillJS "Deltas"
+                        // See: https://quilljs.com/docs/delta/
+                        for commit in text_deltas {
+                            let mut index = 0;
+                            for delta in commit {
+                                match delta {
+                                    loro::TextDelta::Retain { retain, .. } => {
+                                        index += retain;
+                                    }
+                                    loro::TextDelta::Insert { insert, .. } => {
+                                        let len = insert.len();
+                                        obj.imp().emit_text_inserted(index as i32, insert);
+                                        index += len;
+                                    }
+                                    loro::TextDelta::Delete { delete } => {
+                                        obj.imp().emit_range_deleted(
+                                            index as i32,
+                                            (index + delete) as i32,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                )),
+            )
+            .detach();
+
+            doc.subscribe_local_update(Box::new(clone!(
+                #[weak]
+                obj,
+                #[upgrade_or]
+                false,
+                move |delta_bytes| {
+                    let delta_bytes = delta_bytes.to_vec();
+                    // Move a strong reference to the Document into the spawn,
+                    // to ensure changes are always propagated to the network
+                    glib::spawn_future(async move {
+                        // Broadcast a "text delta" to all peers and persist the snapshot.
+                        //
+                        // TODO(adz): We should consider persisting the snapshot every x
+                        // times or x seconds, not sure yet what logic makes the most
+                        // sense.
+                        let snapshot_bytes = obj
+                            .imp()
+                            .crdt_doc
+                            .get()
+                            .expect("crdt_doc to be set")
+                            .export(ExportMode::Snapshot)
+                            .expect("encoded crdt snapshot");
+
+                        if let Err(error) = obj
+                            .service()
+                            .node()
+                            .delta_with_snapshot(obj.id().0, delta_bytes, snapshot_bytes)
+                            .await
+                        {
+                            error!(
+                                "Failed to send snapshot of document to the network: {}",
+                                error
+                            );
+                        }
+                    });
+
+                    true
+                }
+            )))
+            .detach();
+
+            self.crdt_doc.set(doc).unwrap();
+        }
     }
 
     #[glib::derived_properties]
@@ -153,22 +280,7 @@ mod imp {
                 self.set_id(Some(DocumentId(document_id)));
             }
 
-            let public_key = self.obj().service().public_key();
-            let crdt_doc = TextCrdt::new({
-                // Take first 8 bytes of public key (32 bytes) to determine a unique "peer id"
-                // which is used to keep authors apart inside the text crdt.
-                //
-                // TODO(adz): This is strictly speaking not collision-resistant but we're limited
-                // here by the 8 bytes / 64 bit from the u64 `PeerId` type from Loro. In practice
-                // this should not really be a problem, but it would be nice if the Loro API would
-                // change some day.
-                let mut buf = [0u8; 8];
-                buf[..8].copy_from_slice(&public_key.as_bytes()[..8]);
-                u64::from_be_bytes(buf)
-            });
-
-            let crdt_doc_rx = crdt_doc.subscribe();
-            self.crdt_doc.set(crdt_doc).expect("crdt_doc not to be set");
+            self.setup_loro_document();
 
             let obj = self.obj();
             glib::spawn_future(clone!(
@@ -179,57 +291,6 @@ mod imp {
                     let handle = DocumentHandle(obj.downgrade());
                     if let Err(error) = obj.service().node().subscribe(document_id, handle).await {
                         error!("Failed to subscribe to document: {}", error);
-                    }
-                }
-            ));
-
-            let obj = self.obj();
-            glib::spawn_future(clone!(
-                #[weak]
-                obj,
-                async move {
-                    while let Ok(event) = crdt_doc_rx.recv().await {
-                        match event {
-                            TextCrdtEvent::LocalEncoded(delta_bytes) => {
-                                // Broadcast a "text delta" to all peers and persist the snapshot.
-                                //
-                                // TODO(adz): We should consider persisting the snapshot every x
-                                // times or x seconds, not sure yet what logic makes the most
-                                // sense.
-                                let snapshot_bytes = obj
-                                    .imp()
-                                    .crdt_doc
-                                    .get()
-                                    .expect("crdt_doc to be set")
-                                    .snapshot();
-
-                                if obj
-                                    .service()
-                                    .node()
-                                    .delta_with_snapshot(obj.id().0, delta_bytes, snapshot_bytes)
-                                    .await
-                                    .is_err()
-                                {
-                                    break;
-                                }
-                            }
-                            TextCrdtEvent::Local(text_deltas)
-                            | TextCrdtEvent::Remote(text_deltas) => {
-                                for delta in text_deltas {
-                                    match delta {
-                                        TextDelta::Insert { index, chunk } => {
-                                            obj.imp().emit_text_inserted(index as i32, chunk);
-                                        }
-                                        TextDelta::Remove { index, len } => {
-                                            obj.imp().emit_range_deleted(
-                                                index as i32,
-                                                (index + len) as i32,
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             ));
