@@ -1,24 +1,22 @@
-use std::cell::{Cell, OnceCell, RefCell};
+use std::cell::{Cell, OnceCell};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::OnceLock;
 
-use aardvark_node::NodeCommand;
-
-use aardvark_node::document::DocumentId as DocumentIdNode;
+use aardvark_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
 use anyhow::Result;
 use glib::prelude::*;
-use glib::subclass::Signal;
-use glib::subclass::prelude::*;
+use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
-use p2panda_core::HashError;
+use p2panda_core::{HashError, PublicKey};
+use tracing::error;
 
 use crate::crdt::{TextCrdt, TextCrdtEvent, TextDelta};
 use crate::service::Service;
 
 #[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
 #[boxed_type(name = "AardvarkDocumentId", nullable)]
-pub struct DocumentId(pub DocumentIdNode);
+pub struct DocumentId(DocumentIdNode);
 
 impl FromStr for DocumentId {
     type Err = HashError;
@@ -35,15 +33,13 @@ impl fmt::Display for DocumentId {
 }
 
 mod imp {
-    use std::rc::Rc;
-
     use super::*;
 
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
         #[property(name = "text", get = Self::text, type = String)]
-        crdt_doc: Rc<RefCell<Option<TextCrdt>>>,
+        crdt_doc: OnceCell<TextCrdt>,
         #[property(get, construct_only, set = Self::set_id)]
         id: OnceCell<DocumentId>,
         #[property(get, set)]
@@ -60,11 +56,7 @@ mod imp {
 
     impl Document {
         pub fn text(&self) -> String {
-            self.crdt_doc
-                .borrow()
-                .as_ref()
-                .expect("crdt_doc to be set")
-                .to_string()
+            self.crdt_doc.get().expect("crdt_doc to be set").to_string()
         }
 
         fn set_id(&self, id: Option<DocumentId>) {
@@ -74,8 +66,8 @@ mod imp {
         }
 
         pub fn splice_text(&self, index: i32, delete_len: i32, chunk: &str) -> Result<()> {
-            let mut doc_borrow = self.crdt_doc.borrow_mut();
-            let doc = doc_borrow.as_mut().expect("crdt_doc to be set");
+            let doc = self.crdt_doc.get().expect("crdt_doc to be set");
+
             if delete_len == 0 {
                 doc.insert(index as usize, chunk)
                     .expect("update document after text insertion");
@@ -87,22 +79,48 @@ mod imp {
             Ok(())
         }
 
-        fn on_remote_message(&self, bytes: Vec<u8>) {
-            let mut doc_borrow = self.crdt_doc.borrow_mut();
-            let doc = doc_borrow.as_mut().expect("crdt_doc to be set");
+        pub fn on_remote_message(&self, bytes: &[u8]) {
+            let doc = self.crdt_doc.get().expect("crdt_doc to be set");
+
             if let Err(err) = doc.apply_encoded_delta(&bytes) {
                 eprintln!("received invalid message: {}", err);
             }
         }
 
-        fn emit_text_inserted(&self, pos: i32, text: &str) {
-            self.obj()
-                .emit_by_name::<()>("text-inserted", &[&pos, &text]);
+        fn emit_text_inserted(&self, pos: i32, text: String) {
+            // Emit the signal on the main thread
+            let obj = self.obj();
+            glib::source::idle_add_full(
+                glib::source::Priority::DEFAULT,
+                clone!(
+                    #[weak]
+                    obj,
+                    #[upgrade_or]
+                    glib::ControlFlow::Break,
+                    move || {
+                        obj.emit_by_name::<()>("text-inserted", &[&pos, &text]);
+                        glib::ControlFlow::Break
+                    }
+                ),
+            );
         }
 
         fn emit_range_deleted(&self, start: i32, end: i32) {
-            self.obj()
-                .emit_by_name::<()>("range-deleted", &[&start, &end]);
+            // Emit the signal on the main thread
+            let obj = self.obj();
+            glib::source::idle_add_full(
+                glib::source::Priority::DEFAULT,
+                clone!(
+                    #[weak]
+                    obj,
+                    #[upgrade_or]
+                    glib::ControlFlow::Break,
+                    move || {
+                        obj.emit_by_name::<()>("range-deleted", &[&start, &end]);
+                        glib::ControlFlow::Break
+                    }
+                ),
+            );
         }
     }
 
@@ -125,16 +143,17 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            let service = self.service.get().unwrap();
-            let (network_tx, mut rx) = if let Some(document_id) = self.id.get() {
-                service.join_document(document_id)
-            } else {
-                let (document_id, network_tx, rx) = service.create_document();
-                self.set_id(Some(document_id));
-                (network_tx, rx)
-            };
+            if self.id.get().is_none() {
+                let document_id = self
+                    .obj()
+                    .service()
+                    .node()
+                    .create_document()
+                    .expect("Create document");
+                self.set_id(Some(DocumentId(document_id)));
+            }
 
-            let public_key = service.public_key();
+            let public_key = self.obj().service().public_key();
             let crdt_doc = TextCrdt::new({
                 // Take first 8 bytes of public key (32 bytes) to determine a unique "peer id"
                 // which is used to keep authors apart inside the text crdt.
@@ -149,24 +168,25 @@ mod imp {
             });
 
             let crdt_doc_rx = crdt_doc.subscribe();
+            self.crdt_doc.set(crdt_doc).expect("crdt_doc not to be set");
 
-            self.crdt_doc.replace(Some(crdt_doc));
-
-            glib::spawn_future_local(clone!(
-                #[weak(rename_to = this)]
-                self,
+            let obj = self.obj();
+            glib::spawn_future(clone!(
+                #[weak]
+                obj,
                 async move {
-                    while let Some(bytes) = rx.recv().await {
-                        this.on_remote_message(bytes);
+                    let document_id = obj.id().0;
+                    let handle = DocumentHandle(obj.downgrade());
+                    if let Err(error) = obj.service().node().subscribe(document_id, handle).await {
+                        error!("Failed to subscribe to document: {}", error);
                     }
                 }
             ));
 
-            let crdt_doc = self.crdt_doc.clone();
-
-            glib::spawn_future_local(clone!(
-                #[weak(rename_to = this)]
-                self,
+            let obj = self.obj();
+            glib::spawn_future(clone!(
+                #[weak]
+                obj,
                 async move {
                     while let Ok(event) = crdt_doc_rx.recv().await {
                         match event {
@@ -176,17 +196,17 @@ mod imp {
                                 // TODO(adz): We should consider persisting the snapshot every x
                                 // times or x seconds, not sure yet what logic makes the most
                                 // sense.
-                                let snapshot_bytes = crdt_doc
-                                    .borrow()
-                                    .as_ref()
+                                let snapshot_bytes = obj
+                                    .imp()
+                                    .crdt_doc
+                                    .get()
                                     .expect("crdt_doc to be set")
                                     .snapshot();
 
-                                if network_tx
-                                    .send(NodeCommand::DeltaWithSnapshot {
-                                        snapshot_bytes,
-                                        delta_bytes,
-                                    })
+                                if obj
+                                    .service()
+                                    .node()
+                                    .delta_with_snapshot(obj.id().0, delta_bytes, snapshot_bytes)
                                     .await
                                     .is_err()
                                 {
@@ -198,10 +218,10 @@ mod imp {
                                 for delta in text_deltas {
                                     match delta {
                                         TextDelta::Insert { index, chunk } => {
-                                            this.emit_text_inserted(index as i32, &chunk);
+                                            obj.imp().emit_text_inserted(index as i32, chunk);
                                         }
                                         TextDelta::Remove { index, len } => {
-                                            this.emit_range_deleted(
+                                            obj.imp().emit_range_deleted(
                                                 index as i32,
                                                 (index + len) as i32,
                                             );
@@ -234,5 +254,18 @@ impl Document {
 
     pub fn delete_range(&self, index: i32, end: i32) -> Result<()> {
         self.imp().splice_text(index, end - index, "")
+    }
+}
+
+unsafe impl Send for Document {}
+unsafe impl Sync for Document {}
+
+struct DocumentHandle(glib::WeakRef<Document>);
+
+impl SubscribableDocument for DocumentHandle {
+    fn bytes_received(&self, _author: PublicKey, data: &[u8]) {
+        if let Some(document) = self.0.upgrade() {
+            document.imp().on_remote_message(data);
+        }
     }
 }

@@ -4,4 +4,5 @@ mod node;
 mod operation;
 mod store;
 
-pub use node::{Node, NodeCommand, NodeReceiver, NodeSender};
+pub use document::SubscribableDocument;
+pub use node::Node;

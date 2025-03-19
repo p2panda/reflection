@@ -20,6 +20,7 @@ pub type EventReceiver = async_channel::Receiver<TextCrdtEvent>;
 /// Internally this uses a text CRDT implementation by [Loro](https://www.loro.dev/). This
 /// interface serves merely as a wrapper to bring Loro and it's data into the shape we need,
 /// without worrying too much about the internal details of Loro.
+#[derive(Debug)]
 pub struct TextCrdt {
     doc: RefCell<LoroDoc>,
     event_rx: EventReceiver,
