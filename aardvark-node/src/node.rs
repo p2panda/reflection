@@ -68,7 +68,7 @@ impl Node {
         let operation_store = self.inner.operation_store.clone();
         let inner = self.inner.clone();
 
-        self.inner.runtime.spawn(async move {
+        self.inner.runtime.block_on(async move {
             inner
                 .private_key
                 .set(private_key.clone())
