@@ -102,6 +102,8 @@ mod imp {
         }
 
         fn constructed(&self) {
+            self.parent_constructed();
+
             let service = self.service.get().unwrap();
             let (network_tx, mut rx) = if let Some(id) = self.id.get() {
                 service.join_document(Hash::from_str(id).expect("Invalid document id"))
