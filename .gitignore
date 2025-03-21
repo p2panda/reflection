@@ -1,2 +1,3 @@
 target
 .flatpak-builder
+aardvark-app/src/config.rs
