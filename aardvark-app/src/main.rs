@@ -21,6 +21,7 @@
 mod application;
 mod components;
 mod config;
+mod system_settings;
 mod textbuffer;
 mod window;
 

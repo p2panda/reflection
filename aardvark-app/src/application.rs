@@ -26,6 +26,7 @@ use gtk::{gio, glib, glib::Properties};
 
 use crate::AardvarkWindow;
 use crate::config;
+use crate::system_settings::SystemSettings;
 
 mod imp {
     use super::*;
@@ -35,6 +36,8 @@ mod imp {
     pub struct AardvarkApplication {
         #[property(get)]
         pub service: Service,
+        #[property(get)]
+        pub system_settings: SystemSettings,
     }
 
     #[glib::object_subclass]
@@ -147,5 +150,13 @@ impl AardvarkApplication {
             .build();
 
         about.present(Some(&window));
+    }
+}
+
+impl Default for AardvarkApplication {
+    fn default() -> Self {
+        gio::Application::default()
+            .and_downcast::<AardvarkApplication>()
+            .unwrap()
     }
 }
