@@ -16,6 +16,8 @@ gtk = { version = "0.9", package = "gtk4", features = ["gnome_47"] }
 sourceview = { package = "sourceview5", version = "0.9" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+ashpd = { version = "0.9", default-features = false, features = ["tracing", "async-std"] }
+futures-util = "0.3"
 
 [dependencies.adw]
 package = "libadwaita"
