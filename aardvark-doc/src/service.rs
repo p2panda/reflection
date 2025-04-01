@@ -1,6 +1,6 @@
 use glib::subclass::prelude::*;
 use p2panda_core::{Hash, PrivateKey, PublicKey};
-use tracing::info;
+use tracing::{error, info};
 
 use aardvark_node::Node;
 
@@ -35,8 +35,16 @@ impl Service {
         let private_key = self.imp().private_key.clone();
         let network_id = b"aardvark <3";
         info!("my public key: {}", private_key.public_key());
-
-        self.imp().node.run(private_key, Hash::new(network_id));
+        glib::MainContext::new().block_on(async move {
+            if let Err(error) = self
+                .imp()
+                .node
+                .run(private_key, Hash::new(network_id))
+                .await
+            {
+                error!("Running node failed: {error}");
+            }
+        });
     }
 
     pub fn shutdown(&self) {

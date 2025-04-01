@@ -275,12 +275,14 @@ mod imp {
             self.parent_constructed();
 
             if self.id.get().is_none() {
-                let document_id = self
-                    .obj()
-                    .service()
-                    .node()
-                    .create_document()
-                    .expect("Create document");
+                let document_id = glib::MainContext::new().block_on(async move {
+                    self.obj()
+                        .service()
+                        .node()
+                        .create_document()
+                        .await
+                        .expect("Create document")
+                });
                 self.set_id(Some(DocumentId(document_id)));
             }
 
