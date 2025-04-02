@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use p2panda_core::{Hash, PrivateKey};
-use p2panda_net::SyncConfiguration;
+use p2panda_net::{SyncConfiguration, SystemEvent, TopicId};
 use p2panda_sync::log_sync::LogSyncProtocol;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::OnceCell;
@@ -122,6 +122,7 @@ impl Node {
         document: T,
     ) -> Result<()> {
         let private_key = self.inner.private_key.get().expect("private key").clone();
+        let document = Arc::new(document);
 
         // Add ourselves as an author to the document store.
         self.inner
@@ -130,7 +131,7 @@ impl Node {
             .await?;
 
         let inner_clone = self.inner.clone();
-        let (document_tx, mut document_rx) = self
+        let (document_tx, mut document_rx, mut system_event) = self
             .inner
             .runtime
             .spawn(async move {
@@ -152,6 +153,7 @@ impl Node {
             .await;
 
         let inner = self.inner.clone();
+        let document_clone = document.clone();
         self.inner.runtime.spawn(async move {
             // Process the operations and forward application messages to app layer. This is where
             // we "materialize" our application state from incoming "application events".
@@ -175,8 +177,31 @@ impl Node {
 
                 // Forward the payload up to the app.
                 if let Some(body) = operation.body {
-                    document.bytes_received(operation.header.public_key, &body.to_bytes());
+                    document_clone.bytes_received(operation.header.public_key, &body.to_bytes());
                 }
+            }
+        });
+
+        self.inner.runtime.spawn(async move {
+            while let Ok(system_event) = system_event.recv().await {
+                match system_event {
+                    SystemEvent::GossipJoined { topic_id, peers }
+                        if topic_id == document_id.id() =>
+                    {
+                        document.authors_joined(peers);
+                    }
+                    SystemEvent::GossipNeighborUp { topic_id, peer }
+                        if topic_id == document_id.id() =>
+                    {
+                        document.author_set_online(peer, true);
+                    }
+                    SystemEvent::GossipNeighborDown { topic_id, peer }
+                        if topic_id == document_id.id() =>
+                    {
+                        document.author_set_online(peer, false);
+                    }
+                    _ => {}
+                };
             }
         });
 

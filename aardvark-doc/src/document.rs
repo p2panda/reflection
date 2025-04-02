@@ -330,4 +330,12 @@ impl SubscribableDocument for DocumentHandle {
             document.imp().on_remote_message(data);
         }
     }
+
+    fn authors_joined(&self, _: Vec<PublicKey>) {
+        todo!()
+    }
+
+    fn author_set_online(&self, _: PublicKey, _: bool) {
+        todo!()
+    }
 }
