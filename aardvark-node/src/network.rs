@@ -5,9 +5,9 @@ use anyhow::Result;
 use p2panda_core::{Hash, Operation, PrivateKey};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
-use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
+use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, SystemEvent, ToNetwork};
 use p2panda_stream::{DecodeExt, IngestExt};
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -57,6 +57,7 @@ impl Network {
     ) -> Result<(
         mpsc::Sender<Operation<AardvarkExtensions>>,
         mpsc::Receiver<Operation<AardvarkExtensions>>,
+        broadcast::Receiver<SystemEvent<DocumentId>>,
     )> {
         let (to_network, mut from_app) = mpsc::channel::<Operation<AardvarkExtensions>>(128);
         let (to_app, from_network) = mpsc::channel(128);
@@ -134,6 +135,8 @@ impl Network {
             Ok(())
         });
 
-        Ok((to_network, from_network))
+        let events = self.network.events().await?;
+
+        Ok((to_network, from_network, events))
     }
 }
