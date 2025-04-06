@@ -39,7 +39,7 @@ impl Service {
             if let Err(error) = self
                 .imp()
                 .node
-                .run(private_key, Hash::new(network_id))
+                .run(private_key, Hash::new(network_id), None)
                 .await
             {
                 error!("Running node failed: {error}");

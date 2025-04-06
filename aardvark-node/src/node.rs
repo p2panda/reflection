@@ -1,9 +1,12 @@
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use anyhow::Result;
 use p2panda_core::{Hash, PrivateKey};
 use p2panda_net::{SyncConfiguration, SystemEvent, TopicId};
+use p2panda_store::sqlite::store::run_pending_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
+use sqlx::sqlite;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::Notify;
 use tracing::warn;
@@ -53,7 +56,12 @@ impl Node {
         }
     }
 
-    pub async fn run(&self, private_key: PrivateKey, network_id: Hash) -> Result<()> {
+    pub async fn run(
+        &self,
+        private_key: PrivateKey,
+        network_id: Hash,
+        db_location: Option<&Path>,
+    ) -> Result<()> {
         // FIXME: Stores are currently in-memory and do not persist data on the file-system.
         // Related issue: https://github.com/p2panda/aardvark/issues/3
         let runtime = Builder::new_multi_thread()
@@ -63,7 +71,30 @@ impl Node {
 
         let _guard = runtime.enter();
 
-        let operation_store = OperationStore::new();
+        let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
+            .shared_cache(true)
+            .create_if_missing(true);
+        let connection_options = if let Some(db_location) = db_location {
+            connection_options.filename(db_location)
+        } else {
+            connection_options.in_memory(true)
+        };
+
+        let pool = if db_location.is_some() {
+            sqlx::sqlite::SqlitePool::connect_with(connection_options).await?
+        } else {
+            // FIXME: we need to set max connection to 1 for in memory sqlite DB.
+            // Probably has to do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
+            let pool_options = sqlite::SqlitePoolOptions::new().max_connections(1);
+            pool_options.connect_with(connection_options).await?
+        };
+
+        // FIXME: Migrate the OperationStore Sqlite DB, I think p2panda-store should call this internally
+        run_pending_migrations(&pool).await?;
+        // TODO: Do migration of our DB
+        // sqlx::migrate!().run(&pool).await?;
+
+        let operation_store = OperationStore::new(pool);
         let document_store = DocumentStore::new();
 
         let sync_config = {
