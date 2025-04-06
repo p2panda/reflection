@@ -7,16 +7,18 @@ use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, SystemEvent, ToNetwork};
 use p2panda_stream::{DecodeExt, IngestExt};
-use tokio::sync::{broadcast, mpsc};
-use tokio::task::JoinHandle;
+use std::collections::HashMap;
+use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Network {
     operation_store: OperationStore,
     network: p2panda_net::Network<DocumentId>,
+    document_tx: RwLock<HashMap<DocumentId, mpsc::Sender<ToNetwork>>>,
 }
 
 impl Network {
@@ -43,28 +45,31 @@ impl Network {
         Ok(Self {
             operation_store,
             network,
+            document_tx: RwLock::new(HashMap::new()),
         })
     }
 
-    pub async fn shutdown(self) -> Result<()> {
-        self.network.shutdown().await?;
+    pub async fn shutdown(&self) -> Result<()> {
+        self.network.clone().shutdown().await?;
         Ok(())
     }
 
-    pub async fn subscribe(
+    pub async fn subscribe<Fut>(
         &self,
         document: DocumentId,
-    ) -> Result<(
-        mpsc::Sender<Operation<AardvarkExtensions>>,
-        mpsc::Receiver<Operation<AardvarkExtensions>>,
-        broadcast::Receiver<SystemEvent<DocumentId>>,
-    )> {
-        let (to_network, mut from_app) = mpsc::channel::<Operation<AardvarkExtensions>>(128);
-        let (to_app, from_network) = mpsc::channel(128);
-
+        f: impl Fn(Operation<AardvarkExtensions>) -> Fut + Send + 'static,
+    ) -> Result<()>
+    where
+        Fut: Future<Output = ()> + Send,
+    {
         // Join a gossip overlay with peers who are interested in the same document and start sync
         // with them.
         let (document_tx, document_rx, _gossip_ready) = self.network.subscribe(document).await?;
+
+        {
+            let mut store = self.document_tx.write().await;
+            store.insert(document.clone(), document_tx);
+        }
 
         let stream = ReceiverStream::new(document_rx);
 
@@ -113,30 +118,57 @@ impl Network {
             });
 
         // Send checked and ingested operations for this document to application layer.
-        let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+        tokio::task::spawn(async move {
             while let Some(operation) = stream.next().await {
-                to_app.send(operation).await?;
+                f(operation).await;
             }
-            Ok(())
         });
 
-        // Receive operations from application layer and forward them into gossip overlay for this
-        // document.
-        let _result: JoinHandle<Result<()>> = tokio::task::spawn(async move {
-            while let Some(operation) = from_app.recv().await {
-                let encoded_gossip_operation =
-                    encode_gossip_operation(operation.header, operation.body)?;
-                document_tx
-                    .send(ToNetwork::Message {
-                        bytes: encoded_gossip_operation,
-                    })
-                    .await?;
+        Ok(())
+    }
+
+    pub async fn subscribe_events<Fut>(
+        &self,
+        f: impl Fn(SystemEvent<DocumentId>) -> Fut + Send + 'static,
+    ) -> Result<()>
+    where
+        Fut: Future<Output = ()> + Send,
+    {
+        let mut events = self.network.events().await?;
+
+        tokio::task::spawn(async move {
+            while let Ok(event) = events.recv().await {
+                f(event).await;
             }
-            Ok(())
         });
 
-        let events = self.network.events().await?;
+        Ok(())
+    }
 
-        Ok((to_network, from_network, events))
+    /// Send operations to the gossip overlay for `document`.
+    ///
+    /// This will panic if the `document` wasn't subscribed to.
+    pub async fn send_operation(
+        &self,
+        document: &DocumentId,
+        operation: Operation<AardvarkExtensions>,
+    ) -> Result<()> {
+        let document_tx = {
+            self.document_tx
+                .read()
+                .await
+                .get(document)
+                .cloned()
+                .expect("Not subscribed to document with id {document_id}")
+        };
+
+        let encoded_gossip_operation = encode_gossip_operation(operation.header, operation.body)?;
+        document_tx
+            .send(ToNetwork::Message {
+                bytes: encoded_gossip_operation,
+            })
+            .await?;
+
+        Ok(())
     }
 }

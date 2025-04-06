@@ -1,11 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash as StdHash;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use p2panda_core::{Operation, PublicKey};
+use p2panda_core::PublicKey;
 use p2panda_store::MemoryStore;
 use p2panda_sync::log_sync::TopicLogMap;
 use serde::{Deserialize, Serialize};
@@ -22,7 +21,6 @@ pub struct DocumentStore {
 #[derive(Debug)]
 struct DocumentStoreInner {
     authors: HashMap<PublicKey, HashSet<DocumentId>>,
-    document_tx: HashMap<DocumentId, mpsc::Sender<Operation<AardvarkExtensions>>>,
 }
 
 impl DocumentStore {
@@ -30,26 +28,8 @@ impl DocumentStore {
         Self {
             inner: Arc::new(RwLock::new(DocumentStoreInner {
                 authors: HashMap::new(),
-                document_tx: HashMap::new(),
             })),
         }
-    }
-
-    pub async fn set_subscription_for_document(
-        &self,
-        document_id: DocumentId,
-        tx: mpsc::Sender<Operation<AardvarkExtensions>>,
-    ) {
-        let mut store = self.inner.write().await;
-        store.document_tx.insert(document_id, tx);
-    }
-
-    pub async fn subscription_for_document(
-        &self,
-        document_id: DocumentId,
-    ) -> Option<mpsc::Sender<Operation<AardvarkExtensions>>> {
-        let store = self.inner.read().await;
-        store.document_tx.get(&document_id).cloned()
     }
 
     pub async fn add_author(&self, document: DocumentId, public_key: PublicKey) -> Result<()> {
