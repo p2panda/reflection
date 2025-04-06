@@ -126,9 +126,13 @@ impl Node {
 
     pub fn shutdown(&self) {
         if let Some(inner) = self.inner.get() {
-            let network = inner.network.clone();
+            let inner_clone = inner.clone();
             inner.runtime.block_on(async move {
-                network.shutdown().await.expect("network to shutdown");
+                inner_clone
+                    .network
+                    .shutdown()
+                    .await
+                    .expect("network to shutdown");
             });
         }
     }
@@ -172,68 +176,79 @@ impl Node {
             .await?;
 
         let inner_clone = inner.clone();
-        let (document_tx, mut document_rx, mut system_event) = inner
-            .runtime
-            .spawn(async move { inner_clone.network.subscribe(document_id).await })
-            .await
-            .unwrap()?;
+        let document_clone = document.clone();
         inner
-            .document_store
-            .set_subscription_for_document(document_id, document_tx)
-            .await;
+            .runtime
+            .spawn(async move {
+                let inner_clone2 = inner_clone.clone();
+                inner_clone2
+                    .network
+                    .subscribe(document_id, move |operation| {
+                        let inner_clone = inner_clone.clone();
+                        let document_clone = document_clone.clone();
+                        async move {
+                            // Process the operations and forward application messages to app layer. This is where
+                            // we "materialize" our application state from incoming "application events".
+                            // Validation for our custom "document" extension.
+                            if let Err(err) = validate_operation(&operation, &document_id) {
+                                warn!(
+                                    public_key = %operation.header.public_key,
+                                    seq_num = %operation.header.seq_num,
+                                    "{err}"
+                                );
+                                return;
+                            }
+
+                            // When we discover a new author we need to add them to our document store.
+                            inner_clone
+                                .document_store
+                                .add_author(document_id, operation.header.public_key)
+                                .await
+                                .expect("Unable to add author to DocumentStore");
+
+                            // Forward the payload up to the app.
+                            if let Some(body) = operation.body {
+                                document_clone
+                                    .bytes_received(operation.header.public_key, &body.to_bytes());
+                            }
+                        }
+                    })
+                    .await
+            })
+            .await??;
 
         let inner_clone = inner.clone();
-        let document_clone = document.clone();
-        inner.runtime.spawn(async move {
-            // Process the operations and forward application messages to app layer. This is where
-            // we "materialize" our application state from incoming "application events".
-            while let Some(operation) = document_rx.recv().await {
-                // Validation for our custom "document" extension.
-                if let Err(err) = validate_operation(&operation, &document_id) {
-                    warn!(
-                        public_key = %operation.header.public_key,
-                        seq_num = %operation.header.seq_num,
-                        "{err}"
-                    );
-                    continue;
-                }
-
-                // When we discover a new author we need to add them to our document store.
+        inner
+            .runtime
+            .spawn(async move {
                 inner_clone
-                    .document_store
-                    .add_author(document_id, operation.header.public_key)
+                    .network
+                    .subscribe_events(move |system_event| {
+                        let document = document.clone();
+                        async move {
+                            match system_event {
+                                SystemEvent::GossipJoined { topic_id, peers }
+                                    if topic_id == document_id.id() =>
+                                {
+                                    document.authors_joined(peers);
+                                }
+                                SystemEvent::GossipNeighborUp { topic_id, peer }
+                                    if topic_id == document_id.id() =>
+                                {
+                                    document.author_set_online(peer, true);
+                                }
+                                SystemEvent::GossipNeighborDown { topic_id, peer }
+                                    if topic_id == document_id.id() =>
+                                {
+                                    document.author_set_online(peer, false);
+                                }
+                                _ => {}
+                            };
+                        }
+                    })
                     .await
-                    .expect("Unable to add author to DocumentStore");
-
-                // Forward the payload up to the app.
-                if let Some(body) = operation.body {
-                    document_clone.bytes_received(operation.header.public_key, &body.to_bytes());
-                }
-            }
-        });
-
-        inner.runtime.spawn(async move {
-            while let Ok(system_event) = system_event.recv().await {
-                match system_event {
-                    SystemEvent::GossipJoined { topic_id, peers }
-                        if topic_id == document_id.id() =>
-                    {
-                        document.authors_joined(peers);
-                    }
-                    SystemEvent::GossipNeighborUp { topic_id, peer }
-                        if topic_id == document_id.id() =>
-                    {
-                        document.author_set_online(peer, true);
-                    }
-                    SystemEvent::GossipNeighborDown { topic_id, peer }
-                        if topic_id == document_id.id() =>
-                    {
-                        document.author_set_online(peer, false);
-                    }
-                    _ => {}
-                };
-            }
-        });
+            })
+            .await??;
 
         Ok(())
     }
@@ -261,14 +276,12 @@ impl Node {
                 )
                 .await?;
 
-                let document_tx = inner_clone
-                    .document_store
-                    .subscription_for_document(document_id)
-                    .await
-                    .expect("Not subscribed to document");
-
                 // Broadcast operation on gossip overlay.
-                document_tx.send(operation).await?;
+                inner_clone
+                    .network
+                    .send_operation(&document_id, operation)
+                    .await?;
+
                 Ok(())
             })
             .await?
@@ -328,14 +341,11 @@ impl Node {
                 )
                 .await?;
 
-                let document_tx = inner_clone
-                    .document_store
-                    .subscription_for_document(document_id)
-                    .await
-                    .expect("Not subscribed to document");
-
                 // Broadcast operation on gossip overlay.
-                document_tx.send(operation).await?;
+                inner_clone
+                    .network
+                    .send_operation(&document_id, operation)
+                    .await?;
 
                 Ok(())
             })
