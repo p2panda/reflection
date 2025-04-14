@@ -22,6 +22,7 @@ mod application;
 mod components;
 mod config;
 mod connection_popover;
+mod open_dialog;
 mod system_settings;
 mod textbuffer;
 mod window;
