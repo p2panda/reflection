@@ -19,7 +19,6 @@
  */
 
 use std::cell::{Cell, OnceCell, RefCell};
-use std::str::FromStr;
 
 use aardvark_doc::{
     document::{Document, DocumentId},
@@ -27,7 +26,6 @@ use aardvark_doc::{
 };
 use adw::prelude::AdwDialogExt;
 use adw::subclass::prelude::*;
-use gettextrs::gettext;
 use gtk::prelude::*;
 use gtk::{gdk, gio, glib, glib::clone};
 use sourceview::*;
@@ -35,6 +33,7 @@ use sourceview::*;
 use crate::{
     AardvarkApplication, AardvarkTextBuffer, ConnectionPopover,
     components::{MultilineEntry, ZoomLevelSelector},
+    open_dialog::OpenDialog,
 };
 
 const BASE_TEXT_FONT_SIZE: f64 = 24.0;
@@ -52,10 +51,6 @@ mod imp {
         #[template_child]
         pub open_dialog_document_button: TemplateChild<gtk::Button>,
         #[template_child]
-        pub open_document_button: TemplateChild<gtk::Button>,
-        #[template_child]
-        pub open_document_dialog: TemplateChild<adw::Dialog>,
-        #[template_child]
         pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
         pub share_popover: TemplateChild<gtk::Popover>,
@@ -63,8 +58,6 @@ mod imp {
         pub share_code_label: TemplateChild<gtk::Label>,
         #[template_child]
         pub copy_code_button: TemplateChild<gtk::Button>,
-        #[template_child]
-        pub open_document_entry: TemplateChild<gtk::TextView>,
         #[template_child]
         pub connection_button: TemplateChild<gtk::MenuButton>,
         #[template_child]
@@ -201,11 +194,31 @@ mod imp {
             });
             self.obj().add_controller(zoom_gesture);
 
-            let window = self.obj().clone();
-            let dialog = self.open_document_dialog.clone();
-            self.open_dialog_document_button.connect_clicked(move |_| {
-                dialog.present(Some(&window));
-            });
+            let window = self.obj();
+            self.open_dialog_document_button.connect_clicked(clone!(
+                #[weak]
+                window,
+                move |_| {
+                    let dialog = OpenDialog::new();
+
+                    dialog.present(Some(&window));
+
+                    dialog.connect_open(clone!(
+                        #[weak]
+                        window,
+                        move |_, document_id| {
+                            let app = AardvarkApplication::default();
+
+                            if let Some(window) = app.window_for_document_id(document_id) {
+                                window.present();
+                            } else {
+                                let document = Document::new(&window.service(), Some(document_id));
+                                window.imp().set_document(document);
+                            }
+                        }
+                    ));
+                }
+            ));
 
             self.copy_code_button.connect_clicked(clone!(
                 #[weak(rename_to = this)]
@@ -217,132 +230,6 @@ mod imp {
                     this.share_popover.popdown();
                 }
             ));
-
-            self.open_document_button.connect_clicked(clone!(
-                #[weak(rename_to = this)]
-                self,
-                move |_| {
-                    let open_document_buffer = this.open_document_entry.buffer();
-                    let document_id = DocumentId::from_str(
-                        &open_document_buffer
-                            .text(
-                                &open_document_buffer.start_iter(),
-                                &open_document_buffer.end_iter(),
-                                false,
-                            )
-                            .chars()
-                            .filter(|c| c.is_digit(16))
-                            .collect::<String>(),
-                    )
-                    .expect("valid document id");
-
-                    let app = this
-                        .obj()
-                        .application()
-                        .and_then(|app| app.downcast::<AardvarkApplication>().ok())
-                        .expect("Application needs to be a AardvarkApplication");
-
-                    if let Some(window) = app.window_for_document_id(&document_id) {
-                        window.present();
-                    } else {
-                        let document =
-                            Document::new(this.service.get().unwrap(), Some(&document_id));
-                        this.set_document(document);
-                    }
-                    this.open_document_dialog.close();
-                }
-            ));
-
-            self.open_document_entry.buffer().connect_changed(clone!(
-                #[weak(rename_to = this)]
-                self,
-                move |_| {
-                    let buffer = this.open_document_entry.buffer();
-                    let input: String = buffer
-                        .text(&buffer.start_iter(), &buffer.end_iter(), false)
-                        .chars()
-                        .filter(|c| c.is_digit(16))
-                        .collect();
-
-                    let document_id = if input.len() == 64 {
-                        DocumentId::from_str(&input).ok()
-                    } else {
-                        None
-                    };
-                    this.open_document_button
-                        .set_sensitive(document_id.is_some());
-
-                    let existing = if let Some(document_id) = document_id {
-                        let app = this
-                            .obj()
-                            .application()
-                            .and_then(|app| app.downcast::<AardvarkApplication>().ok())
-                            .expect("Application needs to be a AardvarkApplication");
-                        app.window_for_document_id(&document_id)
-                    } else {
-                        None
-                    };
-
-                    if existing.is_some() {
-                        this.open_document_button
-                            .set_label(&gettext("Switch to Existing Window"));
-                    } else {
-                        this.open_document_button
-                            .set_label(&gettext("Open Document"));
-                    }
-                }
-            ));
-
-            self.open_document_entry
-                .buffer()
-                .connect_insert_text(|buffer, pos, new_text| {
-                    let mut prev_char: Option<char> = None;
-                    let filterd_text: String = new_text
-                        .chars()
-                        .filter(|c| {
-                            if c.is_digit(16) {
-                                prev_char = None;
-                                true
-                            } else if c == &' ' && prev_char != Some(' ') {
-                                prev_char = Some(' ');
-                                true
-                            } else {
-                                false
-                            }
-                        })
-                        .collect();
-
-                    let mut before_iter = pos.clone();
-                    let before_char = if before_iter.backward_char() {
-                        Some(before_iter.char())
-                    } else {
-                        None
-                    };
-                    let after_char = Some(pos.char());
-
-                    let trimmed_text = if before_char == Some(' ') && after_char == Some(' ') {
-                        filterd_text.trim()
-                    } else if before_char == Some(' ') {
-                        filterd_text.trim_start()
-                    } else if after_char == Some(' ') {
-                        filterd_text.trim_end()
-                    } else {
-                        &filterd_text
-                    };
-
-                    let input_len = buffer
-                        .text(&buffer.start_iter(), &buffer.end_iter(), false)
-                        .chars()
-                        .filter(|c| c.is_digit(16))
-                        .count();
-
-                    if trimmed_text.len() == 0 || (input_len >= 64 && trimmed_text != " ") {
-                        buffer.stop_signal_emission_by_name("insert-text");
-                    } else if new_text != trimmed_text {
-                        buffer.stop_signal_emission_by_name("insert-text");
-                        buffer.insert(pos, &trimmed_text);
-                    }
-                });
 
             let document = Document::new(self.service.get().unwrap(), None);
             self.set_document(document);

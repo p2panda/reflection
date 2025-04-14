@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="Adw" version="1.0"/>
+  <template class="AardvarkOpenDialog" parent="AdwDialog">
+    <property name="can-close">true</property>
+    <property name="content-width">460</property>
+    <property name="content-height">380</property>
+    <property name="default-widget">open_document_button</property>
+    <child>
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar"/>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="margin-top">0</property>
+            <property name="margin-bottom">36</property>
+            <property name="margin-start">36</property>
+            <property name="margin-end">36</property>
+            <property name="spacing">12</property>
+            <child>
+              <object class="GtkLabel">
+                <property name="label" translatable="true">Open Document</property>
+                <style>
+                  <class name="title-2"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="wrap">True</property>
+                <property name="justify">GTK_JUSTIFY_CENTER</property>
+                <property name="max-width-chars">25</property>
+                <property name="natural-wrap-mode">GTK_NATURAL_WRAP_WORD</property>
+                <property name="label" translatable="true">Enter an invite code to start collaborating on a document</property>
+              </object>
+            </child>
+            <child>
+              <object class="MultilineEntry" id="open_document_entry">
+                <property name="margin-top">12</property>
+                <property name="wrap-mode">char</property>
+                <style>
+                  <class name="invite-code-entry"/>
+                  <class name="monospace"/>
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="GtkBox">
+                <property name="halign">center</property>
+                <property name="margin-top">12</property>
+                <child>
+                  <object class="GtkButton" id="open_document_button">
+                    <property name="label" translatable="true">Open</property>
+                    <property name="sensitive">False</property>
+                    <style>
+                      <class name="pill"/>
+                      <class name="suggested-action"/>
+                      <class name="open-document-button"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </child>
+      </object>
+    </child>
+  </template>
+</interface>
