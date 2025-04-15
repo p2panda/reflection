@@ -1,8 +1,7 @@
-pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 gnome = import('gnome')
 
-gnome.compile_resources('aardvark',
-  'aardvark.gresource.xml',
+gnome.compile_resources('ui-resources',
+  'ui-resources.gresource.xml',
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,

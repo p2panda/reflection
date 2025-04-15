@@ -1,5 +1,7 @@
-pub static APP_ID: &str = @APP_ID@;
-pub static VERSION: &str = @VERSION@;
-pub static GETTEXT_PACKAGE: &str = @GETTEXT_PACKAGE@;
-pub static LOCALEDIR: &str = @LOCALEDIR@;
-pub static PKGDATADIR: &str = @PKGDATADIR@;
+pub const APP_ID: &str = @APP_ID@;
+pub const VERSION: &str = @VERSION@;
+pub const GETTEXT_PACKAGE: &str = @GETTEXT_PACKAGE@;
+pub const LOCALEDIR: &str = @LOCALEDIR@;
+pub const PKGDATADIR: &str = @PKGDATADIR@;
+pub const RESOURCES_FILE: &str = concat!(@PKGDATADIR@, "/resources.gresource");
+pub const UI_RESOURCES_FILE: &str = concat!(@PKGDATADIR@, "/ui-resources.gresource");
