@@ -5,6 +5,7 @@ use p2panda_core::Hash;
 use std::sync::OnceLock;
 use tracing::error;
 
+use crate::documents::Documents;
 use crate::identity::PrivateKey;
 use aardvark_node::Node;
 
@@ -17,6 +18,8 @@ mod imp {
         pub node: Node,
         #[property(get, set, construct_only, type = PrivateKey)]
         pub private_key: OnceLock<PrivateKey>,
+        #[property(get)]
+        documents: Documents,
     }
 
     #[glib::derived_properties]
