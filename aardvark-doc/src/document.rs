@@ -365,6 +365,8 @@ mod imp {
             // Add ourself to the list of authors
             self.authors
                 .add_this_device(self.obj().service().public_key());
+
+            self.obj().service().documents().add(self.obj().clone());
         }
     }
 }

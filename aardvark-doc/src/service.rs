@@ -1,18 +1,25 @@
+use glib::Properties;
+use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
 use p2panda_core::{Hash, PrivateKey, PublicKey};
 use tracing::{error, info};
 
+use crate::documents::Documents;
 use aardvark_node::Node;
 
 mod imp {
     use super::*;
 
-    #[derive(Default)]
+    #[derive(Properties, Default)]
+    #[properties(wrapper_type = super::Service)]
     pub struct Service {
         pub node: Node,
         pub private_key: PrivateKey,
+        #[property(get)]
+        documents: Documents,
     }
 
+    #[glib::derived_properties]
     impl ObjectImpl for Service {}
 
     #[glib::object_subclass]

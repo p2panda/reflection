@@ -1,6 +1,7 @@
 pub mod author;
 pub mod authors;
 pub mod document;
+pub mod documents;
 pub mod service;
 
 #[cfg(test)]
