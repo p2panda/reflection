@@ -44,3 +44,4 @@ configure_file(
 )
 
 subdir('icons')
+subdir('resources')

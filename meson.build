@@ -7,6 +7,8 @@ project('aardvark', 'rust',
 i18n = import('i18n')
 gnome = import('gnome')
 
+pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
+
 subdir('aardvark-app/data')
 subdir('aardvark-app/src')
 subdir('aardvark-app/po')

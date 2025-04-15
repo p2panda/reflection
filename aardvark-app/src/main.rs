@@ -27,16 +27,15 @@ mod system_settings;
 mod textbuffer;
 mod window;
 
-use std::path::PathBuf;
-
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
 
 use self::application::AardvarkApplication;
-use self::config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
+use self::config::*;
 use self::connection_popover::ConnectionPopover;
 use self::textbuffer::AardvarkTextBuffer;
 use self::window::AardvarkWindow;
@@ -51,38 +50,25 @@ fn main() -> glib::ExitCode {
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
     // Load resources
-    let resources = gio::Resource::load(get_pkgdatadir().join("aardvark.gresource"))
-        .expect("Could not load resources");
-    gio::resources_register(&resources);
+    let res = gio::Resource::load(RESOURCES_FILE).expect("Could not load gresource file");
+    gio::resources_register(&res);
+    let ui_res = gio::Resource::load(UI_RESOURCES_FILE).expect("Could not load UI gresource file");
+    gio::resources_register(&ui_res);
 
     // Create a new GtkApplication. The application manages our main loop,
     // application windows, integration with the window manager/compositor, and
     // desktop features such as file opening and single-instance applications.
     let app = AardvarkApplication::new("org.p2panda.aardvark", &gio::ApplicationFlags::empty());
 
+    info!("Aardvark ({})", APP_ID);
+    info!("Version: {}", VERSION);
+    info!("Datadir: {}", PKGDATADIR);
+
     // Run the application. This function will block until the application
     // exits. Upon return, we have our exit code to return to the shell. (This
     // is the code you see when you do `echo $?` after running a command in a
     // terminal.
     app.run()
-}
-
-fn get_pkgdatadir() -> PathBuf {
-    #[cfg(target_os = "macos")]
-    {
-        let exe_path = std::env::current_exe().expect("Failed to get current executable path");
-        // Navigate to the 'Resources/share/aardvark' directory relative to the executable
-        exe_path
-            .parent() // Goes up to 'Contents/MacOS'
-            .and_then(|p| p.parent()) // Goes up to 'Contents'
-            .map(|p| p.join("Resources/share/aardvark"))
-            .expect("Failed to compute PKGDATADIR")
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        PathBuf::from(PKGDATADIR)
-    }
 }
 
 fn setup_logging() {
