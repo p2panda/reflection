@@ -127,6 +127,12 @@ impl Network {
         Ok(())
     }
 
+    pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
+        self.document_tx.write().await.remove(document_id);
+
+        Ok(())
+    }
+
     pub async fn subscribe_events<Fut>(
         &self,
         f: impl Fn(SystemEvent<DocumentId>) -> Fut + Send + 'static,
