@@ -1,14 +1,16 @@
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use anyhow::Result;
 use p2panda_core::{Hash, PrivateKey};
-use p2panda_net::{SyncConfiguration, SystemEvent, TopicId};
+use p2panda_net::{SyncConfiguration, SystemEvent};
 use p2panda_store::sqlite::store::run_pending_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::sqlite;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::Notify;
+use tokio::sync::RwLock;
 use tracing::warn;
 
 use crate::document::{DocumentId, SubscribableDocument};
@@ -16,10 +18,10 @@ use crate::network::Network;
 use crate::operation::{LogType, create_operation, validate_operation};
 use crate::store::{DocumentStore, OperationStore};
 
-#[derive(Clone)]
 pub struct Node {
     inner: OnceLock<Arc<NodeInner>>,
     ready_notify: Arc<Notify>,
+    documents: Arc<RwLock<HashMap<DocumentId, Arc<dyn SubscribableDocument>>>>,
 }
 
 impl Default for Node {
@@ -42,6 +44,7 @@ impl Node {
         Self {
             inner: OnceLock::new(),
             ready_notify: Arc::new(Notify::new()),
+            documents: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -109,6 +112,33 @@ impl Node {
             operation_store.clone(),
         )
         .await?;
+
+        let documents = self.documents.clone();
+        network
+            .subscribe_events(move |system_event| {
+                let documents = documents.clone();
+                async move {
+                    match system_event {
+                        SystemEvent::GossipJoined { topic_id, peers } => {
+                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+                                document.authors_joined(peers);
+                            }
+                        }
+                        SystemEvent::GossipNeighborUp { topic_id, peer } => {
+                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+                                document.author_set_online(peer, true);
+                            }
+                        }
+                        SystemEvent::GossipNeighborDown { topic_id, peer } => {
+                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+                                document.author_set_online(peer, false);
+                            }
+                        }
+                        _ => {}
+                    };
+                }
+            })
+            .await?;
 
         self.inner
             .set(Arc::new(NodeInner {
@@ -217,38 +247,16 @@ impl Node {
             })
             .await??;
 
-        let inner_clone = inner.clone();
-        inner
-            .runtime
-            .spawn(async move {
-                inner_clone
-                    .network
-                    .subscribe_events(move |system_event| {
-                        let document = document.clone();
-                        async move {
-                            match system_event {
-                                SystemEvent::GossipJoined { topic_id, peers }
-                                    if topic_id == document_id.id() =>
-                                {
-                                    document.authors_joined(peers);
-                                }
-                                SystemEvent::GossipNeighborUp { topic_id, peer }
-                                    if topic_id == document_id.id() =>
-                                {
-                                    document.author_set_online(peer, true);
-                                }
-                                SystemEvent::GossipNeighborDown { topic_id, peer }
-                                    if topic_id == document_id.id() =>
-                                {
-                                    document.author_set_online(peer, false);
-                                }
-                                _ => {}
-                            };
-                        }
-                    })
-                    .await
-            })
-            .await??;
+        self.documents.write().await.insert(document_id, document);
+
+        Ok(())
+    }
+
+    pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
+        let inner = self.inner().await;
+
+        inner.network.unsubscribe(document_id).await?;
+        self.documents.write().await.remove(document_id);
 
         Ok(())
     }

@@ -18,6 +18,12 @@ impl TopicId for DocumentId {
     }
 }
 
+impl From<[u8; 32]> for DocumentId {
+    fn from(bytes: [u8; 32]) -> Self {
+        Self(Hash::from_bytes(bytes))
+    }
+}
+
 impl From<Hash> for DocumentId {
     fn from(document_id: Hash) -> Self {
         Self(document_id)
