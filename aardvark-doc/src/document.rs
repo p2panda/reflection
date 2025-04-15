@@ -1,7 +1,9 @@
 use std::cell::{Cell, OnceCell};
+use std::cmp::min;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use aardvark_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
@@ -39,18 +41,22 @@ mod imp {
     ///
     /// Loro documents can contain multiple different CRDT types in one document.
     const TEXT_CONTAINER_ID: &str = "document";
+    const DOCUMENT_NAME_LENGTH: usize = 32;
 
     use super::*;
 
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
+        #[property(name = "name", get = Self::name, type = Option<String>)]
+        #[property(get)]
+        last_accessed: Mutex<Option<glib::DateTime>>,
         #[property(name = "text", get = Self::text, type = String)]
         crdt_doc: OnceCell<LoroDoc>,
         #[property(get, construct_only, set = Self::set_id)]
         id: OnceCell<DocumentId>,
-        #[property(get, set)]
-        ready: Cell<bool>,
+        #[property(get, set = Self::set_subscribed)]
+        subscribed: Cell<bool>,
         #[property(get, construct_only)]
         service: OnceCell<Service>,
         #[property(get)]
@@ -70,6 +76,21 @@ mod imp {
                 .expect("crdt_doc to be set")
                 .get_text(TEXT_CONTAINER_ID)
                 .to_string()
+        }
+
+        pub fn name(&self) -> Option<String> {
+            let crdt_text = self
+                .crdt_doc
+                .get()
+                .expect("crdt_doc to be set")
+                .get_text(TEXT_CONTAINER_ID);
+            if crdt_text.is_empty() {
+                return None;
+            }
+
+            crdt_text
+                .slice(0, min(DOCUMENT_NAME_LENGTH, crdt_text.len_unicode()))
+                .ok()
         }
 
         fn set_id(&self, id: Option<DocumentId>) {
@@ -104,7 +125,55 @@ mod imp {
             }
         }
 
+        pub fn set_subscribed(&self, subscribed: bool) {
+            if self.obj().subscribed() == subscribed {
+                return;
+            }
+
+            self.subscribed.set(subscribed);
+
+            if subscribed {
+                *self.last_accessed.lock().unwrap() = None;
+
+                let obj = self.obj();
+                glib::spawn_future(clone!(
+                    #[weak]
+                    obj,
+                    async move {
+                        let document_id = obj.id().0;
+                        let handle = DocumentHandle(obj.downgrade());
+                        if let Err(error) =
+                            obj.service().node().subscribe(document_id, handle).await
+                        {
+                            error!("Failed to subscribe to document: {}", error);
+                            obj.imp().set_subscribed(false);
+                        }
+                    }
+                ));
+            } else {
+                *self.last_accessed.lock().unwrap() = glib::DateTime::now_local().ok();
+
+                let obj = self.obj();
+                glib::spawn_future(clone!(
+                    #[weak]
+                    obj,
+                    async move {
+                        let document_id = obj.id().0;
+                        if let Err(error) = obj.service().node().unsubscribe(&document_id).await {
+                            error!("Failed to unsubscribe document {}: {}", document_id, error);
+                        }
+                    }
+                ));
+            }
+            self.obj().notify_last_accessed();
+            self.obj().notify_subscribed();
+        }
+
         fn emit_text_inserted(&self, pos: i32, text: String) {
+            if pos <= DOCUMENT_NAME_LENGTH as i32 {
+                self.obj().notify_name();
+            }
+
             // Emit the signal on the main thread
             let obj = self.obj();
             glib::source::idle_add_full(
@@ -116,6 +185,7 @@ mod imp {
                     glib::ControlFlow::Break,
                     move || {
                         obj.emit_by_name::<()>("text-inserted", &[&pos, &text]);
+                        obj.notify_name();
                         glib::ControlFlow::Break
                     }
                 ),
@@ -123,6 +193,10 @@ mod imp {
         }
 
         fn emit_range_deleted(&self, start: i32, end: i32) {
+            if start <= DOCUMENT_NAME_LENGTH as i32 || end <= DOCUMENT_NAME_LENGTH as i32 {
+                self.obj().notify_name();
+            }
+
             // Emit the signal on the main thread
             let obj = self.obj();
             glib::source::idle_add_full(
@@ -287,19 +361,6 @@ mod imp {
             }
 
             self.setup_loro_document();
-
-            let obj = self.obj();
-            glib::spawn_future(clone!(
-                #[weak]
-                obj,
-                async move {
-                    let document_id = obj.id().0;
-                    let handle = DocumentHandle(obj.downgrade());
-                    if let Err(error) = obj.service().node().subscribe(document_id, handle).await {
-                        error!("Failed to subscribe to document: {}", error);
-                    }
-                }
-            ));
 
             // Add ourself to the list of authors
             self.authors
