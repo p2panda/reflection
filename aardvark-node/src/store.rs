@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash as StdHash;
 use std::sync::Arc;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use p2panda_core::PublicKey;
 use p2panda_store::SqliteStore;
@@ -15,33 +14,24 @@ use crate::operation::{AardvarkExtensions, LogType};
 
 #[derive(Clone, Debug)]
 pub struct DocumentStore {
-    inner: Arc<RwLock<DocumentStoreInner>>,
-}
-
-#[derive(Debug)]
-struct DocumentStoreInner {
-    authors: HashMap<PublicKey, HashSet<DocumentId>>,
+    documents: Arc<RwLock<HashMap<DocumentId, HashSet<PublicKey>>>>,
 }
 
 impl DocumentStore {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(DocumentStoreInner {
-                authors: HashMap::new(),
-            })),
+            documents: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    pub async fn add_author(&self, document: DocumentId, public_key: PublicKey) -> Result<()> {
-        let mut store = self.inner.write().await;
-        store
-            .authors
-            .entry(public_key)
+    pub async fn add_author(&self, document: DocumentId, public_key: PublicKey) {
+        let mut documents = self.documents.write().await;
+        documents
+            .entry(document)
             .and_modify(|documents| {
-                documents.insert(document);
+                documents.insert(public_key);
             })
-            .or_insert(HashSet::from([document]));
-        Ok(())
+            .or_insert(HashSet::from([public_key]));
     }
 }
 
@@ -57,27 +47,18 @@ impl LogId {
 #[async_trait]
 impl TopicLogMap<DocumentId, LogId> for DocumentStore {
     async fn get(&self, topic: &DocumentId) -> Option<HashMap<PublicKey, Vec<LogId>>> {
-        let store = &self.inner.read().await;
-        let mut result = HashMap::<PublicKey, Vec<LogId>>::new();
-
-        for (public_key, documents) in &store.authors {
-            if documents.contains(topic) {
-                // We maintain two logs per author per document.
-                let log_ids = [
-                    LogId::new(LogType::Delta, topic),
-                    LogId::new(LogType::Snapshot, topic),
-                ];
-
-                result
-                    .entry(*public_key)
-                    .and_modify(|logs| {
-                        logs.extend_from_slice(&log_ids);
-                    })
-                    .or_insert(log_ids.into());
-            }
-        }
-
-        Some(result)
+        let documents = self.documents.read().await;
+        let authors = documents.get(topic)?.clone();
+        let log_ids = [
+            LogId::new(LogType::Delta, topic),
+            LogId::new(LogType::Snapshot, topic),
+        ];
+        Some(
+            authors
+                .into_iter()
+                .map(|author| (author, log_ids.to_vec()))
+                .collect(),
+        )
     }
 }
 

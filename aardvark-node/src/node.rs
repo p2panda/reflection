@@ -205,7 +205,7 @@ impl Node {
         inner
             .document_store
             .add_author(document_id, inner.private_key.public_key())
-            .await?;
+            .await;
 
         let inner_clone = inner.clone();
         let document_clone = document.clone();
@@ -235,8 +235,7 @@ impl Node {
                             inner_clone
                                 .document_store
                                 .add_author(document_id, operation.header.public_key)
-                                .await
-                                .expect("Unable to add author to DocumentStore");
+                                .await;
 
                             // Forward the payload up to the app.
                             if let Some(body) = operation.body {
