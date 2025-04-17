@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use aardvark_doc::{document::DocumentId, service::Service, identity::PrivateKey};
+use aardvark_doc::{document::DocumentId, service::Service};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
@@ -27,6 +27,7 @@ use std::cell::OnceCell;
 
 use crate::AardvarkWindow;
 use crate::config;
+use crate::secret;
 use crate::system_settings::SystemSettings;
 
 mod imp {
@@ -57,7 +58,13 @@ mod imp {
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
             obj.set_accels_for_action("app.new-window", &["<control>n"]);
 
-            self.service.set(Service::new(&PrivateKey::new())).unwrap();
+            // FIXME: Don't block on loading the identity
+            glib::MainContext::new().block_on(async move {
+                let private_key = secret::get_or_create_identity()
+                    .await
+                    .expect("Unable to get or create identity");
+                self.service.set(Service::new(&private_key)).unwrap();
+            });
         }
     }
 
