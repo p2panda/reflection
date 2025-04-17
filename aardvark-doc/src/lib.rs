@@ -3,16 +3,82 @@ pub mod authors;
 pub mod document;
 pub mod service;
 
+pub mod identity {
+    use std::fmt;
+
+    #[derive(Clone, Debug, glib::Boxed)]
+    #[boxed_type(name = "AardvarkPrivateKey", nullable)]
+    pub struct PrivateKey(pub(crate) p2panda_core::PrivateKey);
+
+    impl PrivateKey {
+        pub fn new() -> PrivateKey {
+            PrivateKey(p2panda_core::PrivateKey::new())
+        }
+
+        pub fn public_key(&self) -> PublicKey {
+            PublicKey(self.0.public_key())
+        }
+
+        pub fn as_bytes(&self) -> &[u8] {
+            self.0.as_bytes().as_slice()
+        }
+    }
+
+    impl TryFrom<&[u8]> for PrivateKey {
+        type Error = p2panda_core::IdentityError;
+
+        fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+            Ok(PrivateKey(p2panda_core::PrivateKey::try_from(value)?))
+        }
+    }
+
+    impl<'a> From<&'a PrivateKey> for &'a [u8] {
+        fn from(value: &PrivateKey) -> &[u8] {
+            value.0.as_bytes().as_slice()
+        }
+    }
+
+    impl fmt::Display for PrivateKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Display::fmt(&self.0, f)
+        }
+    }
+
+    #[derive(Clone, Debug, PartialEq, glib::Boxed)]
+    #[boxed_type(name = "AardvarkPublicKey", nullable)]
+    pub struct PublicKey(pub(crate) p2panda_core::PublicKey);
+
+    impl fmt::Display for PublicKey {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            fmt::Display::fmt(&self.0, f)
+        }
+    }
+
+    impl<'a> From<&'a PublicKey> for &'a [u8] {
+        fn from(value: &PublicKey) -> &[u8] {
+            value.0.as_bytes().as_slice()
+        }
+    }
+
+    impl PublicKey {
+        pub fn as_bytes(&self) -> &[u8] {
+            self.0.as_bytes().as_slice()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::document::Document;
+    use crate::identity::PrivateKey;
     use crate::service::Service;
     use glib::object::ObjectExt;
 
     #[test]
     fn create_document() {
         let context = glib::MainContext::default();
-        let service = Service::new();
+
+        let service = Service::new(&PrivateKey::new());
         let test_string = "Hello World";
         service.startup();
         let document = Document::new(&service, None);
@@ -25,13 +91,13 @@ mod tests {
     fn basic_sync() {
         let main_loop = glib::MainLoop::new(None, false);
         let test_string = "Hello World";
-        let service = Service::new();
+        let service = Service::new(&PrivateKey::new());
         service.startup();
 
         let document = Document::new(&service, None);
         let id = document.id();
 
-        let service2 = Service::new();
+        let service2 = Service::new(&PrivateKey::new());
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
 
@@ -57,13 +123,13 @@ mod tests {
     fn sync_multiple_changes() {
         let main_loop = glib::MainLoop::new(None, false);
         let expected_string = "Hello, World!";
-        let service = Service::new();
+        let service = Service::new(&PrivateKey::new());
         service.startup();
 
         let document = Document::new(&service, None);
         let id = document.id();
 
-        let service2 = Service::new();
+        let service2 = Service::new(&PrivateKey::new());
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
 
@@ -99,13 +165,13 @@ mod tests {
             "{}{}{}{}",
             test_string, test_string, test_string, test_string
         );
-        let service = Service::new();
+        let service = Service::new(&PrivateKey::new());
         service.startup();
 
         let document = Document::new(&service, None);
         let id = document.id();
 
-        let service2 = Service::new();
+        let service2 = Service::new(&PrivateKey::new());
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
 

@@ -18,11 +18,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use aardvark_doc::{document::DocumentId, service::Service};
+use aardvark_doc::{document::DocumentId, identity::PrivateKey, service::Service};
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib, glib::Properties};
+use std::cell::OnceCell;
 
 use crate::AardvarkWindow;
 use crate::config;
@@ -35,7 +36,7 @@ mod imp {
     #[properties(wrapper_type = super::AardvarkApplication)]
     pub struct AardvarkApplication {
         #[property(get)]
-        pub service: Service,
+        pub service: OnceCell<Service>,
         #[property(get)]
         pub system_settings: SystemSettings,
     }
@@ -55,17 +56,19 @@ mod imp {
             obj.setup_gactions();
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
             obj.set_accels_for_action("app.new-window", &["<control>n"]);
+
+            self.service.set(Service::new(&PrivateKey::new())).unwrap();
         }
     }
 
     impl ApplicationImpl for AardvarkApplication {
         fn startup(&self) {
-            self.service.startup();
+            self.obj().service().startup();
             self.parent_startup();
         }
 
         fn shutdown(&self) {
-            self.service.shutdown();
+            self.obj().service().shutdown();
             self.parent_shutdown();
         }
 
@@ -116,7 +119,7 @@ impl AardvarkApplication {
     }
 
     fn new_window(&self) {
-        let window = AardvarkWindow::new(self, &self.imp().service);
+        let window = AardvarkWindow::new(self, &self.service());
         window.present();
     }
 

@@ -1,4 +1,3 @@
-use p2panda_core::PublicKey;
 use std::sync::Mutex;
 
 use gio::prelude::*;
@@ -6,6 +5,7 @@ use gio::subclass::prelude::ListModelImpl;
 use glib::{clone, subclass::prelude::*};
 
 use crate::author::Author;
+use crate::identity::PublicKey;
 
 mod imp {
     use super::*;
@@ -75,7 +75,7 @@ impl Authors {
                     let mut list = obj.imp().list.lock().unwrap();
                     let pos = list.len() as u32;
 
-                    let author = Author::for_this_device(author_key);
+                    let author = Author::for_this_device(&author_key);
                     list.push(author);
                     drop(list);
                     obj.items_changed(pos, 0, 1);
@@ -96,15 +96,14 @@ impl Authors {
                 move || {
                     let mut list = obj.imp().list.lock().unwrap();
 
-                    if let Some(author) = list
-                        .iter()
-                        .find(|author| author.public_key() == &author_key)
+                    if let Some(author) =
+                        list.iter().find(|author| author.public_key() == author_key)
                     {
                         author.set_is_online(is_online);
                     } else {
                         let pos = list.len() as u32;
 
-                        let author = Author::new(author_key);
+                        let author = Author::new(&author_key);
 
                         list.push(author);
                         drop(list);
