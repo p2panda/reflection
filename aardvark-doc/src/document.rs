@@ -12,10 +12,11 @@ use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
 use loro::{ExportMode, LoroDoc, event::Diff};
-use p2panda_core::{HashError, PublicKey};
+use p2panda_core::HashError;
 use tracing::error;
 
 use crate::authors::Authors;
+use crate::identity::PublicKey;
 use crate::service::Service;
 
 #[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
@@ -215,7 +216,7 @@ mod imp {
         }
 
         fn setup_loro_document(&self) {
-            let public_key = self.obj().service().public_key();
+            let public_key = self.obj().service().private_key().public_key();
             let obj = self.obj();
             let doc = LoroDoc::new();
             // The peer id represents the identity of the author applying local changes (that's
@@ -229,7 +230,7 @@ mod imp {
                 // this should not really be a problem, but it would be nice if the Loro API would
                 // change some day.
                 let mut buf = [0u8; 8];
-                buf[..8].copy_from_slice(&public_key.as_bytes()[..8]);
+                buf[..8].copy_from_slice(&public_key.0.as_bytes()[..8]);
                 u64::from_be_bytes(buf)
             })
             .expect("set peer id for new document");
@@ -364,7 +365,7 @@ mod imp {
 
             // Add ourself to the list of authors
             self.authors
-                .add_this_device(self.obj().service().public_key());
+                .add_this_device(self.obj().service().private_key().public_key());
 
             self.obj().service().documents().add(self.obj().clone());
         }
@@ -397,23 +398,25 @@ unsafe impl Sync for Document {}
 struct DocumentHandle(glib::WeakRef<Document>);
 
 impl SubscribableDocument for DocumentHandle {
-    fn bytes_received(&self, _author: PublicKey, data: &[u8]) {
+    fn bytes_received(&self, _author: p2panda_core::PublicKey, data: &[u8]) {
         if let Some(document) = self.0.upgrade() {
             document.imp().on_remote_message(data);
         }
     }
 
-    fn authors_joined(&self, authors: Vec<PublicKey>) {
+    fn authors_joined(&self, authors: Vec<p2panda_core::PublicKey>) {
         if let Some(document) = self.0.upgrade() {
             for author in authors.into_iter() {
-                document.authors().add_or_update(author, true);
+                document.authors().add_or_update(PublicKey(author), true);
             }
         }
     }
 
-    fn author_set_online(&self, author: PublicKey, is_online: bool) {
+    fn author_set_online(&self, author: p2panda_core::PublicKey, is_online: bool) {
         if let Some(document) = self.0.upgrade() {
-            document.authors().add_or_update(author, is_online);
+            document
+                .authors()
+                .add_or_update(PublicKey(author), is_online);
         }
     }
 }
