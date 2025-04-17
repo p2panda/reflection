@@ -17,7 +17,13 @@ sourceview = { package = "sourceview5", version = "0.9" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 ashpd = { version = "0.9", default-features = false, features = ["tracing", "async-std"] }
+thiserror = { version = "2.0" }
 futures-util = "0.3"
+oo7 = { version = "0.4", default-features = false, features = [
+    "openssl_crypto",
+    "async-std",
+    "tracing",
+] }
 
 [dependencies.adw]
 package = "libadwaita"

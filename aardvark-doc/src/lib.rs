@@ -4,6 +4,7 @@ pub mod document;
 pub mod service;
 
 pub mod identity {
+    pub use p2panda_core::identity::IdentityError;
     use std::fmt;
 
     #[derive(Clone, Debug, glib::Boxed)]

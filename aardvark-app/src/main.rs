@@ -23,6 +23,7 @@ mod components;
 mod config;
 mod connection_popover;
 mod open_dialog;
+mod secret;
 mod system_settings;
 mod textbuffer;
 mod window;
@@ -39,6 +40,8 @@ use self::config::*;
 use self::connection_popover::ConnectionPopover;
 use self::textbuffer::AardvarkTextBuffer;
 use self::window::AardvarkWindow;
+
+pub use self::config::APP_ID;
 
 fn main() -> glib::ExitCode {
     setup_logging();
