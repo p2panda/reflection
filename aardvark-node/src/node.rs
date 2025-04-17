@@ -11,7 +11,7 @@ use sqlx::sqlite;
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::Notify;
 use tokio::sync::RwLock;
-use tracing::warn;
+use tracing::{info, warn};
 
 use crate::document::{DocumentId, SubscribableDocument};
 use crate::network::Network;
@@ -78,7 +78,9 @@ impl Node {
             .shared_cache(true)
             .create_if_missing(true);
         let connection_options = if let Some(db_location) = db_location {
-            connection_options.filename(db_location)
+            let db_file = db_location.join("database.sqlite");
+            info!("Database file location: {db_file:?}");
+            connection_options.filename(db_file)
         } else {
             connection_options.in_memory(true)
         };

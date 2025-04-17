@@ -23,7 +23,8 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib, glib::Properties};
-use std::cell::OnceCell;
+use std::{cell::OnceCell, fs};
+use tracing::error;
 
 use crate::AardvarkWindow;
 use crate::config;
@@ -63,7 +64,18 @@ mod imp {
                 let private_key = secret::get_or_create_identity()
                     .await
                     .expect("Unable to get or create identity");
-                self.service.set(Service::new(&private_key)).unwrap();
+
+                let mut data_path = glib::user_data_dir();
+                data_path.push("Aardvark");
+                data_path.push(private_key.public_key().to_string());
+                if let Err(error) = fs::create_dir_all(&data_path) {
+                    error!("Failed to create data directory: {error}");
+                }
+                let data_dir = gio::File::for_path(data_path);
+
+                self.service
+                    .set(Service::new(&private_key, &data_dir))
+                    .unwrap();
             });
         }
     }

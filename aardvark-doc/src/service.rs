@@ -1,3 +1,4 @@
+use gio::prelude::FileExt;
 use glib::Properties;
 use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
@@ -18,6 +19,8 @@ mod imp {
         pub node: Node,
         #[property(get, set, construct_only, type = PrivateKey)]
         pub private_key: OnceLock<PrivateKey>,
+        #[property(get, set, construct_only, type = gio::File)]
+        pub data_dir: OnceLock<gio::File>,
         #[property(get)]
         documents: Documents,
     }
@@ -37,20 +40,22 @@ glib::wrapper! {
 }
 
 impl Service {
-    pub fn new(private_key: &PrivateKey) -> Self {
+    pub fn new(private_key: &PrivateKey, data_dir: &gio::File) -> Self {
         glib::Object::builder()
             .property("private-key", private_key)
+            .property("data-dir", data_dir)
             .build()
     }
 
     pub fn startup(&self) {
-        let network_id = b"aardvark <3";
-
         glib::MainContext::new().block_on(async move {
+            let private_key = self.private_key().0.clone();
+            let network_id = Hash::new(b"aardvark <3");
+            let path = self.data_dir().path().expect("Valid file path");
             if let Err(error) = self
                 .imp()
                 .node
-                .run(self.private_key().0.clone(), Hash::new(network_id), None)
+                .run(private_key, network_id, Some(path.as_ref()))
                 .await
             {
                 error!("Running node failed: {error}");
