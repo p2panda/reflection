@@ -80,7 +80,7 @@ mod imp {
         #[property(name = "color", get = Self::color, type = String)]
         #[property(get, set, construct_only, type = PublicKey)]
         public_key: OnceLock<PublicKey>,
-        #[property(get)]
+        #[property(get, set, construct_only)]
         pub last_seen: Mutex<Option<glib::DateTime>>,
         #[property(get, default = true)]
         pub is_online: Cell<bool>,
@@ -142,6 +142,13 @@ impl Author {
 
         obj.imp().is_online.set(true);
         obj
+    }
+
+    pub(crate) fn with_state(public_key: &PublicKey, last_seen: Option<&glib::DateTime>) -> Self {
+        glib::Object::builder()
+            .property("public-key", public_key)
+            .property("last-seen", last_seen)
+            .build()
     }
 
     pub fn for_this_device(public_key: &PublicKey) -> Self {

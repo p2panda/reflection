@@ -3,20 +3,22 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use anyhow::Result;
+use chrono::Utc;
 use p2panda_core::{Hash, PrivateKey};
 use p2panda_net::{SyncConfiguration, SystemEvent};
-use p2panda_store::sqlite::store::run_pending_migrations;
+use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
-use sqlx::sqlite;
+use sqlx::{migrate::Migrator, sqlite};
 use tokio::runtime::{Builder, Runtime};
 use tokio::sync::Notify;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
-use crate::document::{DocumentId, SubscribableDocument};
+use crate::document::{Document, DocumentId, SubscribableDocument};
 use crate::network::Network;
 use crate::operation::{LogType, create_operation, validate_operation};
 use crate::store::{DocumentStore, OperationStore};
+use crate::utils::CombinedMigrationSource;
 
 pub struct Node {
     inner: OnceLock<Arc<NodeInner>>,
@@ -94,13 +96,17 @@ impl Node {
             pool_options.connect_with(connection_options).await?
         };
 
-        // FIXME: Migrate the OperationStore Sqlite DB, I think p2panda-store should call this internally
-        run_pending_migrations(&pool).await?;
-        // TODO: Do migration of our DB
-        // sqlx::migrate!().run(&pool).await?;
+        // Run migration for p2panda OperationStore and for the our DocumentStore
+        Migrator::new(CombinedMigrationSource::new(vec![
+            operation_store_migrations(),
+            sqlx::migrate!(),
+        ]))
+        .await?
+        .run(&pool)
+        .await?;
 
-        let operation_store = OperationStore::new(pool);
-        let document_store = DocumentStore::new();
+        let operation_store = OperationStore::new(pool.clone());
+        let document_store = DocumentStore::new(pool);
 
         let sync_config = {
             let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone());
@@ -114,11 +120,22 @@ impl Node {
             operation_store.clone(),
         )
         .await?;
+        let inner = Arc::new(NodeInner {
+            runtime,
+            operation_store,
+            document_store,
+            network,
+            private_key,
+        });
 
         let documents = self.documents.clone();
-        network
+
+        let inner_clone = inner.clone();
+        inner
+            .network
             .subscribe_events(move |system_event| {
                 let documents = documents.clone();
+                let inner_clone = inner_clone.clone();
                 async move {
                     match system_event {
                         SystemEvent::GossipJoined { topic_id, peers } => {
@@ -132,6 +149,13 @@ impl Node {
                             }
                         }
                         SystemEvent::GossipNeighborDown { topic_id, peer } => {
+                            if let Err(error) = inner_clone
+                                .document_store
+                                .set_last_seen_for_author(peer, Some(Utc::now()))
+                                .await
+                            {
+                                error!("Failed to set last seen for author {peer}: {error}");
+                            }
                             if let Some(document) = documents.read().await.get(&topic_id.into()) {
                                 document.author_set_online(peer, false);
                             }
@@ -142,31 +166,31 @@ impl Node {
             })
             .await?;
 
-        self.inner
-            .set(Arc::new(NodeInner {
-                runtime,
-                operation_store,
-                document_store,
-                network,
-                private_key,
-            }))
-            .expect("Node can be run only once");
+        self.inner.set(inner).expect("Node can be run only once");
         self.ready_notify.notify_waiters();
 
         Ok(())
     }
 
-    pub fn shutdown(&self) {
-        if let Some(inner) = self.inner.get() {
-            let inner_clone = inner.clone();
-            inner.runtime.block_on(async move {
-                inner_clone
-                    .network
-                    .shutdown()
-                    .await
-                    .expect("network to shutdown");
-            });
-        }
+    pub async fn shutdown(&self) -> Result<()> {
+        // TODO: set last seen for all peer that are online
+        // TODO: ensure all documents are unsubscribe at this point
+        let inner = self.inner().await;
+        let _guard = inner.runtime.enter();
+
+        inner.network.shutdown().await?;
+
+        Ok(())
+    }
+
+    pub async fn documents(&self) -> Result<Vec<Document>> {
+        let inner = self.inner().await;
+
+        let inner_clone = inner.clone();
+        Ok(inner
+            .runtime
+            .spawn(async move { inner_clone.document_store.documents().await })
+            .await??)
     }
 
     pub async fn create_document(&self) -> Result<DocumentId> {
@@ -193,6 +217,33 @@ impl Node {
         Ok(document_id)
     }
 
+    /// Set the name for a given document
+    ///
+    /// This information will be written to the database
+    pub async fn set_name_for_document(
+        &self,
+        document_id: &DocumentId,
+        name: Option<String>,
+    ) -> Result<()> {
+        let inner = self.inner().await;
+
+        let inner_clone = inner.clone();
+        let document_id = *document_id;
+        inner
+            .runtime
+            .spawn(async move {
+                inner_clone
+                    .document_store
+                    .set_name_for_document(&document_id, name)
+                    .await
+            })
+            .await??;
+
+        Ok(())
+    }
+
+    // TODO: check if peers are online and call SubscribableDocument::author_set_online().
+    // For this we need to track the systemevents
     pub async fn subscribe<T: SubscribableDocument + 'static>(
         &self,
         document_id: DocumentId,
@@ -201,11 +252,33 @@ impl Node {
         let document = Arc::new(document);
         let inner = self.inner().await;
 
-        // Add ourselves as an author to the document store.
-        inner
-            .document_store
-            .add_author(document_id, inner.private_key.public_key())
-            .await;
+        let inner_clone = inner.clone();
+        let stored_operations = inner
+            .runtime
+            .spawn(async move {
+                inner_clone
+                    .document_store
+                    .add_document(&document_id)
+                    .await?;
+                // Add ourselves as an author to the document store.
+                inner_clone
+                    .document_store
+                    .add_author(&document_id, &inner_clone.private_key.public_key())
+                    .await?;
+                inner_clone
+                    .document_store
+                    .operations_for_document(&inner_clone.operation_store, &document_id)
+                    .await
+            })
+            .await??;
+
+        for operation in stored_operations {
+            // Send all stored operation bytes to the app,
+            // it doesn't matter if the app already knows some or all of them
+            if let Some(body) = operation.body {
+                document.bytes_received(operation.header.public_key, &body.to_bytes());
+            }
+        }
 
         let inner_clone = inner.clone();
         let document_clone = document.clone();
@@ -232,10 +305,13 @@ impl Node {
                             }
 
                             // When we discover a new author we need to add them to our document store.
-                            inner_clone
+                            if let Err(error) = inner_clone
                                 .document_store
-                                .add_author(document_id, operation.header.public_key)
-                                .await;
+                                .add_author(&document_id, &operation.header.public_key)
+                                .await
+                            {
+                                error!("Can't store author to database: {error}");
+                            }
 
                             // Forward the payload up to the app.
                             if let Some(body) = operation.body {
@@ -256,8 +332,22 @@ impl Node {
     pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
         let inner = self.inner().await;
 
-        inner.network.unsubscribe(document_id).await?;
-        self.documents.write().await.remove(document_id);
+        let inner_clone = inner.clone();
+        let document_id = *document_id;
+
+        inner
+            .runtime
+            .spawn(async move {
+                inner_clone
+                    .document_store
+                    .set_last_accessed_for_document(&document_id, Some(Utc::now()))
+                    .await?;
+
+                let result = inner_clone.network.unsubscribe(&document_id).await;
+                result
+            })
+            .await??;
+        self.documents.write().await.remove(&document_id);
 
         Ok(())
     }

@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 
 use aardvark_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
 use anyhow::Result;
+use gio::prelude::ApplicationExtManual;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
@@ -21,7 +22,7 @@ use crate::service::Service;
 
 #[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
 #[boxed_type(name = "AardvarkDocumentId", nullable)]
-pub struct DocumentId(DocumentIdNode);
+pub struct DocumentId(pub(crate) DocumentIdNode);
 
 impl FromStr for DocumentId {
     type Err = HashError;
@@ -49,8 +50,9 @@ mod imp {
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
-        #[property(name = "name", get = Self::name, type = Option<String>)]
-        #[property(get)]
+        #[property(get, construct_only)]
+        name: Mutex<Option<String>>,
+        #[property(get, construct_only, set)]
         last_accessed: Mutex<Option<glib::DateTime>>,
         #[property(name = "text", get = Self::text, type = String)]
         crdt_doc: OnceCell<LoroDoc>,
@@ -60,8 +62,8 @@ mod imp {
         subscribed: Cell<bool>,
         #[property(get, construct_only)]
         service: OnceCell<Service>,
-        #[property(get)]
-        authors: Authors,
+        #[property(get, set = Self::set_authors, construct_only)]
+        authors: OnceCell<Authors>,
     }
 
     #[glib::object_subclass]
@@ -71,6 +73,12 @@ mod imp {
     }
 
     impl Document {
+        fn set_authors(&self, authors: Option<Authors>) {
+            if let Some(authors) = authors {
+                self.authors.set(authors).unwrap();
+            }
+        }
+
         pub fn text(&self) -> String {
             self.crdt_doc
                 .get()
@@ -79,19 +87,46 @@ mod imp {
                 .to_string()
         }
 
-        pub fn name(&self) -> Option<String> {
+        fn update_name(&self) {
             let crdt_text = self
                 .crdt_doc
                 .get()
                 .expect("crdt_doc to be set")
                 .get_text(TEXT_CONTAINER_ID);
-            if crdt_text.is_empty() {
-                return None;
+            let name = if crdt_text.is_empty() {
+                None
+            } else {
+                crdt_text
+                    .slice(0, min(DOCUMENT_NAME_LENGTH, crdt_text.len_unicode()))
+                    .ok()
+            };
+
+            if name == self.obj().name() {
+                return;
             }
 
-            crdt_text
-                .slice(0, min(DOCUMENT_NAME_LENGTH, crdt_text.len_unicode()))
-                .ok()
+            *self.name.lock().unwrap() = name.clone();
+            self.obj().notify_name();
+
+            let obj = self.obj();
+            glib::spawn_future(clone!(
+                #[weak]
+                obj,
+                async move {
+                    let document_id = obj.id().0;
+                    if let Err(error) = obj
+                        .service()
+                        .node()
+                        .set_name_for_document(&document_id, name)
+                        .await
+                    {
+                        error!(
+                            "Failed to update name for document {}: {}",
+                            document_id, error
+                        );
+                    }
+                }
+            ));
         }
 
         fn set_id(&self, id: Option<DocumentId>) {
@@ -155,14 +190,18 @@ mod imp {
                 *self.last_accessed.lock().unwrap() = glib::DateTime::now_local().ok();
 
                 let obj = self.obj();
-                glib::spawn_future(clone!(
-                    #[weak]
+                // Keep the application alive till we completed the unsubscription task
+                let guard = gio::Application::default().and_then(|app| Some(app.hold()));
+                // Keep a strong reference to the document to ensure the document lives long enough
+                glib::spawn_future_local(clone!(
+                    #[strong]
                     obj,
                     async move {
                         let document_id = obj.id().0;
                         if let Err(error) = obj.service().node().unsubscribe(&document_id).await {
                             error!("Failed to unsubscribe document {}: {}", document_id, error);
                         }
+                        drop(guard);
                     }
                 ));
             }
@@ -172,7 +211,7 @@ mod imp {
 
         fn emit_text_inserted(&self, pos: i32, text: String) {
             if pos <= DOCUMENT_NAME_LENGTH as i32 {
-                self.obj().notify_name();
+                self.update_name();
             }
 
             // Emit the signal on the main thread
@@ -195,7 +234,7 @@ mod imp {
 
         fn emit_range_deleted(&self, start: i32, end: i32) {
             if start <= DOCUMENT_NAME_LENGTH as i32 || end <= DOCUMENT_NAME_LENGTH as i32 {
-                self.obj().notify_name();
+                self.update_name();
             }
 
             // Emit the signal on the main thread
@@ -345,6 +384,9 @@ mod imp {
                 ]
             })
         }
+        fn dispose(&self) {
+            self.set_subscribed(false);
+        }
 
         fn constructed(&self) {
             self.parent_constructed();
@@ -363,9 +405,13 @@ mod imp {
 
             self.setup_loro_document();
 
-            // Add ourself to the list of authors
-            self.authors
-                .add_this_device(self.obj().service().private_key().public_key());
+            self.authors.get_or_init(|| {
+                let authors = Authors::new();
+
+                // Add ourself to the list of authors
+                authors.add_this_device(self.obj().service().private_key().public_key());
+                authors
+            });
 
             self.obj().service().documents().add(self.obj().clone());
         }
@@ -380,6 +426,22 @@ impl Document {
         glib::Object::builder()
             .property("service", service)
             .property("id", id)
+            .build()
+    }
+
+    pub(crate) fn with_state(
+        service: &Service,
+        id: Option<&DocumentId>,
+        name: Option<&str>,
+        last_accessed: Option<&glib::DateTime>,
+        authors: &Authors,
+    ) -> Self {
+        glib::Object::builder()
+            .property("service", service)
+            .property("id", id)
+            .property("authors", authors)
+            .property("name", name)
+            .property("last-accessed", last_accessed)
             .build()
     }
 

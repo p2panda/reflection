@@ -232,11 +232,11 @@ mod imp {
 
             let document = Document::new(self.service.get().unwrap(), None);
             self.set_document(document);
-        }
 
-        fn dispose(&self) {
-            // TODO: we should actually set the window document to None
-            self.obj().document().set_subscribed(false);
+            self.obj().connect_close_request(|window| {
+                window.document().set_subscribed(false);
+                glib::Propagation::Proceed
+            });
         }
     }
 
@@ -261,7 +261,7 @@ mod imp {
                 .buffer()
                 .downcast::<AardvarkTextBuffer>()
                 .unwrap()
-                .set_document(&document);
+                .set_document(Some(document.clone()));
             let authors = document.authors();
             self.connection_button
                 .set_popover(Some(&ConnectionPopover::new(&authors)));

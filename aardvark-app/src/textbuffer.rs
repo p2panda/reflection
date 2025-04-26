@@ -37,20 +37,23 @@ mod imp {
     pub struct AardvarkTextBuffer {
         pub inhibit_text_change: Cell<bool>,
         pub document_handlers: OnceCell<glib::SignalGroup>,
-        #[property(get, set = Self::set_document)]
+        #[property(get, set = Self::set_document, nullable)]
         pub document: RefCell<Option<Document>>,
     }
 
     impl AardvarkTextBuffer {
-        fn set_document(&self, document: Option<&Document>) {
+        fn set_document(&self, document: Option<Document>) {
             if let Some(document) = document.as_ref() {
                 self.obj().set_inhibit_text_change(true);
                 self.obj().set_text(&document.text());
                 self.obj().set_inhibit_text_change(false);
             }
 
-            self.document_handlers.get().unwrap().set_target(document);
-            self.document.replace(document.cloned());
+            self.document_handlers
+                .get()
+                .unwrap()
+                .set_target(document.as_ref());
+            self.document.replace(document);
         }
     }
 

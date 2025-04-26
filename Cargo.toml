@@ -1,3 +1,11 @@
 [workspace]
 resolver = "2"
 members = ["aardvark-app", "aardvark-doc", "aardvark-node"]
+
+[patch."https://github.com/p2panda/p2panda"]
+p2panda-core = { git = "https://github.com/jsparber/p2panda.git", rev = "dd9088a33d30014e9a11cbb3600278cfa2a2d889" }
+p2panda-discovery = { git = "https://github.com/jsparber/p2panda.git", rev = "dd9088a33d30014e9a11cbb3600278cfa2a2d889", features = ["mdns"] }
+p2panda-net = { git = "https://github.com/jsparber/p2panda.git", rev = "dd9088a33d30014e9a11cbb3600278cfa2a2d889" }
+p2panda-store = { git = "https://github.com/jsparber/p2panda.git", rev = "dd9088a33d30014e9a11cbb3600278cfa2a2d889", features = ["sqlite"] }
+p2panda-stream = { git = "https://github.com/jsparber/p2panda.git", rev = "dd9088a33d30014e9a11cbb3600278cfa2a2d889" }
+p2panda-sync = { git = "https://github.com/jsparber/p2panda.git", rev = "dd9088a33d30014e9a11cbb3600278cfa2a2d889", features = ["log-sync"] }
