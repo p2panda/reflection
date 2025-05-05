@@ -30,7 +30,6 @@ dependencies = [
  "loro",
  "p2panda-core",
  "thiserror 2.0.12",
- "tokio",
  "tracing",
 ]
 
