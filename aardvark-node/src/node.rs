@@ -149,17 +149,13 @@ impl Node {
         Ok(())
     }
 
-    pub fn shutdown(&self) {
-        if let Some(inner) = self.inner.get() {
-            let inner_clone = inner.clone();
-            inner.runtime.block_on(async move {
-                inner_clone
-                    .network
-                    .shutdown()
-                    .await
-                    .expect("network to shutdown");
-            });
-        }
+    pub async fn shutdown(&self) -> Result<()> {
+        let inner = self.inner().await;
+        let _guard = inner.runtime.enter();
+
+        inner.network.shutdown().await?;
+
+        Ok(())
     }
 
     pub async fn create_document(&self) -> Result<DocumentId> {
