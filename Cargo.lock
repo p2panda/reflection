@@ -3721,7 +3721,10 @@ name = "p2panda-store"
 version = "0.3.1"
 source = "git+https://github.com/p2panda/p2panda?rev=085a57206aeae70142176c0777ed2febc7b98664#085a57206aeae70142176c0777ed2febc7b98664"
 dependencies = [
+ "ciborium",
+ "hex",
  "p2panda-core",
+ "sqlx",
  "thiserror 2.0.12",
  "trait-variant",
 ]
