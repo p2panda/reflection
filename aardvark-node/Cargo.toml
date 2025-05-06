@@ -11,6 +11,7 @@ authors = [
 [dependencies]
 anyhow = "1.0.94"
 async-trait = "0.1.83"
+chrono = "0.4.40"
 ciborium = "0.2.2"
 p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "085a57206aeae70142176c0777ed2febc7b98664" }
 p2panda-discovery = { git = "https://github.com/p2panda/p2panda", rev = "085a57206aeae70142176c0777ed2febc7b98664", features = ["mdns"] }
