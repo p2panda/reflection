@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use p2panda_core::PublicKey;
-use p2panda_store::MemoryStore;
+use p2panda_store::SqliteStore;
 use p2panda_sync::log_sync::TopicLogMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
@@ -62,4 +62,4 @@ impl TopicLogMap<DocumentId, LogId> for DocumentStore {
     }
 }
 
-pub type OperationStore = MemoryStore<LogId, AardvarkExtensions>;
+pub type OperationStore = SqliteStore<LogId, AardvarkExtensions>;
