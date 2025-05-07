@@ -159,39 +159,48 @@ mod imp {
             let scroll_controller =
                 gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
             scroll_controller.set_propagation_phase(gtk::PropagationPhase::Capture);
-            let window = self.obj().clone();
-            scroll_controller.connect_scroll(move |scroll, _dx, dy| {
-                if scroll
-                    .current_event_state()
-                    .contains(gdk::ModifierType::CONTROL_MASK)
-                {
-                    if dy < 0.0 {
-                        window.set_font_scale(window.font_scale() + 1.0);
+            let window = self.obj();
+            scroll_controller.connect_scroll(clone!(
+                #[weak]
+                window,
+                #[upgrade_or]
+                glib::Propagation::Stop,
+                move |scroll, _dx, dy| {
+                    if scroll
+                        .current_event_state()
+                        .contains(gdk::ModifierType::CONTROL_MASK)
+                    {
+                        if dy < 0.0 {
+                            window.set_font_scale(window.font_scale() + 1.0);
+                        } else {
+                            window.set_font_scale(window.font_scale() - 1.0);
+                        }
+                        glib::Propagation::Stop
                     } else {
-                        window.set_font_scale(window.font_scale() - 1.0);
+                        glib::Propagation::Proceed
                     }
-                    glib::Propagation::Stop
-                } else {
-                    glib::Propagation::Proceed
                 }
-            });
+            ));
             self.obj().add_controller(scroll_controller);
 
             let zoom_gesture = gtk::GestureZoom::new();
-            let window = self.obj().clone();
             let prev_delta = Cell::new(0.0);
-            zoom_gesture.connect_scale_changed(move |_, delta| {
-                if prev_delta.get() == delta {
-                    return;
-                }
+            zoom_gesture.connect_scale_changed(clone!(
+                #[weak]
+                window,
+                move |_, delta| {
+                    if prev_delta.get() == delta {
+                        return;
+                    }
 
-                if prev_delta.get() < delta {
-                    window.set_font_scale(window.font_scale() + delta);
-                } else {
-                    window.set_font_scale(window.font_scale() - delta);
+                    if prev_delta.get() < delta {
+                        window.set_font_scale(window.font_scale() + delta);
+                    } else {
+                        window.set_font_scale(window.font_scale() - delta);
+                    }
+                    prev_delta.set(delta);
                 }
-                prev_delta.set(delta);
-            });
+            ));
             self.obj().add_controller(zoom_gesture);
 
             self.open_popover
