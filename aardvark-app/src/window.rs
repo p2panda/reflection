@@ -24,16 +24,13 @@ use aardvark_doc::{
     document::{Document, DocumentId},
     service::Service,
 };
-use adw::prelude::AdwDialogExt;
-use adw::subclass::prelude::*;
-use gtk::prelude::*;
+
+use adw::{prelude::*, subclass::prelude::*};
 use gtk::{gdk, gio, glib, glib::clone};
-use sourceview::*;
 
 use crate::{
-    AardvarkApplication, AardvarkTextBuffer, ConnectionPopover,
+    AardvarkApplication, AardvarkTextBuffer, ConnectionPopover, OpenPopover,
     components::{MultilineEntry, ZoomLevelSelector},
-    open_dialog::OpenDialog,
 };
 
 const BASE_TEXT_FONT_SIZE: f64 = 24.0;
@@ -49,7 +46,9 @@ mod imp {
         #[template_child]
         pub text_view: TemplateChild<sourceview::View>,
         #[template_child]
-        pub open_dialog_document_button: TemplateChild<gtk::Button>,
+        pub open_popover_button: TemplateChild<gtk::MenuButton>,
+        #[template_child]
+        pub open_popover: TemplateChild<OpenPopover>,
         #[template_child]
         pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
@@ -83,6 +82,7 @@ mod imp {
         fn class_init(klass: &mut Self::Class) {
             ZoomLevelSelector::static_type();
             MultilineEntry::static_type();
+            OpenPopover::static_type();
 
             klass.bind_template();
 
@@ -151,7 +151,7 @@ mod imp {
             self.font_size.set(BASE_TEXT_FONT_SIZE);
             self.obj().set_font_scale(0.0);
             gtk::style_context_add_provider_for_display(
-                &self.obj().display(),
+                &gtk::Widget::display(self.obj().upcast_ref()),
                 &self.css_provider,
                 gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
             );
@@ -194,29 +194,19 @@ mod imp {
             });
             self.obj().add_controller(zoom_gesture);
 
-            let window = self.obj();
-            self.open_dialog_document_button.connect_clicked(clone!(
-                #[weak]
-                window,
-                move |_| {
-                    let dialog = OpenDialog::new();
+            self.open_popover
+                .set_model(self.obj().service().documents());
 
-                    dialog.present(Some(&window));
-
-                    dialog.connect_open(clone!(
-                        #[weak]
-                        window,
-                        move |_, document_id| {
-                            let app = AardvarkApplication::default();
-
-                            if let Some(window) = app.window_for_document_id(document_id) {
-                                window.present();
-                            } else {
-                                let document = Document::new(&window.service(), Some(document_id));
-                                window.imp().set_document(document);
-                            }
-                        }
-                    ));
+            self.open_popover.connect_document_activated(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |_, document| {
+                    let app = AardvarkApplication::default();
+                    if let Some(window) = app.window_for_document_id(&document.id()) {
+                        window.present();
+                    } else {
+                        this.set_document(document.to_owned());
+                    }
                 }
             ));
 
@@ -316,7 +306,7 @@ mod imp {
 glib::wrapper! {
     pub struct AardvarkWindow(ObjectSubclass<imp::AardvarkWindow>)
         @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
-        @implements gio::ActionGroup, gio::ActionMap;
+        @implements gtk::Native, gtk::Root, gio::ActionGroup, gio::ActionMap;
 }
 
 impl AardvarkWindow {

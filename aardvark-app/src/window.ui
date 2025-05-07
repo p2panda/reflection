@@ -39,14 +39,28 @@
         <child type="top">
           <object class="AdwHeaderBar">
             <child type="start">
-              <object class="GtkButton" id="open_dialog_document_button">
+              <object class="GtkMenuButton" id="open_popover_button">
                 <property name="child">
-                  <object class="AdwButtonContent">
-                    <property name="icon-name">document-open-symbolic</property>
-                    <property name="label" translatable="yes">_Open</property>
-                    <property name="use-underline">True</property>
+                  <object class="GtkBox">
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">_Open</property>
+                        <property name="use-underline">True</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkImage">
+                        <property name="icon-name">down-smaller-symbolic</property>
+                      </object>
+                    </child>
                   </object>
                 </property>
+                <property name="popover">
+                  <object class="AardvarkOpenPopover" id="open_popover"/>
+                </property>
+                <style>
+                  <class name="flat"/>
+                </style>
               </object>
 
             </child>
@@ -198,4 +212,5 @@
     </property>
   </object>
 </interface>
+
 

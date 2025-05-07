@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/p2panda/aardvark">
+    <file preprocess="xml-stripblanks">icons/scalable/actions/down-smaller-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/join-document-symbolic.svg</file>
   </gresource>
 </gresources>

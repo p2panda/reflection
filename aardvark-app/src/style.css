@@ -42,3 +42,20 @@
 	font-weight: 700;
 	font-size: 9px;
 }
+.open-popover contents {
+  padding: 0px;
+  min-width: 300px;
+}
+
+.open-popover .search {
+  margin: 6px;
+}
+
+.open-popover row {
+  border-radius: 6px;
+  margin: 6px;
+}
+
+.open-popover .open-document {
+  margin: 12px;
+}
