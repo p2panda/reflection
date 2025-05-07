@@ -61,8 +61,8 @@ mod imp {
         subscribed: Cell<bool>,
         #[property(get, construct_only)]
         service: OnceCell<Service>,
-        #[property(get)]
-        authors: Authors,
+        #[property(get, set = Self::set_authors, construct_only)]
+        authors: OnceCell<Authors>,
     }
 
     #[glib::object_subclass]
@@ -98,6 +98,12 @@ mod imp {
     }
 
     impl Document {
+        fn set_authors(&self, authors: Option<Authors>) {
+            if let Some(authors) = authors {
+                self.authors.set(authors).unwrap();
+            }
+        }
+
         pub fn text(&self) -> String {
             self.crdt_doc
                 .get()
@@ -418,9 +424,13 @@ mod imp {
 
             self.setup_loro_document();
 
-            // Add ourself to the list of authors
-            self.authors
-                .add_this_device(self.obj().service().private_key().public_key());
+            self.authors.get_or_init(|| {
+                let authors = Authors::new();
+
+                // Add ourself to the list of authors
+                authors.add_this_device(self.obj().service().private_key().public_key());
+                authors
+            });
 
             self.obj().service().documents().add(self.obj().clone());
         }
