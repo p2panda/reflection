@@ -63,6 +63,12 @@ impl Authors {
         glib::Object::new()
     }
 
+    pub(crate) fn from_vec(authors: Vec<Author>) -> Self {
+        let obj: Self = glib::Object::new();
+        *obj.imp().list.lock().unwrap() = authors;
+        obj
+    }
+
     pub(crate) fn add_this_device(&self, author_key: PublicKey) {
         glib::source::idle_add_full(
             glib::source::Priority::DEFAULT,
