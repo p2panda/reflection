@@ -50,6 +50,8 @@ mod imp {
     pub struct Document {
         #[property(get, construct_only)]
         name: Mutex<Option<String>>,
+        #[property(get, construct_only, set)]
+        last_accessed: Mutex<Option<glib::DateTime>>,
         #[property(name = "text", get = Self::text, type = String)]
         crdt_doc: OnceCell<LoroDoc>,
         #[property(get, construct_only, set = Self::set_id)]
