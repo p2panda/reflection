@@ -21,7 +21,7 @@ use crate::service::Service;
 
 #[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
 #[boxed_type(name = "AardvarkDocumentId", nullable)]
-pub struct DocumentId(DocumentIdNode);
+pub struct DocumentId(pub(crate) DocumentIdNode);
 
 impl FromStr for DocumentId {
     type Err = HashError;
@@ -445,6 +445,22 @@ impl Document {
         glib::Object::builder()
             .property("service", service)
             .property("id", id)
+            .build()
+    }
+
+    pub(crate) fn with_state(
+        service: &Service,
+        id: Option<&DocumentId>,
+        name: Option<&str>,
+        last_accessed: Option<&glib::DateTime>,
+        authors: &Authors,
+    ) -> Self {
+        glib::Object::builder()
+            .property("service", service)
+            .property("id", id)
+            .property("authors", authors)
+            .property("name", name)
+            .property("last-accessed", last_accessed)
             .build()
     }
 
