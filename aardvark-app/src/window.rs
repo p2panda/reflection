@@ -233,6 +233,11 @@ mod imp {
 
             let document = Document::new(self.service.get().unwrap(), None);
             self.set_document(document);
+
+            self.obj().connect_close_request(|window| {
+                window.document().set_subscribed(false);
+                glib::Propagation::Proceed
+            });
         }
     }
 
@@ -273,7 +278,13 @@ mod imp {
             ));
             self.connection_button_label
                 .set_label(&format!("{}", authors.n_items()));
-            self.document.replace(Some(document));
+
+            document.set_subscribed(true);
+            let old_document = self.document.replace(Some(document));
+
+            if let Some(old_document) = old_document {
+                old_document.set_subscribed(false);
+            }
 
             self.obj().notify("document");
         }
