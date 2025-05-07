@@ -2,6 +2,7 @@ use std::cell::{Cell, OnceCell};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use aardvark_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
@@ -9,7 +10,7 @@ use anyhow::Result;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
-use loro::{ExportMode, LoroDoc, event::Diff};
+use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::HashError;
 use tracing::error;
 
@@ -40,12 +41,15 @@ mod imp {
     ///
     /// Loro documents can contain multiple different CRDT types in one document.
     const TEXT_CONTAINER_ID: &str = "document";
+    const DOCUMENT_NAME_LENGTH: usize = 32;
 
     use super::*;
 
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
+        #[property(get, construct_only)]
+        name: Mutex<Option<String>>,
         #[property(name = "text", get = Self::text, type = String)]
         crdt_doc: OnceCell<LoroDoc>,
         #[property(get, construct_only, set = Self::set_id)]
@@ -64,6 +68,32 @@ mod imp {
         type Type = super::Document;
     }
 
+    fn extract_name(crdt_text: LoroText) -> Option<String> {
+        if crdt_text.is_empty() {
+            return None;
+        }
+
+        let mut name = String::with_capacity(DOCUMENT_NAME_LENGTH);
+        crdt_text.iter(|slice| {
+            for char in slice.chars() {
+                if char == '\n' {
+                    // Only use the first line as name for the document
+                    return false;
+                } else if char.is_whitespace() || char.is_alphanumeric() {
+                    name.push(char);
+                }
+            }
+
+            name.len() < DOCUMENT_NAME_LENGTH
+        });
+
+        if name.trim().len() > 0 {
+            Some(name)
+        } else {
+            None
+        }
+    }
+
     impl Document {
         pub fn text(&self) -> String {
             self.crdt_doc
@@ -71,6 +101,43 @@ mod imp {
                 .expect("crdt_doc to be set")
                 .get_text(TEXT_CONTAINER_ID)
                 .to_string()
+        }
+
+        fn update_name(&self) {
+            let crdt_text = self
+                .crdt_doc
+                .get()
+                .expect("crdt_doc to be set")
+                .get_text(TEXT_CONTAINER_ID);
+
+            let name = extract_name(crdt_text);
+
+            if name == self.obj().name() {
+                return;
+            }
+
+            *self.name.lock().unwrap() = name.clone();
+            self.obj().notify_name();
+
+            let obj = self.obj();
+            glib::spawn_future(clone!(
+                #[weak]
+                obj,
+                async move {
+                    let document_id = obj.id().0;
+                    if let Err(error) = obj
+                        .service()
+                        .node()
+                        .set_name_for_document(&document_id, name)
+                        .await
+                    {
+                        error!(
+                            "Failed to update name for document {}: {}",
+                            document_id, error
+                        );
+                    }
+                }
+            ));
         }
 
         fn set_id(&self, id: Option<DocumentId>) {
@@ -106,6 +173,10 @@ mod imp {
         }
 
         fn emit_text_inserted(&self, pos: i32, text: String) {
+            if pos <= DOCUMENT_NAME_LENGTH as i32 {
+                self.update_name();
+            }
+
             // Emit the signal on the main thread
             let obj = self.obj();
             glib::source::idle_add_full(
@@ -124,6 +195,10 @@ mod imp {
         }
 
         fn emit_range_deleted(&self, start: i32, end: i32) {
+            if start <= DOCUMENT_NAME_LENGTH as i32 || end <= DOCUMENT_NAME_LENGTH as i32 {
+                self.update_name();
+            }
+
             // Emit the signal on the main thread
             let obj = self.obj();
             glib::source::idle_add_full(
