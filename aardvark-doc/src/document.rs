@@ -7,6 +7,7 @@ use std::sync::OnceLock;
 
 use aardvark_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
 use anyhow::Result;
+use gio::prelude::ApplicationExtManual;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
@@ -56,8 +57,8 @@ mod imp {
         crdt_doc: OnceCell<LoroDoc>,
         #[property(get, construct_only, set = Self::set_id)]
         id: OnceCell<DocumentId>,
-        #[property(get, set)]
-        ready: Cell<bool>,
+        #[property(get, set = Self::set_subscribed)]
+        subscribed: Cell<bool>,
         #[property(get, construct_only)]
         service: OnceCell<Service>,
         #[property(get)]
@@ -172,6 +173,54 @@ mod imp {
             if let Err(err) = doc.import_with(bytes, "delta") {
                 eprintln!("received invalid message: {}", err);
             }
+        }
+
+        pub fn set_subscribed(&self, subscribed: bool) {
+            if self.obj().subscribed() == subscribed {
+                return;
+            }
+
+            self.subscribed.set(subscribed);
+
+            if subscribed {
+                *self.last_accessed.lock().unwrap() = None;
+
+                let obj = self.obj();
+                glib::spawn_future(clone!(
+                    #[weak]
+                    obj,
+                    async move {
+                        let document_id = obj.id().0;
+                        let handle = DocumentHandle(obj.downgrade());
+                        if let Err(error) =
+                            obj.service().node().subscribe(document_id, handle).await
+                        {
+                            error!("Failed to subscribe to document: {}", error);
+                            obj.imp().set_subscribed(false);
+                        }
+                    }
+                ));
+            } else {
+                *self.last_accessed.lock().unwrap() = glib::DateTime::now_utc().ok();
+
+                let obj = self.obj();
+                // Keep the application alive till we completed the unsubscription task
+                let guard = gio::Application::default().and_then(|app| Some(app.hold()));
+                // Keep a strong reference to the document to ensure the document lives long enough
+                glib::spawn_future_local(clone!(
+                    #[strong]
+                    obj,
+                    async move {
+                        let document_id = obj.id().0;
+                        if let Err(error) = obj.service().node().unsubscribe(&document_id).await {
+                            error!("Failed to unsubscribe document {}: {}", document_id, error);
+                        }
+                        drop(guard);
+                    }
+                ));
+            }
+            self.obj().notify_last_accessed();
+            self.obj().notify_subscribed();
         }
 
         fn emit_text_inserted(&self, pos: i32, text: String) {
@@ -348,6 +397,9 @@ mod imp {
                 ]
             })
         }
+        fn dispose(&self) {
+            self.set_subscribed(false);
+        }
 
         fn constructed(&self) {
             self.parent_constructed();
@@ -365,19 +417,6 @@ mod imp {
             }
 
             self.setup_loro_document();
-
-            let obj = self.obj();
-            glib::spawn_future(clone!(
-                #[weak]
-                obj,
-                async move {
-                    let document_id = obj.id().0;
-                    let handle = DocumentHandle(obj.downgrade());
-                    if let Err(error) = obj.service().node().subscribe(document_id, handle).await {
-                        error!("Failed to subscribe to document: {}", error);
-                    }
-                }
-            ));
 
             // Add ourself to the list of authors
             self.authors
