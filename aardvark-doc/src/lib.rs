@@ -74,13 +74,47 @@ mod tests {
     use crate::document::Document;
     use crate::identity::PrivateKey;
     use crate::service::Service;
+    use gio::prelude::FileExt;
     use glib::object::ObjectExt;
+    use std::fs;
+
+    struct TestResource {
+        service: Service,
+    }
+
+    impl Drop for TestResource {
+        fn drop(&mut self) {
+            fs::remove_dir_all(self.service.data_dir().path().unwrap())
+                .expect("Able to remove data dir");
+        }
+    }
+
+    impl TestResource {
+        /// Creates a new `TestResource` that includes the `Service`
+        fn new() -> TestResource {
+            let private_key = PrivateKey::new();
+            let mut data_path = glib::tmp_dir();
+            data_path.push("Aardvark");
+            data_path.push(private_key.public_key().to_string());
+            fs::create_dir_all(&data_path).expect("Able to create data dir");
+            let data_dir = gio::File::for_path(data_path);
+
+            TestResource {
+                service: Service::new(&private_key, &data_dir),
+            }
+        }
+
+        fn service(&self) -> Service {
+            self.service.clone()
+        }
+    }
 
     #[test]
     fn create_document() {
         let context = glib::MainContext::default();
 
-        let service = Service::new(&PrivateKey::new());
+        let resource = TestResource::new();
+        let service = resource.service();
         let test_string = "Hello World";
         service.startup();
         let document = Document::new(&service, None);
@@ -94,14 +128,16 @@ mod tests {
     fn basic_sync() {
         let main_loop = glib::MainLoop::new(None, false);
         let test_string = "Hello World";
-        let service = Service::new(&PrivateKey::new());
+        let resource = TestResource::new();
+        let service = resource.service();
         service.startup();
 
         let document = Document::new(&service, None);
         document.set_subscribed(true);
         let id = document.id();
 
-        let service2 = Service::new(&PrivateKey::new());
+        let resource2 = TestResource::new();
+        let service2 = resource2.service();
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
         document2.set_subscribed(true);
@@ -128,14 +164,16 @@ mod tests {
     fn sync_multiple_changes() {
         let main_loop = glib::MainLoop::new(None, false);
         let expected_string = "Hello, World!";
-        let service = Service::new(&PrivateKey::new());
+        let resource = TestResource::new();
+        let service = resource.service();
         service.startup();
 
         let document = Document::new(&service, None);
         document.set_subscribed(true);
         let id = document.id();
 
-        let service2 = Service::new(&PrivateKey::new());
+        let resource2 = TestResource::new();
+        let service2 = resource2.service();
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
         document2.set_subscribed(true);
@@ -172,14 +210,16 @@ mod tests {
             "{}{}{}{}",
             test_string, test_string, test_string, test_string
         );
-        let service = Service::new(&PrivateKey::new());
+        let resource = TestResource::new();
+        let service = resource.service();
         service.startup();
 
         let document = Document::new(&service, None);
         document.set_subscribed(true);
         let id = document.id();
 
-        let service2 = Service::new(&PrivateKey::new());
+        let resource2 = TestResource::new();
+        let service2 = resource2.service();
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
         document2.set_subscribed(true);
