@@ -83,6 +83,7 @@ mod tests {
         let test_string = "Hello World";
         service.startup();
         let document = Document::new(&service, None);
+        document.set_subscribed(true);
         context.iteration(false);
         assert!(document.insert_text(0, test_string).is_ok());
         assert_eq!(document.text(), test_string);
@@ -96,11 +97,13 @@ mod tests {
         service.startup();
 
         let document = Document::new(&service, None);
+        document.set_subscribed(true);
         let id = document.id();
 
         let service2 = Service::new(&PrivateKey::new());
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
+        document2.set_subscribed(true);
 
         assert_eq!(document.id(), document2.id());
         main_loop.context().spawn(async move {
@@ -128,11 +131,13 @@ mod tests {
         service.startup();
 
         let document = Document::new(&service, None);
+        document.set_subscribed(true);
         let id = document.id();
 
         let service2 = Service::new(&PrivateKey::new());
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
+        document2.set_subscribed(true);
 
         assert_eq!(document.id(), document2.id());
         main_loop.context().spawn(async move {
@@ -170,11 +175,13 @@ mod tests {
         service.startup();
 
         let document = Document::new(&service, None);
+        document.set_subscribed(true);
         let id = document.id();
 
         let service2 = Service::new(&PrivateKey::new());
         service2.startup();
         let document2 = Document::new(&service2, Some(&id));
+        document2.set_subscribed(true);
 
         assert_eq!(document.id(), document2.id());
         main_loop.context().spawn(async move {
