@@ -121,7 +121,9 @@ impl AardvarkApplication {
         self.windows()
             .into_iter()
             .filter_map(|window| window.downcast::<super::AardvarkWindow>().ok())
-            .find(|window| &window.document().id() == document_id)
+            .find(|window| {
+                &window.document().id() == document_id && window.service() == self.service()
+            })
     }
 
     fn setup_gactions(&self) {
@@ -138,7 +140,20 @@ impl AardvarkApplication {
     }
 
     fn new_window(&self) {
-        let window = AardvarkWindow::new(self, &self.service());
+        let window = if self.windows().is_empty() {
+            AardvarkWindow::new(self, &self.service())
+        } else {
+            let private_key = aardvark_doc::identity::PrivateKey::new();
+            let mut data_path = glib::tmp_dir();
+            data_path.push("Aardvark");
+            data_path.push(private_key.public_key().to_string());
+            fs::create_dir_all(&data_path).expect("Able to create data dir");
+            let data_dir = gio::File::for_path(data_path);
+            let service = Service::new(&private_key, &data_dir);
+            service.startup();
+            AardvarkWindow::new(self, &service)
+        };
+
         window.present();
     }
 
