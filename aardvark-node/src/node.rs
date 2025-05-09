@@ -409,7 +409,7 @@ impl Node {
                 //
                 // Snapshots are not broadcasted on the gossip overlay as they would be
                 // too large. Peers will sync them up when they join the document.
-                create_operation(
+                let snapshot_operation = create_operation(
                     &mut operation_store,
                     &inner_clone.private_key,
                     LogType::Snapshot,
@@ -417,7 +417,12 @@ impl Node {
                     Some(&snapshot_bytes),
                     true,
                 )
-                .await?;
+                .await;
+
+                // FIXME: Adding a snapshot may fail because we get twice the same snapshot from LORO
+                if let Err(error) = snapshot_operation {
+                    error!("Failed to create snapshot operation {}", error);
+                };
 
                 // Append an operation to our "ephemeral" delta log and set the prune
                 // flag to true.
