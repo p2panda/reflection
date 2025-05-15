@@ -397,12 +397,7 @@ impl Node {
     /// Since a snapshot contains all data we need to reliably reconcile documents (it is a
     /// State-Based CRDT) this command prunes all our logs and removes past snapshot- and delta
     /// operations.
-    pub async fn delta_with_snapshot(
-        &self,
-        document_id: DocumentId,
-        delta_bytes: Vec<u8>,
-        snapshot_bytes: Vec<u8>,
-    ) -> Result<()> {
+    pub async fn snapshot(&self, document_id: DocumentId, snapshot_bytes: Vec<u8>) -> Result<()> {
         let inner = self.inner().await;
         let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
@@ -417,7 +412,7 @@ impl Node {
                 //
                 // Snapshots are not broadcasted on the gossip overlay as they would be
                 // too large. Peers will sync them up when they join the document.
-                let snapshot_operation = create_operation(
+                create_operation(
                     &mut operation_store,
                     &inner_clone.private_key,
                     LogType::Snapshot,
@@ -425,12 +420,7 @@ impl Node {
                     Some(&snapshot_bytes),
                     true,
                 )
-                .await;
-
-                // FIXME: Adding a snapshot may fail because we get twice the same snapshot from LORO
-                if let Err(error) = snapshot_operation {
-                    error!("Failed to create snapshot operation {}", error);
-                };
+                .await?;
 
                 // Append an operation to our "ephemeral" delta log and set the prune
                 // flag to true.
@@ -443,8 +433,8 @@ impl Node {
                     &mut operation_store,
                     &inner_clone.private_key,
                     LogType::Delta,
-                    Some(document_id.into()),
-                    Some(&delta_bytes),
+                    Some(document_id),
+                    None,
                     true,
                 )
                 .await?;
@@ -453,10 +443,10 @@ impl Node {
                 inner_clone
                     .network
                     .send_operation(&document_id, operation)
-                    .await?;
-
-                Ok(())
+                    .await
             })
-            .await?
+            .await??;
+
+        Ok(())
     }
 }

@@ -1,9 +1,5 @@
-use std::cell::{Cell, OnceCell};
 use std::fmt;
 use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::OnceLock;
 
 use aardvark_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
 use anyhow::Result;
@@ -38,13 +34,17 @@ impl fmt::Display for DocumentId {
 }
 
 mod imp {
+    use super::*;
+    use std::cell::{Cell, OnceCell};
+    use std::sync::{Arc, Mutex, OnceLock};
+    use std::time::Duration;
+
     /// Identifier of container where we handle the text CRDT in a Loro document.
     ///
     /// Loro documents can contain multiple different CRDT types in one document.
     const TEXT_CONTAINER_ID: &str = "document";
     const DOCUMENT_NAME_LENGTH: usize = 32;
-
-    use super::*;
+    const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
@@ -54,7 +54,7 @@ mod imp {
         #[property(get, construct_only, set)]
         last_accessed: Mutex<Option<glib::DateTime>>,
         #[property(name = "text", get = Self::text, type = String)]
-        crdt_doc: OnceCell<LoroDoc>,
+        pub(super) crdt_doc: OnceCell<LoroDoc>,
         #[property(get, construct_only, set = Self::set_id)]
         id: OnceCell<DocumentId>,
         #[property(get, set = Self::set_subscribed)]
@@ -63,6 +63,7 @@ mod imp {
         service: OnceCell<Service>,
         #[property(get, set = Self::set_authors, construct_only)]
         authors: OnceCell<Authors>,
+        snapshot_task: Mutex<Option<glib::SourceId>>,
     }
 
     #[glib::object_subclass]
@@ -273,6 +274,32 @@ mod imp {
             );
         }
 
+        fn mark_for_snapshot(&self) {
+            let mut snapshot_task = self.snapshot_task.lock().unwrap();
+            if snapshot_task.is_none() {
+                let obj = self.obj();
+                let ctx = glib::MainContext::ref_thread_default();
+                let handle = ctx.spawn_with_priority(
+                    glib::source::Priority::LOW,
+                    clone!(
+                        #[weak]
+                        obj,
+                        async move {
+                            glib::timeout_future_with_priority(
+                                glib::source::Priority::LOW,
+                                SNAPSHOT_TIMEOUT,
+                            )
+                            .await;
+                            obj.store_snapshot().await;
+                            obj.imp().snapshot_task.lock().unwrap().take();
+                        }
+                    ),
+                );
+
+                *snapshot_task = handle.into_source_id().ok();
+            }
+        }
+
         fn setup_loro_document(&self) {
             let public_key = self.obj().service().private_key().public_key();
             let obj = self.obj();
@@ -350,32 +377,15 @@ mod imp {
                 false,
                 move |delta_bytes| {
                     let delta_bytes = delta_bytes.to_vec();
+                    obj.imp().mark_for_snapshot();
                     // Move a strong reference to the Document into the spawn,
                     // to ensure changes are always propagated to the network
                     glib::spawn_future(async move {
-                        // Broadcast a "text delta" to all peers and persist the snapshot.
-                        //
-                        // TODO(adz): We should consider persisting the snapshot every x
-                        // times or x seconds, not sure yet what logic makes the most
-                        // sense.
-                        let snapshot_bytes = obj
-                            .imp()
-                            .crdt_doc
-                            .get()
-                            .expect("crdt_doc to be set")
-                            .export(ExportMode::Snapshot)
-                            .expect("encoded crdt snapshot");
-
-                        if let Err(error) = obj
-                            .service()
-                            .node()
-                            .delta_with_snapshot(obj.id().0, delta_bytes, snapshot_bytes)
-                            .await
+                        // Broadcast a "text delta" to all peers
+                        if let Err(error) =
+                            obj.service().node().delta(obj.id().0, delta_bytes).await
                         {
-                            error!(
-                                "Failed to send snapshot of document to the network: {}",
-                                error
-                            );
+                            error!("Failed to send delta of document to the network: {}", error);
                         }
                     });
 
@@ -470,6 +480,29 @@ impl Document {
 
     pub fn delete_range(&self, index: i32, end: i32) -> Result<()> {
         self.imp().splice_text(index, end - index, "")
+    }
+
+    /// Persist the snapshot.
+    pub(crate) async fn store_snapshot(&self) {
+        // FIXME: only store a new snapshot if it changed since the previous snapshot
+        let snapshot_bytes = self
+            .imp()
+            .crdt_doc
+            .get()
+            .expect("crdt_doc to be set")
+            .export(ExportMode::Snapshot)
+            .expect("encoded crdt snapshot");
+        if let Err(error) = self
+            .service()
+            .node()
+            .snapshot(self.id().0, snapshot_bytes)
+            .await
+        {
+            error!(
+                "Failed to send snapshot of document to the network: {}",
+                error
+            );
+        }
     }
 }
 
