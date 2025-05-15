@@ -118,9 +118,10 @@ mod imp {
                         let author: Author = binding.source().unwrap().downcast().unwrap();
                         if is_online {
                             Some("Online".to_string())
-                            //Some(format_last_seen(&glib::DateTime::now_local().unwrap()))
+                        } else if let Some(last_seen) = author.last_seen() {
+                            Some(format_last_seen(&last_seen))
                         } else {
-                            Some(format_last_seen(&author.last_seen().unwrap()))
+                            Some("Never seen".to_string())
                         }
                     })
                     .build();
