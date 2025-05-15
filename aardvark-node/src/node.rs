@@ -10,8 +10,7 @@ use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
 use tokio::runtime::{Builder, Runtime};
-use tokio::sync::Notify;
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock, Semaphore};
 use tracing::{error, info, warn};
 
 use crate::document::{Document, DocumentId, SubscribableDocument};
@@ -24,6 +23,7 @@ pub struct Node {
     inner: OnceLock<Arc<NodeInner>>,
     ready_notify: Arc<Notify>,
     documents: Arc<RwLock<HashMap<DocumentId, Arc<dyn SubscribableDocument>>>>,
+    semaphore_operation_store: Semaphore,
 }
 
 impl Default for Node {
@@ -47,6 +47,9 @@ impl Node {
             inner: OnceLock::new(),
             ready_notify: Arc::new(Notify::new()),
             documents: Arc::new(RwLock::new(HashMap::new())),
+            // FIXME: This makes sure we only create one operation at the time and not in parallel
+            // Since we would mess up the sequence of operations
+            semaphore_operation_store: Semaphore::new(1),
         }
     }
 
@@ -191,6 +194,7 @@ impl Node {
 
     pub async fn create_document(&self) -> Result<DocumentId> {
         let inner = self.inner().await;
+        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         let operation = inner.runtime.block_on(async {
@@ -247,6 +251,7 @@ impl Node {
     ) -> Result<()> {
         let document = Arc::new(document);
         let inner = self.inner().await;
+        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         let stored_operations = inner
@@ -327,6 +332,7 @@ impl Node {
 
     pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
         let inner = self.inner().await;
+        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         let document_id = *document_id;
@@ -354,6 +360,7 @@ impl Node {
     /// document (Delta-Based CRDT).
     pub async fn delta(&self, document_id: DocumentId, bytes: Vec<u8>) -> Result<()> {
         let inner = self.inner().await;
+        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         inner
@@ -397,6 +404,7 @@ impl Node {
         snapshot_bytes: Vec<u8>,
     ) -> Result<()> {
         let inner = self.inner().await;
+        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         inner
