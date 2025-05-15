@@ -21,6 +21,9 @@ pub struct Network {
     document_tx: RwLock<HashMap<DocumentId, mpsc::Sender<ToNetwork>>>,
 }
 
+const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
+const BOOTSTRAP_NODE_ID: &str = "195565cde208ef1ed01984dcc0aaed5b3d9dff5e36d273e55d5a98d44285c896";
+
 impl Network {
     pub async fn spawn(
         network_id: Hash,
@@ -31,6 +34,12 @@ impl Network {
         let network = NetworkBuilder::new(network_id.into())
             .private_key(private_key)
             .discovery(LocalDiscovery::new())
+            .relay(RELAY_URL.parse().expect("valid relay URL"), false, 0)
+            .direct_address(
+                BOOTSTRAP_NODE_ID.parse().expect("valid node ID"),
+                vec![],
+                None,
+            )
             .gossip(GossipConfig {
                 // FIXME: This is a temporary workaround to account for larger delta patches (for
                 // example when the user Copy & Pastes a big chunk of text).
