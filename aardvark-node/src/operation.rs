@@ -5,7 +5,7 @@ use anyhow::{Result, bail};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{Body, Extension, Extensions, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::LogStore;
-use p2panda_stream::operation::{IngestResult, ingest_operation};
+use p2panda_store::OperationStore as TraitOperationStore;
 use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentId;
@@ -125,7 +125,6 @@ pub async fn create_operation(
     prune_flag: bool,
 ) -> Result<Operation<AardvarkExtensions>> {
     let body = body.map(Body::new);
-
     let public_key = private_key.public_key();
 
     let latest_operation = match document {
@@ -168,19 +167,31 @@ pub async fn create_operation(
     let document: DocumentId = header.extension().expect("document id from our own logs");
     let log_id = LogId::new(log_type, &document);
 
-    let result = ingest_operation(
-        store,
-        header.clone(),
-        body.clone(),
-        header.to_bytes(),
-        &log_id,
-        prune_flag,
-    )
-    .await?;
-
-    let IngestResult::Complete(operation) = result else {
-        panic!("we should never need to re-order our own operations")
+    let operation = Operation {
+        hash: header.hash(),
+        header,
+        body,
     };
+
+    store
+        .insert_operation(
+            operation.hash,
+            &operation.header,
+            operation.body.as_ref(),
+            operation.header.to_bytes().as_slice(),
+            &log_id,
+        )
+        .await?;
+
+    if prune_flag {
+        store
+            .delete_operations(
+                &operation.header.public_key,
+                &log_id,
+                operation.header.seq_num,
+            )
+            .await?;
+    }
 
     Ok(operation)
 }
