@@ -523,17 +523,23 @@ impl SubscribableDocument for DocumentHandle {
 
     fn authors_joined(&self, authors: Vec<p2panda_core::PublicKey>) {
         if let Some(document) = self.0.upgrade() {
-            for author in authors.into_iter() {
-                document.authors().add_or_update(PublicKey(author), true);
-            }
+            let context = glib::MainContext::ref_thread_default();
+            context.invoke(move || {
+                for author in authors.into_iter() {
+                    document.authors().add_or_update(PublicKey(author), true);
+                }
+            });
         }
     }
 
     fn author_set_online(&self, author: p2panda_core::PublicKey, is_online: bool) {
         if let Some(document) = self.0.upgrade() {
-            document
-                .authors()
-                .add_or_update(PublicKey(author), is_online);
+            let context = glib::MainContext::ref_thread_default();
+            context.invoke(move || {
+                document
+                    .authors()
+                    .add_or_update(PublicKey(author), is_online);
+            });
         }
     }
 }
