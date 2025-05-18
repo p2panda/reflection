@@ -277,7 +277,7 @@ impl Node {
             // Send all stored operation bytes to the app,
             // it doesn't matter if the app already knows some or all of them
             if let Some(body) = operation.body {
-                document.bytes_received(operation.header.public_key, &body.to_bytes());
+                document.bytes_received(operation.header.public_key, body.to_bytes());
             }
         }
 
@@ -317,7 +317,7 @@ impl Node {
                             // Forward the payload up to the app.
                             if let Some(body) = operation.body {
                                 document_clone
-                                    .bytes_received(operation.header.public_key, &body.to_bytes());
+                                    .bytes_received(operation.header.public_key, body.to_bytes());
                             }
                         }
                     })

@@ -174,10 +174,10 @@ mod imp {
         }
 
         /// Apply changes to the CRDT from a message received from another peer
-        pub fn on_remote_message(&self, bytes: &[u8]) {
+        pub fn on_remote_message(&self, bytes: Vec<u8>) {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
 
-            if let Err(err) = doc.import_with(bytes, "delta") {
+            if let Err(err) = doc.import_with(&bytes, "delta") {
                 eprintln!("received invalid message: {}", err);
             }
         }
@@ -512,9 +512,12 @@ unsafe impl Sync for Document {}
 struct DocumentHandle(glib::WeakRef<Document>);
 
 impl SubscribableDocument for DocumentHandle {
-    fn bytes_received(&self, _author: p2panda_core::PublicKey, data: &[u8]) {
+    fn bytes_received(&self, _author: p2panda_core::PublicKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
-            document.imp().on_remote_message(data);
+            let context = glib::MainContext::ref_thread_default();
+            context.invoke(move || {
+                document.imp().on_remote_message(data);
+            });
         }
     }
 

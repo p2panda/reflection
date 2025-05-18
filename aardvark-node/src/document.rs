@@ -122,7 +122,7 @@ pub struct Author {
 }
 
 pub trait SubscribableDocument: Sync + Send {
-    fn bytes_received(&self, author: PublicKey, data: &[u8]);
+    fn bytes_received(&self, author: PublicKey, data: Vec<u8>);
     fn authors_joined(&self, authors: Vec<PublicKey>);
     fn author_set_online(&self, author: PublicKey, is_online: bool);
 }
