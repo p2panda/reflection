@@ -156,18 +156,21 @@ mod imp {
             }
         }
 
-        pub fn splice_text(&self, index: i32, delete_len: i32, chunk: &str) -> Result<()> {
+        pub fn insert_text(&self, index: usize, chunk: &str) -> Result<()> {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
             let text = doc.get_text(TEXT_CONTAINER_ID);
 
-            if delete_len == 0 {
-                text.insert(index as usize, chunk)
-                    .expect("update document after text insertion");
-            } else {
-                text.delete(index as usize, delete_len as usize)
-                    .expect("update document after text removal");
-            }
+            text.insert(index, chunk)?;
+            doc.commit();
 
+            Ok(())
+        }
+
+        pub fn delete_text(&self, index: usize, len: usize) -> Result<()> {
+            let doc = self.crdt_doc.get().expect("crdt_doc to be set");
+            let text = doc.get_text(TEXT_CONTAINER_ID);
+
+            text.delete(index, len)?;
             doc.commit();
 
             Ok(())
@@ -474,12 +477,13 @@ impl Document {
             .build()
     }
 
-    pub fn insert_text(&self, index: i32, chunk: &str) -> Result<()> {
-        self.imp().splice_text(index, 0, chunk)
+    pub fn insert_text(&self, pos: i32, text: &str) -> Result<()> {
+        self.imp().insert_text(pos as usize, text)
     }
 
-    pub fn delete_range(&self, index: i32, end: i32) -> Result<()> {
-        self.imp().splice_text(index, end - index, "")
+    pub fn delete_range(&self, start_pos: i32, end_pos: i32) -> Result<()> {
+        self.imp()
+            .delete_text(start_pos as usize, (end_pos - start_pos) as usize)
     }
 
     /// Persist the snapshot.
