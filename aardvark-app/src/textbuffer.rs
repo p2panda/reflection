@@ -97,6 +97,9 @@ mod imp {
                     move |values| {
                         let pos: i32 = values.get(1).unwrap().get().unwrap();
                         let text: &str = values.get(2).unwrap().get().unwrap();
+                        if buffer.inhibit_text_change() {
+                            return None;
+                        }
 
                         let mut pos_iter = buffer.iter_at_offset(pos);
                         buffer.set_inhibit_text_change(true);
@@ -119,6 +122,10 @@ mod imp {
                     move |values| {
                         let start: i32 = values.get(1).unwrap().get().unwrap();
                         let end: i32 = values.get(2).unwrap().get().unwrap();
+                        if buffer.inhibit_text_change() {
+                            return None;
+                        }
+
                         let mut start = buffer.iter_at_offset(start);
                         let mut end = buffer.iter_at_offset(end);
                         buffer.set_inhibit_text_change(true);
@@ -136,34 +143,49 @@ mod imp {
 
     impl TextBufferImpl for AardvarkTextBuffer {
         fn insert_text(&self, iter: &mut gtk::TextIter, new_text: &str) {
+            if self.obj().inhibit_text_change() {
+                self.parent_insert_text(iter, new_text);
+                return;
+            }
+            let Some(document) = self.obj().document() else {
+                self.parent_insert_text(iter, new_text);
+                return;
+            };
+
             let offset = iter.offset();
+            self.obj().set_inhibit_text_change(true);
+            let result = document.insert_text(offset, new_text);
+            self.obj().set_inhibit_text_change(false);
 
-            if !self.inhibit_text_change.get() {
-                if let Some(document) = self.document.borrow().as_ref() {
-                    if let Err(error) = document.insert_text(offset, new_text) {
-                        error!("Failed to submit changes to the document: {error}");
-                    }
-                }
+            // Only insert text into the buffer when the document was successfully updated
+            if let Err(error) = result {
+                error!("Failed to submit changes to the document: {error}");
             } else {
-                // Only insert text received from the CRDT document
                 info!("inserting new text {} at pos {}", new_text, offset);
-
                 self.parent_insert_text(iter, new_text);
             }
         }
 
         fn delete_range(&self, start: &mut gtk::TextIter, end: &mut gtk::TextIter) {
+            if self.obj().inhibit_text_change() {
+                self.parent_delete_range(start, end);
+                return;
+            }
+            let Some(document) = self.obj().document() else {
+                self.parent_delete_range(start, end);
+                return;
+            };
+
             let offset_start = start.offset();
             let offset_end = end.offset();
+            self.obj().set_inhibit_text_change(true);
+            let result = document.delete_range(offset_start, offset_end);
+            self.obj().set_inhibit_text_change(false);
 
-            if !self.inhibit_text_change.get() {
-                if let Some(document) = self.document.borrow().as_ref() {
-                    if let Err(error) = document.delete_range(offset_start, offset_end) {
-                        error!("Failed to submit changes to the document: {error}")
-                    }
-                }
+            // Only delete text from the buffer when the document was successfully updated
+            if let Err(error) = result {
+                error!("Failed to submit changes to the document: {error}");
             } else {
-                // Only delete text received from the CRDT document
                 info!(
                     "deleting range at start {} end {}",
                     offset_start, offset_end
@@ -185,6 +207,10 @@ glib::wrapper! {
 impl AardvarkTextBuffer {
     pub fn new() -> Self {
         glib::Object::builder().build()
+    }
+
+    fn inhibit_text_change(&self) -> bool {
+        self.imp().inhibit_text_change.get()
     }
 
     fn set_inhibit_text_change(&self, inhibit_text_change: bool) {

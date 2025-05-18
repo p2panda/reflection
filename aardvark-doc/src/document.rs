@@ -238,21 +238,8 @@ mod imp {
                 self.update_name();
             }
 
-            // Emit the signal on the main thread
-            let obj = self.obj();
-            glib::source::idle_add_full(
-                glib::source::Priority::DEFAULT,
-                clone!(
-                    #[weak]
-                    obj,
-                    #[upgrade_or]
-                    glib::ControlFlow::Break,
-                    move || {
-                        obj.emit_by_name::<()>("text-inserted", &[&pos, &text]);
-                        glib::ControlFlow::Break
-                    }
-                ),
-            );
+            self.obj()
+                .emit_by_name::<()>("text-inserted", &[&pos, &text]);
         }
 
         fn emit_range_deleted(&self, start: i32, end: i32) {
@@ -260,21 +247,8 @@ mod imp {
                 self.update_name();
             }
 
-            // Emit the signal on the main thread
-            let obj = self.obj();
-            glib::source::idle_add_full(
-                glib::source::Priority::DEFAULT,
-                clone!(
-                    #[weak]
-                    obj,
-                    #[upgrade_or]
-                    glib::ControlFlow::Break,
-                    move || {
-                        obj.emit_by_name::<()>("range-deleted", &[&start, &end]);
-                        glib::ControlFlow::Break
-                    }
-                ),
-            );
+            self.obj()
+                .emit_by_name::<()>("range-deleted", &[&start, &end]);
         }
 
         fn mark_for_snapshot(&self) {
