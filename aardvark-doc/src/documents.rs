@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use gio::prelude::*;
 use gio::subclass::prelude::ListModelImpl;
-use glib::{clone, subclass::prelude::*};
+use glib::subclass::prelude::*;
 
 use crate::document::{Document, DocumentId};
 
@@ -63,24 +63,12 @@ impl Documents {
     }
 
     pub(crate) fn add(&self, document: Document) {
-        glib::source::idle_add_full(
-            glib::source::Priority::DEFAULT,
-            clone!(
-                #[weak(rename_to = obj)]
-                self,
-                #[upgrade_or]
-                glib::ControlFlow::Break,
-                move || {
-                    let mut list = obj.imp().list.lock().unwrap();
+        let mut list = self.imp().list.lock().unwrap();
 
-                    // FIXME: Inserting a new document at the top of the list is quite inefficient
-                    list.insert(0, document.clone());
-                    drop(list);
-                    obj.items_changed(0, 0, 1);
-                    glib::ControlFlow::Break
-                }
-            ),
-        );
+        // FIXME: Inserting a new document at the top of the list is quite inefficient
+        list.insert(0, document.clone());
+        drop(list);
+        self.items_changed(0, 0, 1);
     }
 
     pub fn by_id(&self, document_id: &DocumentId) -> Option<Document> {
