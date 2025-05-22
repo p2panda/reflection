@@ -382,11 +382,13 @@ impl Node {
                 inner_clone
                     .network
                     .send_operation(&document_id, operation)
-                    .await?;
-
-                Ok(())
+                    .await
             })
-            .await?
+            .await??;
+
+        info!("Delta operation sent for document with id {}", document_id);
+
+        Ok(())
     }
 
     /// Same as [`Self::Delta`] next to persisting a whole snapshot and pruning.
@@ -446,6 +448,8 @@ impl Node {
                     .await
             })
             .await??;
+
+        info!("Snapshot saved for document with id {}", document_id);
 
         Ok(())
     }
