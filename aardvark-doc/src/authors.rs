@@ -79,6 +79,21 @@ impl Authors {
         self.items_changed(pos, 0, 1);
     }
 
+    pub(crate) fn ensure_author(&self, author_key: PublicKey) {
+        let mut list = self.imp().list.lock().unwrap();
+
+        if !list.iter().any(|author| author.public_key() == author_key) {
+            let pos = list.len() as u32;
+
+            let author = Author::new(&author_key);
+
+            list.push(author);
+            drop(list);
+
+            self.items_changed(pos, 0, 1);
+        }
+    }
+
     pub(crate) fn add_or_update(&self, author_key: PublicKey, is_online: bool) {
         let mut list = self.imp().list.lock().unwrap();
 

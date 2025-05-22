@@ -490,11 +490,12 @@ unsafe impl Sync for Document {}
 struct DocumentHandle(glib::WeakRef<Document>);
 
 impl SubscribableDocument for DocumentHandle {
-    fn bytes_received(&self, _author: p2panda_core::PublicKey, data: Vec<u8>) {
+    fn bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
             let context = glib::MainContext::ref_thread_default();
             context.invoke(move || {
                 document.imp().on_remote_message(data);
+                document.authors().ensure_author(PublicKey(author));
             });
         }
     }
