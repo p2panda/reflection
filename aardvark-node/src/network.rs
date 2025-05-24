@@ -14,6 +14,10 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
+const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
+
+const BOOTSTRAP_NODE_ID: &str = "d825a2f929f935efcd6889bed5c3f5510b40f014969a729033d3fb7e33b97dbe";
+
 #[derive(Debug)]
 pub struct Network {
     operation_store: OperationStore,
@@ -31,6 +35,12 @@ impl Network {
         let network = NetworkBuilder::new(network_id.into())
             .private_key(private_key)
             .discovery(LocalDiscovery::new())
+            .relay(RELAY_URL.parse().expect("relay url is fine"), false, 0)
+            .direct_address(
+                BOOTSTRAP_NODE_ID.parse().expect("public key is fine"),
+                vec![],
+                None,
+            )
             .gossip(GossipConfig {
                 // FIXME: This is a temporary workaround to account for larger delta patches (for
                 // example when the user Copy & Pastes a big chunk of text).
