@@ -50,29 +50,30 @@ impl From<oo7::Error> for Error {
 }
 
 pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
-    let keyring = oo7::Keyring::new().await?;
-
-    keyring.unlock().await?;
-
-    let private_key: PrivateKey =
-        if let Some(item) = keyring.search_items(&attributes()).await?.get(0) {
-            item.unlock().await?;
-            let private_key = PrivateKey::try_from(item.secret().await?.as_bytes())?;
-            info!("Found existing identity: {}", private_key.public_key());
-
-            private_key
-        } else {
-            let private_key = PrivateKey::new();
-            keyring
-                .create_item("Aardvark", &attributes(), private_key.as_bytes(), true)
-                .await?;
-
-            info!(
-                "No existing identity found. Create new identity: {}",
-                private_key.public_key()
-            );
-            private_key
-        };
-
+    // let keyring = oo7::Keyring::new().await?;
+    //
+    // keyring.unlock().await?;
+    //
+    // let private_key: PrivateKey =
+    //     if let Some(item) = keyring.search_items(&attributes()).await?.get(0) {
+    //         item.unlock().await?;
+    //         let private_key = PrivateKey::try_from(item.secret().await?.as_bytes())?;
+    //         info!("Found existing identity: {}", private_key.public_key());
+    //
+    //         private_key
+    //     } else {
+    //         let private_key = PrivateKey::new();
+    //         keyring
+    //             .create_item("Aardvark", &attributes(), private_key.as_bytes(), true)
+    //             .await?;
+    //
+    //         info!(
+    //             "No existing identity found. Create new identity: {}",
+    //             private_key.public_key()
+    //         );
+    //         private_key
+    //     };
+    //
+    let private_key = PrivateKey::new();
     Ok(private_key)
 }
