@@ -1,10 +1,11 @@
-use std::cell::{Cell, OnceCell};
 use std::sync::Mutex;
+use std::{cell::Cell, sync::OnceLock};
 
 use glib::Properties;
 use glib::prelude::*;
 use glib::subclass::prelude::*;
-use p2panda_core::PublicKey;
+
+use crate::identity::PublicKey;
 
 pub const COLORS: [(&str, &str); 15] = [
     ("Yellow", "#faf387"),
@@ -77,8 +78,9 @@ mod imp {
         #[property(name = "name", get = Self::name, type = String)]
         #[property(name = "emoji", get = Self::emoji, type = String)]
         #[property(name = "color", get = Self::color, type = String)]
-        pub public_key: OnceCell<PublicKey>,
-        #[property(get)]
+        #[property(get, set, construct_only, type = PublicKey)]
+        public_key: OnceLock<PublicKey>,
+        #[property(get, set, construct_only)]
         pub last_seen: Mutex<Option<glib::DateTime>>,
         #[property(get, default = true)]
         pub is_online: Cell<bool>,
@@ -133,24 +135,28 @@ glib::wrapper! {
     pub struct Author(ObjectSubclass<imp::Author>);
 }
 impl Author {
-    pub fn new(public_key: PublicKey) -> Self {
-        let obj: Self = glib::Object::new();
+    pub fn new(public_key: &PublicKey) -> Self {
+        let obj: Self = glib::Object::builder()
+            .property("public-key", public_key)
+            .build();
 
-        obj.imp().public_key.set(public_key).unwrap();
         obj.imp().is_online.set(true);
         obj
     }
 
-    pub fn for_this_device(public_key: PublicKey) -> Self {
+    pub(crate) fn with_state(public_key: &PublicKey, last_seen: Option<&glib::DateTime>) -> Self {
+        glib::Object::builder()
+            .property("public-key", public_key)
+            .property("last-seen", last_seen)
+            .build()
+    }
+
+    pub fn for_this_device(public_key: &PublicKey) -> Self {
         let obj = Self::new(public_key);
 
         obj.imp().is_this_device.set(true);
         obj.imp().is_online.set(true);
         obj
-    }
-
-    pub(crate) fn public_key(&self) -> &PublicKey {
-        self.imp().public_key.get().unwrap()
     }
 
     pub(crate) fn set_is_online(&self, is_online: bool) {

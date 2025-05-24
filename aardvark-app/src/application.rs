@@ -23,9 +23,12 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib, glib::Properties};
+use std::{cell::OnceCell, fs};
+use tracing::error;
 
 use crate::AardvarkWindow;
 use crate::config;
+use crate::secret;
 use crate::system_settings::SystemSettings;
 
 mod imp {
@@ -35,7 +38,7 @@ mod imp {
     #[properties(wrapper_type = super::AardvarkApplication)]
     pub struct AardvarkApplication {
         #[property(get)]
-        pub service: Service,
+        pub service: OnceCell<Service>,
         #[property(get)]
         pub system_settings: SystemSettings,
     }
@@ -55,17 +58,36 @@ mod imp {
             obj.setup_gactions();
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
             obj.set_accels_for_action("app.new-window", &["<control>n"]);
+
+            // FIXME: Don't block on loading the identity
+            glib::MainContext::new().block_on(async move {
+                let private_key = secret::get_or_create_identity()
+                    .await
+                    .expect("Unable to get or create identity");
+
+                let mut data_path = glib::user_data_dir();
+                data_path.push("Aardvark");
+                data_path.push(private_key.public_key().to_string());
+                if let Err(error) = fs::create_dir_all(&data_path) {
+                    error!("Failed to create data directory: {error}");
+                }
+                let data_dir = gio::File::for_path(data_path);
+
+                self.service
+                    .set(Service::new(&private_key, &data_dir))
+                    .unwrap();
+            });
         }
     }
 
     impl ApplicationImpl for AardvarkApplication {
         fn startup(&self) {
-            self.service.startup();
+            self.obj().service().startup();
             self.parent_startup();
         }
 
         fn shutdown(&self) {
-            self.service.shutdown();
+            self.obj().service().shutdown();
             self.parent_shutdown();
         }
 
@@ -116,7 +138,7 @@ impl AardvarkApplication {
     }
 
     fn new_window(&self) {
-        let window = AardvarkWindow::new(self, &self.imp().service);
+        let window = AardvarkWindow::new(self, &self.service());
         window.present();
     }
 

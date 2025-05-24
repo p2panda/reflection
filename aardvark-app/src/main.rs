@@ -23,6 +23,8 @@ mod components;
 mod config;
 mod connection_popover;
 mod open_dialog;
+mod open_popover;
+mod secret;
 mod system_settings;
 mod textbuffer;
 mod window;
@@ -37,8 +39,11 @@ use tracing_subscriber::prelude::*;
 use self::application::AardvarkApplication;
 use self::config::*;
 use self::connection_popover::ConnectionPopover;
+use self::open_popover::OpenPopover;
 use self::textbuffer::AardvarkTextBuffer;
 use self::window::AardvarkWindow;
+
+pub use self::config::APP_ID;
 
 fn main() -> glib::ExitCode {
     setup_logging();
