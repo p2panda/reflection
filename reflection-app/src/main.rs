@@ -36,6 +36,7 @@ mod window;
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use std::path::PathBuf;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -50,18 +51,7 @@ pub use self::config::APP_ID;
 
 fn main() -> glib::ExitCode {
     setup_logging();
-
-    // Set up gettext translations
-    bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR).expect("Unable to bind the text domain");
-    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8")
-        .expect("Unable to set the text domain encoding");
-    textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
-
-    // Load resources
-    let res = gio::Resource::load(RESOURCES_FILE).expect("Could not load gresource file");
-    gio::resources_register(&res);
-    let ui_res = gio::Resource::load(UI_RESOURCES_FILE).expect("Could not load UI gresource file");
-    gio::resources_register(&ui_res);
+    load_resources();
 
     // Create a new GtkApplication. The application manages our main loop,
     // application windows, integration with the window manager/compositor, and
@@ -86,3 +76,43 @@ fn setup_logging() {
         .try_init()
         .ok();
 }
+
+fn load_resources() {
+    // Used for macOS app bundle
+    let mut base_bundle_path =
+        std::env::current_exe().expect("Failed to get current executable path.");
+    base_bundle_path.pop(); // -> Reflection.app/Contents/MacOS/
+    base_bundle_path.pop(); // -> Reflection.app/Contents/
+
+    let local_dir_path = if cfg!(target_os = "macos") {
+        base_bundle_path.join(LOCALEDIR)
+    } else {
+        PathBuf::from(LOCALEDIR)
+    };
+
+    let resources_dir_path = if cfg!(target_os = "macos") {
+        base_bundle_path.join(PKGDATADIR)
+    } else {
+        PathBuf::from(PKGDATADIR)
+    };
+
+    bindtextdomain(
+        GETTEXT_PACKAGE,
+        local_dir_path
+            .to_str()
+            .expect("Locale path is not valid UTF-8"),
+    )
+    .expect("Unable to bind the text domain");
+    bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8")
+        .expect("Unable to set the text domain encoding");
+    textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
+
+    let res = gio::Resource::load(resources_dir_path.join("resources.gresource"))
+        .expect("Could not load gresource file");
+    gio::resources_register(&res);
+
+    let ui_res = gio::Resource::load(resources_dir_path.join("ui-resources.gresource"))
+        .expect("Could not load UI gresource file");
+    gio::resources_register(&ui_res);
+}
+
