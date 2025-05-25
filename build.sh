@@ -13,6 +13,29 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Initialize flags
+CREATE_CLEAN=false
+CREATE_APP_BUNDLE=false
+CREATE_DMG=false
+
+# Parse command line arguments
+for arg in "$@"; do
+    case $arg in
+        --clean)
+        CREATE_CLEAN=true
+        ;;
+        --app-bundle)
+        CREATE_APP_BUNDLE=true
+        ;;
+        --dmg)
+        CREATE_DMG=true
+        ;;
+        *)
+        # Ignore unknown arguments for now
+        ;;
+    esac
+done
+
 # Check if Homebrew is installed
 if ! command_exists brew; then
     echo -e "${RED}❌ Homebrew not found. Please install it first:${NC}"
@@ -37,7 +60,6 @@ fi
 echo -e "${YELLOW}📋 Using Rust nightly with unstable features enabled${NC}"
 
 # Set up environment for system libraries
-echo -e "${YELLOW}🔧 Configuring system library paths...${NC}"
 export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
 export GETTEXT_SYSTEM=1
 export GETTEXT_DIR="/opt/homebrew"
@@ -48,7 +70,7 @@ export GETTEXT_INCLUDE_DIR="/opt/homebrew/include"
 echo -e "${BLUE}⚙️  Configuring build with Meson...${NC}"
 
 # Only remove builddir if explicitly requested
-if [ "$1" = "--clean" ]; then
+if [ "$CREATE_CLEAN" = true ]; then
     echo -e "${YELLOW}🧹 Clean build requested, removing builddir...${NC}"
     rm -rf builddir
 fi
@@ -76,9 +98,7 @@ ARCH=$(uname -m)
 echo -e "${GREEN}📋 Built for: $ARCH${NC}"
 
 # Optional: Create macOS app bundle
-read -p "📱 Create macOS app bundle? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if [ "$CREATE_APP_BUNDLE" = true ]; then
     echo -e "${BLUE}📱 Creating app bundle...${NC}"
     
     # Find the installed binary
@@ -141,10 +161,8 @@ EOF
     echo -e "${GREEN}✅ App bundle created: Aardvark.app${NC}"
     
     # Optional: Create DMG
-    if command_exists create-dmg; then
-        read -p "💿 Create DMG? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [ "$CREATE_DMG" = true ]; then
+        if command_exists create-dmg; then
             echo -e "${BLUE}💿 Creating DMG...${NC}"
             rm -f "aardvark-$ARCH.dmg"
             create-dmg \
@@ -158,12 +176,23 @@ EOF
                 "aardvark-$ARCH.dmg" \
                 "Aardvark.app"
             echo -e "${GREEN}✅ DMG created: aardvark-$ARCH.dmg${NC}"
+        else
+            echo -e "${YELLOW}⚠️  create-dmg command not found. Skipping DMG creation.${NC}"
         fi
     fi
 fi
 
-echo -e "${GREEN}🚀 Ready to run:${NC}"
 echo -e "  Direct: ${BLUE}./install/bin/aardvark${NC}"
-if [ -d "Aardvark.app" ]; then
-    echo -e "  App bundle: ${BLUE}open Aardvark.app${NC}"
-fi 
+
+if [ "$CREATE_APP_BUNDLE" = true ]; then
+    if [ -d "Aardvark.app" ]; then
+        echo -e "  App bundle: ${BLUE}open Aardvark.app${NC}"
+    fi
+fi
+
+if [ "$CREATE_DMG" = true ]; then
+    ARCH=$(uname -m)
+    if [ -f "aardvark-$ARCH.dmg" ]; then
+        echo -e "  DMG: ${BLUE}open \"aardvark-$ARCH.dmg\"${NC}"
+    fi
+fi ./
