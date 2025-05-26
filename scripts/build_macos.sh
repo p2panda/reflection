@@ -1,4 +1,22 @@
 #!/bin/bash
+
+# Copyright 2024 The Aardvark Developers
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+ 
 set -e
 
 RED='\033[0;31m'
@@ -17,28 +35,32 @@ command_exists() {
 CREATE_CLEAN=false
 CREATE_APP_BUNDLE=false
 CREATE_DMG=false
+BUILD_TYPE="debug"
 
 # Parse command line arguments
-for arg in "$@"; do
-    case $arg in
-        --clean)
-        CREATE_CLEAN=true
-        ;;
-        --app-bundle)
-        CREATE_APP_BUNDLE=true
-        ;;
-        --dmg)
-        CREATE_DMG=true
-        ;;
-        *)
-        # Ignore unknown arguments for now
-        ;;
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --clean) CREATE_CLEAN=true ;;
+        --app-bundle) CREATE_APP_BUNDLE=true ;;
+        --dmg) CREATE_DMG=true ;;
+        --release) BUILD_TYPE="release" ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
+    shift
 done
+# Ask before installing dependencies unless in CI
+if [ -z "$CI" ]; then
+    read -p "Please confirm you want to install dependencies, build and install Aardvark (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${RED}❌ Aborting...${NC}"
+        exit 1
+    fi
+fi
 
 # Check if Homebrew is installed
 if ! command_exists brew; then
-    echo -e "${RED}❌ Homebrew not found. Please install it first:${NC}"
+    echo -e "${RED}❌ Homebrew not found. Please install it first.${NC}"
     exit 1
 fi
 
@@ -47,26 +69,17 @@ echo -e "${BLUE}📦 Installing/updating dependencies...${NC}"
 brew bundle
 
 # Install and configure Rust nightly
-if ! command_exists rustc; then
-    echo -e "${YELLOW}🦀 Installing Rust nightly...${NC}"
-    rustup-init -y --default-toolchain nightly
-    source ~/.cargo/env
-else
-    echo -e "${YELLOW}🦀 Configuring Rust nightly...${NC}"
-    rustup toolchain install nightly
-    rustup default nightly
-fi
-
-echo -e "${YELLOW}📋 Using Rust nightly with unstable features enabled${NC}"
+echo -e "${YELLOW}🦀 Configuring Rust nightly...${NC}"
+rustup toolchain install nightly
+rustup default nightly
 
 # Set up environment for system libraries
-export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+export PKG_CONFIG_PATH="$HOMEBREW_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
 export GETTEXT_SYSTEM=1
-export GETTEXT_DIR="/opt/homebrew"
-export GETTEXT_LIB_DIR="/opt/homebrew/lib"
-export GETTEXT_INCLUDE_DIR="/opt/homebrew/include"
+export GETTEXT_DIR="$HOMEBREW_PREFIX"
+export GETTEXT_LIB_DIR="$HOMEBREW_PREFIX/lib"
+export GETTEXT_INCLUDE_DIR="$HOMEBREW_PREFIX/include"
 
-# Set up build directory
 echo -e "${BLUE}⚙️  Configuring build with Meson...${NC}"
 
 # Only remove builddir if explicitly requested
@@ -77,7 +90,7 @@ fi
 
 if [ ! -d "builddir" ]; then
     meson setup builddir \
-        --buildtype=release \
+        --buildtype=$BUILD_TYPE \
         --prefix="$(pwd)/install"
 else
     echo -e "${YELLOW}📁 Using existing builddir (use './build.sh --clean' for clean build)${NC}"
