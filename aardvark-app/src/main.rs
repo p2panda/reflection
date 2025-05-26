@@ -32,6 +32,7 @@ mod window;
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use std::path::PathBuf;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::prelude::*;
@@ -48,16 +49,78 @@ pub use self::config::APP_ID;
 fn main() -> glib::ExitCode {
     setup_logging();
 
-    // Set up gettext translations
-    bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR).expect("Unable to bind the text domain");
+    // Construct base path within the app bundle for resources and data
+    let mut base_bundle_path =
+        std::env::current_exe().expect("Failed to get current executable path.");
+    base_bundle_path.pop(); // -> Aardvark.app/Contents/MacOS/
+    base_bundle_path.pop(); // -> Aardvark.app/Contents/
+
+    // Set up gettext translations using path relative to bundle
+    let mut locale_dir_path = base_bundle_path.clone();
+    locale_dir_path.push("Resources");
+    locale_dir_path.push("share");
+    locale_dir_path.push("locale");
+
+    if !locale_dir_path.exists() {
+        // It's okay if it doesn't exist, gettext will just not find translations
+        // but we might want to log this in a debug build.
+        if cfg!(debug_assertions) {
+            eprintln!(
+                "Warning: Locale directory not found at expected bundle location: {:?}",
+                locale_dir_path
+            );
+        }
+    }
+
+    bindtextdomain(
+        GETTEXT_PACKAGE,
+        locale_dir_path
+            .to_str()
+            .expect("Locale path is not valid UTF-8"),
+    )
+    .expect("Unable to bind the text domain");
     bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8")
         .expect("Unable to set the text domain encoding");
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
-    // Load resources
-    let res = gio::Resource::load(RESOURCES_FILE).expect("Could not load gresource file");
+    let mut resources_dir_path = base_bundle_path.clone();
+    resources_dir_path.push("Resources");
+    resources_dir_path.push("share");
+    resources_dir_path.push("aardvark"); // Corresponds to the 'aardvark' subdirectory from PKGDATADIR structure
+
+    let mut resources_file_path = resources_dir_path.clone();
+    resources_file_path.push("resources.gresource");
+
+    let mut ui_resources_file_path = resources_dir_path.clone();
+    ui_resources_file_path.push("ui-resources.gresource");
+
+    // Load resources using dynamically constructed paths
+    if !resources_file_path.exists() {
+        panic!(
+            "GResource file 'resources.gresource' not found at expected bundle location: {:?}. Please check build script packaging.",
+            resources_file_path
+        );
+    }
+    let res = gio::Resource::load(&resources_file_path).unwrap_or_else(|err| {
+        panic!(
+            "Could not load gresource file from {:?}: {}",
+            resources_file_path, err
+        )
+    });
     gio::resources_register(&res);
-    let ui_res = gio::Resource::load(UI_RESOURCES_FILE).expect("Could not load UI gresource file");
+
+    if !ui_resources_file_path.exists() {
+        panic!(
+            "GResource file 'ui-resources.gresource' not found at expected bundle location: {:?}. Please check build script packaging.",
+            ui_resources_file_path
+        );
+    }
+    let ui_res = gio::Resource::load(&ui_resources_file_path).unwrap_or_else(|err| {
+        panic!(
+            "Could not load UI gresource file from {:?}: {}",
+            ui_resources_file_path, err
+        )
+    });
     gio::resources_register(&ui_res);
 
     // Create a new GtkApplication. The application manages our main loop,

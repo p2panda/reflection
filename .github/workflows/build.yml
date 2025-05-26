@@ -99,10 +99,11 @@ jobs:
       - name: Run macOS Build Script
         run: |
           chmod +x scripts/build_macos.sh
-          ./scripts/build_macos.sh --release --app-bundle --dmg
+          arch -${{ matrix.arch }} ./scripts/build_macos.sh --release --app-bundle --dmg
         env:
           PKG_CONFIG_ALLOW_CROSS: "1"
           MACOSX_DEPLOYMENT_TARGET: "10.15"
+          RUST_TARGET: ${{ matrix.target }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
