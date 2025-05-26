@@ -1,4 +1,8 @@
 target
 .flatpak-builder
 aardvark-app/src/config.rs
+
+# Build artifacts
 Aardvark.app/
+install/
+aardvark*.dmg
