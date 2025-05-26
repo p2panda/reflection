@@ -30,3 +30,4 @@ features = ["v1_6"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = "2.0"
+base64 = "0.21"

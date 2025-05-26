@@ -16,18 +16,29 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+// #[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use std::collections::HashMap;
 use thiserror::Error;
 use tracing::info;
 
+#[cfg(not(target_os = "macos"))]
 use crate::APP_ID;
 use aardvark_doc::identity::{IdentityError, PrivateKey};
 
+#[cfg(not(target_os = "macos"))]
 const XDG_SCHEMA: &'static str = "xdg:schema";
 
+#[cfg(not(target_os = "macos"))]
 fn attributes() -> HashMap<&'static str, String> {
     HashMap::from([(XDG_SCHEMA, APP_ID.to_owned())])
 }
+
+#[cfg(target_os = "macos")]
+use base64::engine::general_purpose::STANDARD as Base64Engine;
+
+#[cfg(target_os = "macos")]
+use base64::Engine as _;
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -39,11 +50,19 @@ pub enum Error {
     Service(keyring::Error),
     #[error("Format error: {0}")]
     Format(IdentityError),
+    #[error("Base64 decode error: {0}")]
+    Base64Decode(base64::DecodeError),
 }
 
 impl From<IdentityError> for Error {
     fn from(value: IdentityError) -> Self {
         Error::Format(value)
+    }
+}
+
+impl From<base64::DecodeError> for Error {
+    fn from(value: base64::DecodeError) -> Self {
+        Error::Base64Decode(value)
     }
 }
 
@@ -89,14 +108,14 @@ pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
 
     let private_key: PrivateKey = match entry.get_password() {
         Ok(password) => {
-            let private_key = PrivateKey::try_from(password.as_bytes())?;
+            let private_key = PrivateKey::try_from(Base64Engine.decode(password)?.as_slice())?;
             info!("Found existing identity: {}", private_key.public_key());
             private_key
         }
         Err(keyring::Error::NoEntry) => {
             let private_key = PrivateKey::new();
             entry
-                .set_password(&String::from_utf8_lossy(private_key.as_bytes()))
+                .set_password(&Base64Engine.encode(private_key.as_bytes()))
                 .map_err(Error::Service)?;
             info!(
                 "No existing identity found. Create new identity: {}",
