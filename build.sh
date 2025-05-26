@@ -195,4 +195,4 @@ if [ "$CREATE_DMG" = true ]; then
     if [ -f "aardvark-$ARCH.dmg" ]; then
         echo -e "  DMG: ${BLUE}open \"aardvark-$ARCH.dmg\"${NC}"
     fi
-fi ./
+fi
