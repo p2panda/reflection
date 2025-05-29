@@ -3,6 +3,7 @@ c = 'x86_64-apple-darwin-clang'
 cpp = 'x86_64-apple-darwin-clang++'
 ar = 'x86_64-apple-darwin-ar'
 strip = 'x86_64-apple-darwin-strip'
+rust = ['rustc', '--target', 'x86_64-apple-darwin']
 pkgconfig = '/usr/local/bin/pkg-config'
 
 [host_machine]
