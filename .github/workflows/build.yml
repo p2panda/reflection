@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - pv/mac
   pull_request:
     branches:
       - main
