@@ -70,6 +70,7 @@ jobs:
       - uses: moonrepo/setup-rust@v1
         with:
           targets: ${{ matrix.target }}
+          channel: nightly
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
