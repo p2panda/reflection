@@ -75,13 +75,10 @@ fn setup_logging() {
 }
 
 fn load_resources() {
-    #[cfg(target_os = "macos")]
-    let base_bundle_path = {
-        let mut path = std::env::current_exe().expect("Failed to get current executable path.");
-        path.pop(); // -> Aardvark.app/Contents/MacOS/
-        path.pop(); // -> Aardvark.app/Contents/
-        path
-    };
+    let mut base_bundle_path =
+        std::env::current_exe().expect("Failed to get current executable path.");
+    base_bundle_path.pop(); // -> Aardvark.app/Contents/MacOS/
+    base_bundle_path.pop(); // -> Aardvark.app/Contents/
 
     let local_dir_path = if cfg!(target_os = "macos") {
         base_bundle_path.join(LOCALEDIR)
