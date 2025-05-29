@@ -91,6 +91,8 @@ jobs:
           sudo chown -R $(whoami) /usr/local
           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           eval "$(/usr/local/bin/brew shellenv)"
+          # Export Homebrew environment variables to be available in subsequent steps
+          echo "$(/usr/local/bin/brew shellenv)" >> $GITHUB_ENV
 
       - name: Run macOS Build Script
         run: |
