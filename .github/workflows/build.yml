@@ -46,6 +46,8 @@ jobs:
           manifest-path: org.p2panda.aardvark.json
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
+        env:
+          CARGO_TERM_COLOR: always
 
   # The above job will build the application as a flatpack and
   # publish it as an artifact. To test it locally you can download
@@ -79,8 +81,8 @@ jobs:
         with:
           path: |
             ~/Library/Caches/Homebrew
-            /usr/local/Homebrew
-            /opt/homebrew
+            # Conditionally cache the Homebrew directory based on architecture
+            ${{ (matrix.arch == 'x86_64' && '/usr/local/Homebrew') || (matrix.arch == 'arm64' && '/opt/homebrew') }}
           key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('**/Brewfile', '.github/workflows/build.yml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-brew-
@@ -92,12 +94,11 @@ jobs:
           sudo mkdir -p /usr/local
           sudo chown -R $(whoami) /usr/local
           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          eval "$(/usr/local/bin/brew shellenv)"
-          # Export Homebrew environment variables to be available in subsequent steps
-          echo "$(/usr/local/bin/brew shellenv)" >> $GITHUB_ENV
 
       - name: Run macOS Build Script
         run: |
+          eval "$(/usr/local/bin/brew shellenv)"
+          echo "Homebrew prefix: $HOMEBREW_PREFIX"
           chmod +x scripts/build_macos.sh
           arch -${{ matrix.arch }} ./scripts/build_macos.sh --release --app-bundle --dmg
         env:

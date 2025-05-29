@@ -28,6 +28,13 @@ package = "libadwaita"
 version = "0.7"
 features = ["v1_6"]
 
+[target.'cfg(target_os = "linux")'.dependencies]
+oo7 = { version = "0.4", default-features = false, features = [
+  "openssl_crypto",
+  "async-std",
+  "tracing",
+] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = "2.0"
 base64 = "0.21"
