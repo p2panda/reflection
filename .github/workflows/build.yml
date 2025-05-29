@@ -13,46 +13,46 @@ on:
   workflow_dispatch:
 
 jobs:
-  # flatpak:
-  #   name: Flatpak
-  #   runs-on: ubuntu-24.04
-  #   container:
-  #     image: bilelmoussaoui/flatpak-github-actions:gnome-47
-  #     options: --privileged
-  #   strategy:
-  #     matrix:
-  #       arch:
-  #         - x86_64
-  #         - aarch64
-  #     # Don't fail the whole workflow if one architecture fails
-  #     fail-fast: false
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     # Install docker for ARM64 builds
-  #     - name: Install deps
-  #       if: ${{ matrix.arch != 'x86_64' }}
-  #       run: |
-  #         dnf -y install docker
-  #     # Set up QEMU for ARM64 builds
-  #     - name: Set up QEMU
-  #       if: ${{ matrix.arch != 'x86_64' }}
-  #       id: qemu
-  #       uses: docker/setup-qemu-action@v2
-  #       with:
-  #         platforms: arm64
-  #     - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-  #       with:
-  #         bundle: aardvark.flatpak
-  #         manifest-path: org.p2panda.aardvark.json
-  #         cache-key: flatpak-builder-${{ github.sha }}
-  #         arch: ${{ matrix.arch }}
+  flatpak:
+    name: Flatpak
+    runs-on: ubuntu-24.04
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      options: --privileged
+    strategy:
+      matrix:
+        arch:
+          - x86_64
+          - aarch64
+      # Don't fail the whole workflow if one architecture fails
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+      # Install docker for ARM64 builds
+      - name: Install deps
+        if: ${{ matrix.arch != 'x86_64' }}
+        run: |
+          dnf -y install docker
+      # Set up QEMU for ARM64 builds
+      - name: Set up QEMU
+        if: ${{ matrix.arch != 'x86_64' }}
+        id: qemu
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: arm64
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: aardvark.flatpak
+          manifest-path: org.p2panda.aardvark.json
+          cache-key: flatpak-builder-${{ github.sha }}
+          arch: ${{ matrix.arch }}
 
-  # # The above job will build the application as a flatpack and
-  # # publish it as an artifact. To test it locally you can download
-  # # the zip artifact, extract it, install the flatpack and run it.
-  # # unzip aardvark-x86_64.zip
-  # # flatpak --user install aardvark.flatpak
-  # # flatpak run org.p2panda.aardvark
+  # The above job will build the application as a flatpack and
+  # publish it as an artifact. To test it locally you can download
+  # the zip artifact, extract it, install the flatpack and run it.
+  # unzip aardvark-x86_64.zip
+  # flatpak --user install aardvark.flatpak
+  # flatpak run org.p2panda.aardvark
 
   macos:
     name: macOS
@@ -106,7 +106,7 @@ jobs:
           RUST_TARGET: ${{ matrix.target }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           # Build script creates artifacts in the current directory
           name: aardvark-macos-${{ matrix.arch }}
