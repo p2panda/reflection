@@ -1,10 +1,10 @@
 [binaries]
-c = 'x86_64-apple-darwin-clang'
-cpp = 'x86_64-apple-darwin-clang++'
-ar = 'x86_64-apple-darwin-ar'
-strip = 'x86_64-apple-darwin-strip'
+c = ['clang', '-target', 'x86_64-apple-darwin']
+cpp = ['clang++', '-target', 'x86_64-apple-darwin']
+ar = 'ar'
+strip = 'strip'
 rust = ['rustc', '--target', 'x86_64-apple-darwin']
-pkgconfig = '/usr/local/bin/pkg-config'
+pkgconfig = 'pkg-config'
 
 [host_machine]
 system = 'darwin'
