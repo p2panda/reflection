@@ -1,0 +1,4 @@
+option('macos_bundle', 
+       type: 'boolean', 
+       value: false, 
+       description: 'Build for macOS app bundle with relative resource paths') 

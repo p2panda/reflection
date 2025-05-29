@@ -7,12 +7,24 @@ gnome.compile_resources('ui-resources',
   install_dir: pkgdatadir,
 )
 
+# Detect if we're building for a macOS app bundle
+is_macos_bundle = get_option('macos_bundle')
+
 conf = configuration_data()
 conf.set_quoted('APP_ID', application_id)
 conf.set_quoted('VERSION', meson.project_version())
 conf.set_quoted('GETTEXT_PACKAGE', 'aardvark')
-conf.set_quoted('LOCALEDIR', get_option('prefix') / get_option('localedir'))
-conf.set_quoted('PKGDATADIR', pkgdatadir)
+
+# Set paths based on whether we're building for macOS app bundle or not
+if is_macos_bundle
+  # For macOS app bundles, use relative paths that will be resolved at runtime
+  conf.set_quoted('LOCALEDIR', 'Resources/share/locale')
+  conf.set_quoted('PKGDATADIR', 'Resources/share/aardvark')
+else
+  # For Flatpak and other installations, use absolute paths
+  conf.set_quoted('LOCALEDIR', get_option('prefix') / get_option('localedir'))
+  conf.set_quoted('PKGDATADIR', pkgdatadir)
+endif
 
 configure_file(
     input: 'config.rs.in',

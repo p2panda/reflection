@@ -48,6 +48,7 @@ while [[ "$#" -gt 0 ]]; do
     esac
     shift
 done
+
 # Ask before installing dependencies unless in CI
 if [ -z "$CI" ]; then
     read -p "Please confirm you want to install dependencies, build and install Aardvark (y/n) " -n 1 -r
@@ -91,7 +92,8 @@ fi
 if [ ! -d "builddir" ]; then
     meson setup builddir \
         --buildtype=$BUILD_TYPE \
-        --prefix="$(pwd)/install"
+        --prefix="$(pwd)/install" \
+        -Dmacos_bundle=true
 else
     echo -e "${YELLOW}📁 Using existing builddir (use './build.sh --clean' for clean build)${NC}"
 fi
