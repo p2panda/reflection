@@ -50,19 +50,11 @@ pub enum Error {
     Service(keyring::Error),
     #[error("Format error: {0}")]
     Format(IdentityError),
-    #[error("Base64 decode error: {0}")]
-    Base64Decode(base64::DecodeError),
 }
 
 impl From<IdentityError> for Error {
     fn from(value: IdentityError) -> Self {
         Error::Format(value)
-    }
-}
-
-impl From<base64::DecodeError> for Error {
-    fn from(value: base64::DecodeError) -> Self {
-        Error::Base64Decode(value)
     }
 }
 
@@ -108,7 +100,12 @@ pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
 
     let private_key: PrivateKey = match entry.get_password() {
         Ok(password) => {
-            let private_key = PrivateKey::try_from(Base64Engine.decode(password)?.as_slice())?;
+            let private_key = PrivateKey::try_from(
+                Base64Engine
+                    .decode(password)
+                    .expect("Failed to decode base64 secret from keyring")
+                    .as_slice(),
+            )?;
             info!("Found existing identity: {}", private_key.public_key());
             private_key
         }
