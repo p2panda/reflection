@@ -16,20 +16,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// #[cfg(not(target_os = "macos"))]
 #[cfg(target_os = "linux")]
 use std::collections::HashMap;
 use thiserror::Error;
 use tracing::info;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 use crate::APP_ID;
 use aardvark_doc::identity::{IdentityError, PrivateKey};
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 const XDG_SCHEMA: &'static str = "xdg:schema";
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 fn attributes() -> HashMap<&'static str, String> {
     HashMap::from([(XDG_SCHEMA, APP_ID.to_owned())])
 }
@@ -42,7 +41,7 @@ use base64::Engine as _;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     #[error("Secret Service error: {0}")]
     Service(oo7::Error),
     #[cfg(target_os = "macos")]
@@ -58,14 +57,14 @@ impl From<IdentityError> for Error {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 impl From<oo7::Error> for Error {
     fn from(value: oo7::Error) -> Self {
         Error::Service(value)
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
 pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
     let keyring = oo7::Keyring::new().await?;
 

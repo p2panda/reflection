@@ -46,8 +46,6 @@ jobs:
           manifest-path: org.p2panda.aardvark.json
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
-        env:
-          CARGO_TERM_COLOR: always
 
   # The above job will build the application as a flatpack and
   # publish it as an artifact. To test it locally you can download
@@ -81,8 +79,8 @@ jobs:
         with:
           path: |
             ~/Library/Caches/Homebrew
-            # Caching the Homebrew directory on x86_64 causes errors installing the Brewfile
-            ${{ matrix.arch == 'arm64' && '/opt/homebrew' }}
+            /usr/local/Homebrew
+            /opt/homebrew
           key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('**/Brewfile', '.github/workflows/build.yml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-brew-
