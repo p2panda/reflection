@@ -81,8 +81,8 @@ jobs:
         with:
           path: |
             ~/Library/Caches/Homebrew
-            # Conditionally cache the Homebrew directory based on architecture
-            ${{ (matrix.arch == 'x86_64' && '/usr/local/Homebrew') || (matrix.arch == 'arm64' && '/opt/homebrew') }}
+            # Caching the Homebrew directory on x86_64 causes errors installing the Brewfile
+            ${{ matrix.arch == 'arm64' && '/opt/homebrew' }}
           key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('**/Brewfile', '.github/workflows/build.yml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-brew-
