@@ -103,7 +103,7 @@ jobs:
           RUST_TARGET: ${{ matrix.target }}
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           # Build script creates artifacts in the current directory
           name: aardvark-macos-${{ matrix.arch }}
