@@ -96,13 +96,19 @@ jobs:
 
       - name: Run macOS Build Script
         run: |
-          chmod +x scripts/build_macos.sh
-          ./scripts/build_macos.sh --release --app-bundle --dmg ${{ matrix.arch == 'x86_64' && '--arch x86_64' || '' }}
+          if [ "${{ matrix.arch }}" = "x86_64" ]; then
+            eval "$(/usr/local/bin/brew shellenv)"
+            echo "Homebrew prefix: $HOMEBREW_PREFIX"
+            export PKG_CONFIG_PATH="$HOMEBREW_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
+            chmod +x scripts/build_macos.sh
+            ./scripts/build_macos.sh --release --app-bundle --dmg --arch x86_64
+          else
+            chmod +x scripts/build_macos.sh
+            ./scripts/build_macos.sh --release --app-bundle --dmg
+          fi
         env:
           PKG_CONFIG_ALLOW_CROSS: "1"
           MACOSX_DEPLOYMENT_TARGET: "10.15"
-          HOMEBREW_PREFIX: "${{ matrix.arch == 'x86_64' && '/usr/local' || '/opt/homebrew' }}"
-          PKG_CONFIG_PATH: "${{ matrix.arch == 'x86_64' && '/usr/local/lib/pkgconfig' || '/opt/homebrew/lib/pkgconfig' }}"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
