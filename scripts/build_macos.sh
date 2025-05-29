@@ -67,18 +67,18 @@ fi
 
 # Install dependencies
 echo -e "${BLUE}📦 Installing/updating dependencies...${NC}"
-if ! brew bundle; then
+if ! arch -x86_64 brew bundle; then
     echo -e "${YELLOW}⚠️  brew bundle failed, attempting to resolve Python linking conflicts...${NC}"
     
     # Try to force link python if it exists but isn't linked
     if brew list python@3.13 &> /dev/null; then
         echo -e "${YELLOW}🔗 Force linking Python...${NC}"
-        brew link --overwrite python@3.13 || true
+        arch -x86_64 brew link --overwrite python@3.13 || true
     fi
     
     # Retry brew bundle
     echo -e "${YELLOW}🔄 Retrying brew bundle...${NC}"
-    if ! brew bundle; then
+    if ! arch -x86_64 brew bundle; then
         echo -e "${RED}❌ brew bundle failed again. Please check the dependencies.${NC}"
         exit 1
     fi
@@ -108,7 +108,8 @@ if [ ! -d "builddir" ]; then
     meson setup builddir \
         --buildtype=$BUILD_TYPE \
         --prefix="$(pwd)/install" \
-        -Dmacos_bundle=true
+        -Dmacos_bundle=true \
+        -Dcross_file="$(pwd)/x86_64-darwin-cross.txt"
 else
     echo -e "${YELLOW}📁 Using existing builddir (use './build.sh --clean' for clean build)${NC}"
 fi
