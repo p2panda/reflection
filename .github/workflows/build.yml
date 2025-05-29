@@ -95,6 +95,13 @@ jobs:
           sudo chown -R $(whoami) /usr/local
           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
+      - name: Clean up conflicting Python installations
+        if: matrix.arch == 'x86_64'
+        run: |
+          # Remove system Python symlinks that conflict with Homebrew
+          echo "Removing conflicting Python symlinks..."
+          rm -f /usr/local/bin/{idle3,idle3.13,pip3,pip3.13,pydoc3,pydoc3.13,python3,python3-config,python3.13,python3.13-config} || true
+
       - name: Run macOS Build Script
         run: |
           eval "$(/usr/local/bin/brew shellenv)"
