@@ -36,6 +36,7 @@ CREATE_CLEAN=false
 CREATE_APP_BUNDLE=false
 CREATE_DMG=false
 BUILD_TYPE="debug"
+ARCH=$(uname -m)
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -44,10 +45,20 @@ while [[ "$#" -gt 0 ]]; do
         --app-bundle) CREATE_APP_BUNDLE=true ;;
         --dmg) CREATE_DMG=true ;;
         --release) BUILD_TYPE="release" ;;
+        --arch) ARCH="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
 done
+
+# Determine if we need to cross-compile based on target architecture
+if [ "$ARCH" != "$(uname -m)" ]; then
+    CROSS_COMPILE=true
+    echo -e "${YELLOW}⚠️  Cross-compiling for $ARCH architecture${NC}"
+else
+    CROSS_COMPILE=false
+fi
+
 
 # Ask before installing dependencies unless in CI
 if [ -z "$CI" ]; then
@@ -65,20 +76,26 @@ if ! command_exists brew; then
     exit 1
 fi
 
+if [ "$CROSS_COMPILE" = true ]; then
+    BREW_ARCH_CMD="arch -$ARCH brew"
+else
+    BREW_ARCH_CMD="brew"
+fi
+
 # Install dependencies
 echo -e "${BLUE}📦 Installing/updating dependencies...${NC}"
-if ! arch -x86_64 brew bundle; then
+if ! $BREW_ARCH_CMD bundle; then
     echo -e "${YELLOW}⚠️  brew bundle failed, attempting to resolve Python linking conflicts...${NC}"
     
     # Try to force link python if it exists but isn't linked
     if brew list python@3.13 &> /dev/null; then
         echo -e "${YELLOW}🔗 Force linking Python...${NC}"
-        arch -x86_64 brew link --overwrite python@3.13 || true
+        $BREW_ARCH_CMD link --overwrite python@3.13 || true
     fi
     
     # Retry brew bundle
     echo -e "${YELLOW}🔄 Retrying brew bundle...${NC}"
-    if ! arch -x86_64 brew bundle; then
+    if ! $BREW_ARCH_CMD bundle; then
         echo -e "${RED}❌ brew bundle failed again. Please check the dependencies.${NC}"
         exit 1
     fi
@@ -105,11 +122,15 @@ if [ "$CREATE_CLEAN" = true ]; then
 fi
 
 if [ ! -d "builddir" ]; then
-    meson setup builddir \
+    BUILD_ARGS=(
         --buildtype=$BUILD_TYPE \
         --prefix="$(pwd)/install" \
-        -Dmacos_bundle=true \
-        -Dcross_file="$(pwd)/x86_64-darwin-cross.txt"
+        -Dmacos_bundle=true
+    )
+    if [ "$CROSS_COMPILE" = true ]; then
+        BUILD_ARGS+=(--cross-file="$(pwd)/$ARCH-darwin-cross.txt")
+    fi
+    meson setup builddir "${BUILD_ARGS[@]}"
 else
     echo -e "${YELLOW}📁 Using existing builddir (use './build.sh --clean' for clean build)${NC}"
 fi
@@ -124,15 +145,7 @@ meson install -C builddir
 
 echo -e "${GREEN}✅ Build completed successfully!${NC}"
 
-# Detect architecture for output naming
-# Use TARGET_ARCH from CI environment if available, otherwise detect from system
-if [ -n "$TARGET_ARCH" ]; then
-    ARCH="$TARGET_ARCH"
-    echo -e "${GREEN}📋 Built for: $ARCH (from TARGET_ARCH)${NC}"
-else
-    ARCH=$(uname -m)
-    echo -e "${GREEN}📋 Built for: $ARCH${NC}"
-fi
+echo -e "${GREEN}📋 Built for: $ARCH${NC}"
 
 # Optional: Create macOS app bundle
 if [ "$CREATE_APP_BUNDLE" = true ]; then
