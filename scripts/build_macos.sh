@@ -25,25 +25,35 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}🏗️  Aardvark Build Script${NC}"
+echo -e "${GREEN}🏗️ Aardvark Build Script${NC}"
 
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
 # Initialize flags
-CREATE_CLEAN=false
 CREATE_APP_BUNDLE=false
 CREATE_DMG=false
+CREATE_CLEAN=false
 BUILD_TYPE="debug"
 ARCH=$(uname -m)
-
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --clean) CREATE_CLEAN=true ;;
+        --help|-h)
+            echo "Usage: $0 [options]"
+            echo "Options:"
+            echo "  --app-bundle   Create macOS .app bundle"
+            echo "  --dmg          Create DMG installer"
+            echo "  --clean        Clean build directory before building"
+            echo "  --release      Build in release mode"
+            echo "  --arch ARCH    Target architecture (default: $(uname -m))"
+            echo "  --help, -h     Show this help message"
+            exit 0
+            ;;
         --app-bundle) CREATE_APP_BUNDLE=true ;;
         --dmg) CREATE_DMG=true ;;
+        --clean) CREATE_CLEAN=true ;;
         --release) BUILD_TYPE="release" ;;
         --arch) ARCH="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
@@ -54,7 +64,7 @@ done
 # Determine if we need to cross-compile based on target architecture
 if [ "$ARCH" != "$(uname -m)" ]; then
     CROSS_COMPILE=true
-    echo -e "${YELLOW}⚠️  Cross-compiling for $ARCH architecture${NC}"
+    echo -e "${YELLOW}👽 Cross-compiling for $ARCH architecture${NC}"
 else
     CROSS_COMPILE=false
 fi
@@ -132,7 +142,7 @@ if [ ! -d "builddir" ]; then
     fi
     meson setup builddir "${BUILD_ARGS[@]}"
 else
-    echo -e "${YELLOW}📁 Using existing builddir (use './build.sh --clean' for clean build)${NC}"
+    echo -e "${YELLOW}📁 Using existing builddir (use --clean for clean build)${NC}"
 fi
 
 # Build the project
