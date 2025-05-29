@@ -124,8 +124,14 @@ meson install -C builddir
 echo -e "${GREEN}✅ Build completed successfully!${NC}"
 
 # Detect architecture for output naming
-ARCH=$(uname -m)
-echo -e "${GREEN}📋 Built for: $ARCH${NC}"
+# Use TARGET_ARCH from CI environment if available, otherwise detect from system
+if [ -n "$TARGET_ARCH" ]; then
+    ARCH="$TARGET_ARCH"
+    echo -e "${GREEN}📋 Built for: $ARCH (from TARGET_ARCH)${NC}"
+else
+    ARCH=$(uname -m)
+    echo -e "${GREEN}📋 Built for: $ARCH${NC}"
+fi
 
 # Optional: Create macOS app bundle
 if [ "$CREATE_APP_BUNDLE" = true ]; then
@@ -221,7 +227,6 @@ if [ "$CREATE_APP_BUNDLE" = true ]; then
 fi
 
 if [ "$CREATE_DMG" = true ]; then
-    ARCH=$(uname -m)
     if [ -f "aardvark-$ARCH.dmg" ]; then
         echo -e "  DMG: ${BLUE}open \"aardvark-$ARCH.dmg\"${NC}"
     fi
