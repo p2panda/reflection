@@ -55,21 +55,21 @@ jobs:
   # flatpak run org.p2panda.aardvark
 
   macos:
-    name: macOS
+    name: macOS (${{ matrix.arch }})
     runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: x86_64
-            target: x86_64-apple-darwin
+          - target: x86_64-apple-darwin
             arch: x86_64
-          - name: arm64
-            target: aarch64-apple-darwin
+          - target: aarch64-apple-darwin
             arch: arm64
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
+        with:
+          targets: ${{ matrix.target }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -92,9 +92,6 @@ jobs:
           sudo chown -R $(whoami) /usr/local
           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           eval "$(/usr/local/bin/brew shellenv)"
-
-      - name: Add target ${{ matrix.target }}
-        run: rustup target add ${{ matrix.target }}
 
       - name: Run macOS Build Script
         run: |
