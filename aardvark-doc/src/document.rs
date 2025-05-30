@@ -213,6 +213,10 @@ mod imp {
             } else {
                 *self.last_accessed.lock().unwrap() = glib::DateTime::now_utc().ok();
 
+                if let Some(task) = self.snapshot_task.lock().unwrap().take() {
+                    task.remove();
+                }
+
                 let obj = self.obj();
                 // Keep the application alive till we completed the unsubscription task
                 let guard = gio::Application::default().and_then(|app| Some(app.hold()));
