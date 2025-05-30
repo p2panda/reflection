@@ -225,6 +225,9 @@ mod imp {
                     #[strong]
                     obj,
                     async move {
+                        // Store the latest snapshot before unsubscribing
+                        obj.store_snapshot().await;
+
                         let document_id = obj.id().0;
                         if let Err(error) = obj.service().node().unsubscribe(&document_id).await {
                             error!("Failed to unsubscribe document {}: {}", document_id, error);
