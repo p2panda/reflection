@@ -56,7 +56,7 @@ impl Service {
         glib::MainContext::new().block_on(async move {
             let private_key = self.private_key().0.clone();
             let public_key = private_key.public_key();
-            let network_id = Hash::new(b"aardvark <3");
+            let network_id = Hash::new(b"aardvark");
             let path = self.data_dir().path().expect("Valid file path");
             if let Err(error) = self
                 .imp()
