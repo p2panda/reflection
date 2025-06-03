@@ -75,6 +75,7 @@ fn setup_logging() {
 }
 
 fn load_resources() {
+    // Used for macOS app bundle
     let mut base_bundle_path =
         std::env::current_exe().expect("Failed to get current executable path.");
     base_bundle_path.pop(); // -> Aardvark.app/Contents/MacOS/
