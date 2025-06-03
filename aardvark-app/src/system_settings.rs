@@ -20,14 +20,19 @@
 
 use adw::prelude::*;
 use adw::subclass::prelude::*;
+#[cfg(target_os = "linux")]
 use ashpd::{desktop::settings::Settings as SettingsProxy, zvariant};
-use futures_util::stream::StreamExt;
 use gtk::{glib, glib::Properties, glib::clone, pango};
 use std::cell::{Cell, RefCell};
 use tracing::error;
 
+#[cfg(target_os = "linux")]
 const GNOME_DESKTOP_NAMESPACE: &str = "org.gnome.desktop.interface";
+
+#[cfg(target_os = "linux")]
 const CLOCK_FORMAT_KEY: &str = "clock-format";
+
+#[cfg(target_os = "linux")]
 const MONOSPACE_FONT_NAME_KEY: &str = "monospace-font-name";
 
 /// The clock format setting.
@@ -89,7 +94,11 @@ mod imp {
                 self,
                 async move {
                     if let Err(error) = this.init().await {
+                        #[cfg(target_os = "linux")]
                         error!("Unable to read system settings: {error}");
+
+                        #[cfg(target_os = "macos")]
+                        let _ = error;
                     }
                 }
             ));
@@ -97,6 +106,7 @@ mod imp {
     }
 
     impl SystemSettings {
+        #[cfg(target_os = "linux")]
         async fn init(&self) -> Result<(), ashpd::Error> {
             let proxy = SettingsProxy::new().await?;
             let settings = proxy.read_all(&[GNOME_DESKTOP_NAMESPACE]).await?;
@@ -175,6 +185,13 @@ mod imp {
             Ok(())
         }
 
+        #[cfg(target_os = "macos")]
+        async fn init(&self) -> Result<(), ()> {
+            // TODO: Implement reading macOS system settings
+            Ok(())
+        }
+
+        #[cfg(target_os = "linux")]
         fn set_clock_format(&self, clock_format: ClockFormat) {
             if self.obj().clock_format() == clock_format {
                 return;
@@ -184,6 +201,7 @@ mod imp {
             self.obj().notify_clock_format();
         }
 
+        #[cfg(target_os = "linux")]
         fn set_monospace_font_name(&self, font_name: Option<pango::FontDescription>) {
             if self.obj().monospace_font_name() == font_name {
                 return;
@@ -211,6 +229,7 @@ impl Default for SystemSettings {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl TryFrom<&zvariant::OwnedValue> for ClockFormat {
     type Error = zvariant::Error;
 
@@ -229,6 +248,7 @@ impl TryFrom<&zvariant::OwnedValue> for ClockFormat {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl TryFrom<zvariant::OwnedValue> for ClockFormat {
     type Error = zvariant::Error;
 
