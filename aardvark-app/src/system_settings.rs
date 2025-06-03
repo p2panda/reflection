@@ -22,6 +22,8 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 #[cfg(target_os = "linux")]
 use ashpd::{desktop::settings::Settings as SettingsProxy, zvariant};
+#[cfg(target_os = "linux")]
+use futures_util::stream::StreamExt;
 use gtk::{glib, glib::Properties, glib::clone, pango};
 use std::cell::{Cell, RefCell};
 use tracing::error;
