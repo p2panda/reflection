@@ -7,7 +7,7 @@ use glib::subclass::prelude::*;
 
 use crate::identity::PublicKey;
 
-pub const COLORS: [(&str, &str); 15] = [
+pub const COLORS: [(&str, &str); 14] = [
     ("Yellow", "#faf387"),
     ("Orange", "#ffc885"),
     ("Red", "#f99085"),
@@ -17,7 +17,6 @@ pub const COLORS: [(&str, &str); 15] = [
     ("Blue", "#99c1f1"),
     ("Cyan", "#99f1ec"),
     ("Green", "#97f1aa"),
-    ("Khaki", "#f6e7c0"),
     ("Brown", "#d9c0ab"),
     ("Silver", "#deddda"),
     ("Gray", "#c0bfbc"),
