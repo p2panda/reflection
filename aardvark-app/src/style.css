@@ -5,6 +5,11 @@
   font-weight: bold;
 }
 
+/* HACK: the letter-spacing is also applied to the popover */
+.invite-code-entry > popover {
+  letter-spacing: 0px;
+}
+
 .invite-code-entry {
   border-radius: 15px;
   padding: 15px 20px;
