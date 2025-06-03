@@ -111,11 +111,6 @@ if ! $BREW_ARCH_CMD bundle; then
     fi
 fi
 
-# Install and configure Rust nightly
-echo -e "${YELLOW}🦀 Configuring Rust nightly...${NC}"
-rustup toolchain install nightly
-rustup default nightly
-
 # Set up environment for system libraries
 export PKG_CONFIG_PATH="$HOMEBREW_PREFIX/lib/pkgconfig:$PKG_CONFIG_PATH"
 export GETTEXT_SYSTEM=1
