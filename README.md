@@ -1,4 +1,4 @@
-# Aardvark (working title)
+# Reflection
 
 MVP collaborative, local-first GTK text editor :)
 
