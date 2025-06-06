@@ -90,7 +90,6 @@
             </child>
             <child type="end">
               <object class="GtkMenuButton" id="connection_button">
-                <property name="margin-end">6</property>
                 <style>
                   <class name="flat"/>
                 </style>
