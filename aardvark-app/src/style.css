@@ -36,7 +36,7 @@
 }
 
 .connection-popover list {
- margin: 9px 3px;
+    margin: 3px 3px;
 }
 
 .this-device-pill {
@@ -57,8 +57,8 @@
 }
 
 .open-popover row {
-  border-radius: 6px;
-  margin: 6px;
+  border-radius: 8px;
+  margin: 2px 6px;
 }
 
 .open-popover .open-document {
