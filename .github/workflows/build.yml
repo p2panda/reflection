@@ -37,17 +37,17 @@ jobs:
           platforms: arm64
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          bundle: aardvark.flatpak
-          manifest-path: org.p2panda.aardvark.json
+          bundle: reflection.flatpak
+          manifest-path: org.p2panda.reflection.json
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
 
   # The above job will build the application as a flatpack and
   # publish it as an artifact. To test it locally you can download
   # the zip artifact, extract it, install the flatpack and run it.
-  # unzip aardvark-x86_64.zip
-  # flatpak --user install aardvark.flatpak
-  # flatpak run org.p2panda.aardvark
+  # unzip reflection-x86_64.zip
+  # flatpak --user install reflection.flatpak
+  # flatpak run org.p2panda.reflection
 
   macos:
     name: macOS
@@ -180,26 +180,26 @@ jobs:
       - name: Compile GResource
         run: |
           mkdir -p target/${{ matrix.target }}/release/
-          glib-compile-resources --sourcedir aardvark-app/src --target target/${{ matrix.target }}/release/aardvark.gresource aardvark-app/src/aardvark.gresource.xml
+          glib-compile-resources --sourcedir reflection-app/src --target target/${{ matrix.target }}/release/reflection.gresource reflection-app/src/reflection.gresource.xml
 
       - name: Create App Bundle
         run: |
-          mkdir -p Aardvark.app/Contents/{MacOS,Resources}/share/aardvark
-          cp target/${{ matrix.target }}/release/aardvark Aardvark.app/Contents/MacOS/
-          cp target/${{ matrix.target }}/release/aardvark.gresource Aardvark.app/Contents/Resources/share/aardvark/
+          mkdir -p Reflection.app/Contents/{MacOS,Resources}/share/reflection
+          cp target/${{ matrix.target }}/release/reflection Reflection.app/Contents/MacOS/
+          cp target/${{ matrix.target }}/release/reflection.gresource Reflection.app/Contents/Resources/share/reflection/
 
           # Create Info.plist
-          cat > Aardvark.app/Contents/Info.plist << EOF
+          cat > Reflection.app/Contents/Info.plist << EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>CFBundleExecutable</key>
-              <string>aardvark</string>
+              <string>reflection</string>
               <key>CFBundleIdentifier</key>
-              <string>org.p2panda.aardvark</string>
+              <string>org.p2panda.reflection</string>
               <key>CFBundleName</key>
-              <string>Aardvark</string>
+              <string>Reflection</string>
               <key>CFBundlePackageType</key>
               <string>APPL</string>
               <key>CFBundleShortVersionString</key>
@@ -217,25 +217,25 @@ jobs:
       # Bundle dependencies
       - name: Bundle dependencies
         run: |
-          dylibbundler -od -b -x Aardvark.app/Contents/MacOS/aardvark \
-            -d Aardvark.app/Contents/Frameworks/ \
+          dylibbundler -od -b -x Reflection.app/Contents/MacOS/reflection \
+            -d Reflection.app/Contents/Frameworks/ \
             -p @executable_path/../Frameworks/
       # Create DMG
       - name: Create DMG
-        run: hdiutil create -volname "Aardvark" -srcfolder Aardvark.app -ov -format UDZO aardvark-${{ matrix.arch }}.dmg
+        run: hdiutil create -volname "Reflection" -srcfolder Reflection.app -ov -format UDZO reflection-${{ matrix.arch }}.dmg
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: aardvark-macos-${{ matrix.arch }}
-          path: aardvark-${{ matrix.arch }}.dmg
+          name: reflection-macos-${{ matrix.arch }}
+          path: reflection-${{ matrix.arch }}.dmg
       - name: Smoke test the artifact
         env:
           RUST_BACKTRACE: "full"
           RUST_LOG: "debug"
           G_MESSAGES_DEBUG: "all"
         run: |
-          ./Aardvark.app/Contents/MacOS/aardvark &
+          ./Reflection.app/Contents/MacOS/reflection &
           PID=$!
           sleep 5
-          echo Killing aardvark
+          echo Killing reflection
           kill $PID || true

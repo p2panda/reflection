@@ -1,6 +1,0 @@
-# List of source files containing translatable strings.
-# Please keep this file sorted alphabetically.
-data/org.p2panda.aardvark.desktop.in
-data/org.p2panda.aardvark.metainfo.xml.in
-data/org.p2panda.aardvark.gschema.xml
-src/window.ui

@@ -1,4 +1,4 @@
-project('aardvark', 'rust', 
+project('reflection', 'rust',
           version: '0.1.0',
     meson_version: '>= 1.0.0',
   default_options: [ 'warning_level=2', 'werror=false', ],
@@ -9,9 +9,9 @@ gnome = import('gnome')
 
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 
-subdir('aardvark-app/data')
-subdir('aardvark-app/src')
-subdir('aardvark-app/po')
+subdir('reflection-app/data')
+subdir('reflection-app/src')
+subdir('reflection-app/po')
 
 gnome.post_install(
      glib_compile_schemas: true,

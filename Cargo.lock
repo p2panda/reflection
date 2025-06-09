@@ -3,60 +3,6 @@
 version = 4
 
 [[package]]
-name = "aardvark"
-version = "0.1.0"
-dependencies = [
- "aardvark-doc",
- "aardvark-node",
- "ashpd 0.9.2",
- "futures-util",
- "gettext-rs",
- "gtk4",
- "libadwaita",
- "oo7",
- "sourceview5",
- "thiserror 2.0.12",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "aardvark-doc"
-version = "0.1.0"
-dependencies = [
- "aardvark-node",
- "anyhow",
- "async-channel",
- "gio",
- "glib",
- "loro",
- "p2panda-core",
- "thiserror 2.0.12",
- "tracing",
-]
-
-[[package]]
-name = "aardvark-node"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "ciborium",
- "p2panda-core",
- "p2panda-discovery",
- "p2panda-net",
- "p2panda-store",
- "p2panda-stream",
- "p2panda-sync",
- "serde",
- "sqlx",
- "tokio",
- "tokio-stream",
- "tracing",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4363,6 +4309,60 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b8c0c260b63a8219631167be35e6a988e9554dbd323f8bd08439c8ed1302bd1"
 dependencies = [
  "bitflags 2.9.0",
+]
+
+[[package]]
+name = "reflection"
+version = "0.1.0"
+dependencies = [
+ "ashpd 0.9.2",
+ "futures-util",
+ "gettext-rs",
+ "gtk4",
+ "libadwaita",
+ "oo7",
+ "reflection-doc",
+ "reflection-node",
+ "sourceview5",
+ "thiserror 2.0.12",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "reflection-doc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-channel",
+ "gio",
+ "glib",
+ "loro",
+ "p2panda-core",
+ "reflection-node",
+ "thiserror 2.0.12",
+ "tracing",
+]
+
+[[package]]
+name = "reflection-node"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "ciborium",
+ "p2panda-core",
+ "p2panda-discovery",
+ "p2panda-net",
+ "p2panda-store",
+ "p2panda-stream",
+ "p2panda-sync",
+ "serde",
+ "sqlx",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]

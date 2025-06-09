@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=reflection
+Exec=reflection
+Icon=org.p2panda.reflection
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=GTK;
+StartupNotify=true
+DBusActivatable=true

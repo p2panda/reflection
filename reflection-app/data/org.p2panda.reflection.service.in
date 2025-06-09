@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.p2panda.reflection
+Exec=@bindir@/reflection --gapplication-service
