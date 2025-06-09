@@ -1,0 +1,6 @@
+# List of source files containing translatable strings.
+# Please keep this file sorted alphabetically.
+data/org.p2panda.reflection.desktop.in
+data/org.p2panda.reflection.metainfo.xml.in
+data/org.p2panda.reflection.gschema.xml
+src/window.ui

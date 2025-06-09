@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="Adw" version="1.0"/>
+  <template class="ReflectionOpenPopover" parent="GtkPopover">
+    <style>
+      <class name="open-popover"/>
+    </style>
+    <property name="child">
+      <object class="GtkBox">
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkSearchEntry" id="search_entry">
+            <property name="hexpand">True</property>
+            <accessibility>
+              <property name="label" translatable="yes">Past Documents Search</property>
+              <property name="description" translatable="yes">Search for a past document</property>
+            </accessibility>
+          </object>
+        </child>
+        <child>
+          <object class="GtkStack" id="stack">
+            <child>
+              <object class="GtkScrolledWindow" id="document_list_page">
+                <property name="propagate-natural-height">True</property>
+                <property name="hscrollbar-policy">never</property>
+                <property name="max-content-height">400</property>
+                <property name="child">
+                  <object class="GtkListBox" id="listbox" />
+                </property>
+                <style>
+                  <class name="undershoot-top" />
+                  <class name="undershoot-bottom" />
+                </style>
+              </object>
+            </child>
+            <child>
+              <object class="AdwStatusPage" id="no_results_page">
+                <property name="icon-name">system-search-symbolic</property>
+                <property name="title" translatable="yes">No documents found</property>
+                <style>
+                  <class name="compact" />
+                </style>
+              </object>
+            </child>
+          </object>
+        </child>
+        <child>
+          <object class="GtkButton" id="open_document_button">
+            <property name="child">
+              <object class="AdwButtonContent">
+                <property name="icon-name">join-document-symbolic</property>
+                <property name="label" translatable="yes">_Join Document</property>
+                <property name="use-underline">True</property>
+              </object>
+            </property>
+            <property name="valign">center</property>
+            <property name="halign">center</property>
+            <style>
+              <class name="open-document"/>
+              <class name="pill"/>
+            </style>
+          </object>
+        </child>
+      </object>
+    </property>
+  </template>
+</interface>
