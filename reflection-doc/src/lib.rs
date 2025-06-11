@@ -78,6 +78,7 @@ mod tests {
     use gio::prelude::FileExt;
     use glib::object::ObjectExt;
     use std::fs;
+    use test_log::test;
 
     struct TestResource {
         service: Service,
