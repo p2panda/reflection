@@ -36,7 +36,8 @@
 }
 
 .connection-popover list {
-    margin: 3px 3px;
+  background-color: transparent;
+  margin: 3px 3px;
 }
 
 .this-device-pill {
