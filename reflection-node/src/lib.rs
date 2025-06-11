@@ -7,3 +7,5 @@ mod utils;
 
 pub use document::SubscribableDocument;
 pub use node::Node;
+
+pub use p2panda_core;
