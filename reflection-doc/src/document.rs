@@ -7,8 +7,8 @@ use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
-use p2panda_core::HashError;
 use reflection_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
+use reflection_node::p2panda_core;
 use tracing::error;
 
 use crate::authors::Authors;
@@ -20,7 +20,7 @@ use crate::service::Service;
 pub struct DocumentId(pub(crate) DocumentIdNode);
 
 impl FromStr for DocumentId {
-    type Err = HashError;
+    type Err = p2panda_core::HashError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(DocumentId(DocumentIdNode::from_str(value)?))

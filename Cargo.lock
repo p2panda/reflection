@@ -4338,7 +4338,6 @@ dependencies = [
  "gio",
  "glib",
  "loro",
- "p2panda-core",
  "reflection-node",
  "thiserror 2.0.12",
  "tracing",
