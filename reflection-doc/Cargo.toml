@@ -16,3 +16,4 @@ gio = "0.20"
 loro = "1.5"
 thiserror = "2.0.11"
 tracing = "0.1"
+test-log = { version = "0.2.17", default-features = false, features = ["trace", "color"] }
