@@ -4448,6 +4448,7 @@ dependencies = [
  "p2panda-sync",
  "serde",
  "sqlx",
+ "test-log",
  "tokio",
  "tokio-stream",
  "tracing",
