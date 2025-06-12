@@ -54,3 +54,16 @@ cargo_build = custom_target(
     cargo_opt, '&&', 'cp', 'reflection-app/src' / rust_target / meson.project_name(), '@OUTPUT@',
   ]
 )
+
+test(
+  'cargo-test',
+  cargo_bin,
+  args: [
+    'test',
+    cargo_opt,
+    '--',
+    '--test-threads=1',
+  ],
+  is_parallel: false,
+  timeout: 1800,
+)

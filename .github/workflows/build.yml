@@ -28,6 +28,7 @@ jobs:
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.variant.arch }}
           verbose: true
+          run-tests: true
 
   # The above job will build the application as a flatpak and
   # publish it as an artifact. To test it locally you can download
