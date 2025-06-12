@@ -222,7 +222,7 @@ jobs:
       - name: Create DMG
         run: hdiutil create -volname "Reflection" -srcfolder Reflection.app -ov -format UDZO reflection-${{ matrix.arch }}.dmg
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: reflection-macos-${{ matrix.arch }}
           path: reflection-${{ matrix.arch }}.dmg
