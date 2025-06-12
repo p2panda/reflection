@@ -197,17 +197,20 @@ impl Node {
         let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
-        let operation = inner.runtime.block_on(async {
-            create_operation(
-                &mut inner_clone.operation_store.clone(),
-                &inner_clone.private_key,
-                LogType::Snapshot,
-                None,
-                None,
-                false,
-            )
-            .await
-        })?;
+        let operation = inner
+            .runtime
+            .spawn(async move {
+                create_operation(
+                    &mut inner_clone.operation_store.clone(),
+                    &inner_clone.private_key,
+                    LogType::Snapshot,
+                    None,
+                    None,
+                    false,
+                )
+                .await
+            })
+            .await??;
 
         let document_id: DocumentId = operation
             .header
