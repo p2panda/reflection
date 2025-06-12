@@ -197,10 +197,10 @@ impl Node {
         let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
-        let operation = inner
+        inner
             .runtime
             .spawn(async move {
-                create_operation(
+                let operation = create_operation(
                     &mut inner_clone.operation_store.clone(),
                     &inner_clone.private_key,
                     LogType::Snapshot,
@@ -208,16 +208,25 @@ impl Node {
                     None,
                     false,
                 )
-                .await
+                .await?;
+
+                let document_id: DocumentId = operation
+                    .header
+                    .extension()
+                    .expect("document id from our own logs");
+                inner_clone
+                    .document_store
+                    .add_document(&document_id)
+                    .await?;
+
+                // Add ourselves as an author to the document store.
+                inner_clone
+                    .document_store
+                    .add_author(&document_id, &inner_clone.private_key.public_key())
+                    .await?;
+                Ok(document_id)
             })
-            .await??;
-
-        let document_id: DocumentId = operation
-            .header
-            .extension()
-            .expect("document id from our own logs");
-
-        Ok(document_id)
+            .await?
     }
 
     /// Set the name for a given document
