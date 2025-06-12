@@ -1,16 +1,16 @@
 name: Build
 
 on:
+  push:
+    branches: [main]
   pull_request:
-    branches:
-      - main
 
 jobs:
   flatpak:
     name: Flatpak
     runs-on: ubuntu-24.04
     container:
-      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      image: flatpak/flatpak-github-actions:gnome-48
       options: --privileged
     strategy:
       matrix:
@@ -39,10 +39,11 @@ jobs:
           manifest-path: org.p2panda.reflection.json
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.arch }}
+          run-tests: true
 
-  # The above job will build the application as a flatpack and
+  # The above job will build the application as a flatpak and
   # publish it as an artifact. To test it locally you can download
-  # the zip artifact, extract it, install the flatpack and run it.
+  # the zip artifact, extract it, install the flatpak and run it.
   # unzip reflection-x86_64.zip
   # flatpak --user install reflection.flatpak
   # flatpak run org.p2panda.reflection
