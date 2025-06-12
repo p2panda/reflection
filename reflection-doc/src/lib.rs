@@ -5,7 +5,8 @@ pub mod documents;
 pub mod service;
 
 pub mod identity {
-    pub use p2panda_core::identity::IdentityError;
+    use reflection_node::p2panda_core;
+    pub use reflection_node::p2panda_core::identity::IdentityError;
     use std::fmt;
 
     #[derive(Clone, Debug, glib::Boxed)]
@@ -77,6 +78,7 @@ mod tests {
     use gio::prelude::FileExt;
     use glib::object::ObjectExt;
     use std::fs;
+    use test_log::test;
 
     struct TestResource {
         service: Service,

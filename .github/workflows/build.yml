@@ -1,50 +1,38 @@
 name: Build
 
 on:
+  push:
+    branches: [main]
   pull_request:
-    branches:
-      - main
-    types:
-      - ready_for_review
 
 jobs:
   flatpak:
-    name: Flatpak
-    runs-on: ubuntu-24.04
+    name: "Flatpak"
     container:
-      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
     strategy:
       matrix:
-        arch:
-          - x86_64
-          - aarch64
-      # Don't fail the whole workflow if one architecture fails
-      fail-fast: false
+        variant:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.variant.runner }}
     steps:
       - uses: actions/checkout@v4
-      # Install docker for ARM64 builds
-      - name: Install deps
-        if: ${{ matrix.arch != 'x86_64' }}
-        run: |
-          dnf -y install docker
-      # Set up QEMU for ARM64 builds
-      - name: Set up QEMU
-        if: ${{ matrix.arch != 'x86_64' }}
-        id: qemu
-        uses: docker/setup-qemu-action@v2
-        with:
-          platforms: arm64
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: reflection.flatpak
           manifest-path: org.p2panda.reflection.json
           cache-key: flatpak-builder-${{ github.sha }}
-          arch: ${{ matrix.arch }}
+          arch: ${{ matrix.variant.arch }}
+          verbose: true
+          run-tests: true
 
-  # The above job will build the application as a flatpack and
+  # The above job will build the application as a flatpak and
   # publish it as an artifact. To test it locally you can download
-  # the zip artifact, extract it, install the flatpack and run it.
+  # the zip artifact, extract it, install the flatpak and run it.
   # unzip reflection-x86_64.zip
   # flatpak --user install reflection.flatpak
   # flatpak run org.p2panda.reflection
@@ -224,7 +212,7 @@ jobs:
       - name: Create DMG
         run: hdiutil create -volname "Reflection" -srcfolder Reflection.app -ov -format UDZO reflection-${{ matrix.arch }}.dmg
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: reflection-macos-${{ matrix.arch }}
           path: reflection-${{ matrix.arch }}.dmg
