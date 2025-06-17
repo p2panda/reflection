@@ -10,7 +10,6 @@ authors = [
 
 [dependencies]
 reflection-doc = { path = "../reflection-doc" }
-reflection-node = { path = "../reflection-node" }
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
 gtk = { version = "0.9", package = "gtk4", features = ["gnome_47"] }
 sourceview = { package = "sourceview5", version = "0.9" }
