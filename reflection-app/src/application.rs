@@ -26,7 +26,7 @@ use reflection_doc::{document::DocumentId, service::Service};
 use std::{cell::OnceCell, fs};
 use tracing::error;
 
-use crate::ReflectionWindow;
+use crate::DocumentView;
 use crate::config;
 use crate::secret;
 use crate::system_settings::SystemSettings;
@@ -114,13 +114,10 @@ impl ReflectionApplication {
             .build()
     }
 
-    pub fn window_for_document_id(
-        &self,
-        document_id: &DocumentId,
-    ) -> Option<crate::ReflectionWindow> {
+    pub fn window_for_document_id(&self, document_id: &DocumentId) -> Option<crate::DocumentView> {
         self.windows()
             .into_iter()
-            .filter_map(|window| window.downcast::<super::ReflectionWindow>().ok())
+            .filter_map(|window| window.downcast::<super::DocumentView>().ok())
             .find(|window| &window.document().id() == document_id)
     }
 
@@ -138,7 +135,7 @@ impl ReflectionApplication {
     }
 
     fn new_window(&self) {
-        let window = ReflectionWindow::new(self, &self.service());
+        let window = DocumentView::new(self, &self.service());
         window.present();
     }
 

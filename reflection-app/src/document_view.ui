@@ -27,7 +27,7 @@
       </item>
     </section>
   </menu>
-  <template class="ReflectionWindow" parent="AdwApplicationWindow">
+  <template class="ReflectionDocumentView" parent="AdwApplicationWindow">
     <property name="title" translatable="yes">Reflection</property>
     <property name="default-width">800</property>
     <property name="default-height">600</property>
@@ -74,7 +74,7 @@
                     <property name="menu-model">primary_menu</property>
                     <child type="focus-level">
                       <object class="ZoomLevelSelector">
-                        <property name="zoom-level" bind-source="ReflectionWindow" bind-property="zoom-level" bind-flags="sync-create"/>
+                        <property name="zoom-level" bind-source="ReflectionDocumentView" bind-property="zoom-level" bind-flags="sync-create"/>
                       </object>
                     </child>
                   </object>
