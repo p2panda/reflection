@@ -4322,7 +4322,6 @@ dependencies = [
  "libadwaita",
  "oo7",
  "reflection-doc",
- "reflection-node",
  "sourceview5",
  "thiserror 2.0.12",
  "tracing",
