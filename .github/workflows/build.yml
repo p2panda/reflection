@@ -30,9 +30,9 @@ jobs:
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.variant.arch }}
 
-  # The above job will build the application as a flatpack and
+  # The above job will build the application as a flatpak and
   # publish it as an artifact. To test it locally you can download
-  # the zip artifact, extract it, install the flatpack and run it.
+  # the zip artifact, extract it, install the flatpak and run it.
   # unzip reflection-x86_64.zip
   # flatpak --user install reflection.flatpak
   # flatpak run org.p2panda.reflection
