@@ -7,38 +7,28 @@ on:
 
 jobs:
   flatpak:
-    name: Flatpak
-    runs-on: ubuntu-24.04
+    name: "Flatpak"
     container:
-      image: bilelmoussaoui/flatpak-github-actions:gnome-47
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
     strategy:
-      matrix:
-        arch:
-          - x86_64
-          - aarch64
       # Don't fail the whole workflow if one architecture fails
       fail-fast: false
+      matrix:
+        variant:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.variant.runner }}
     steps:
       - uses: actions/checkout@v4
-      # Install docker for ARM64 builds
-      - name: Install deps
-        if: ${{ matrix.arch != 'x86_64' }}
-        run: |
-          dnf -y install docker
-      # Set up QEMU for ARM64 builds
-      - name: Set up QEMU
-        if: ${{ matrix.arch != 'x86_64' }}
-        id: qemu
-        uses: docker/setup-qemu-action@v2
-        with:
-          platforms: arm64
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: reflection.flatpak
           manifest-path: org.p2panda.reflection.json
           cache-key: flatpak-builder-${{ github.sha }}
-          arch: ${{ matrix.arch }}
+          arch: ${{ matrix.variant.arch }}
 
   # The above job will build the application as a flatpack and
   # publish it as an artifact. To test it locally you can download
