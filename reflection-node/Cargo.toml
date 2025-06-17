@@ -24,3 +24,4 @@ sqlx = { version = "0.8.5", features = ["runtime-tokio", "sqlite", "chrono"], de
 tokio = { version = "1.44.2", features = ["rt", "sync"] }
 tokio-stream = "0.1.17"
 tracing = "0.1"
+test-log = { version = "0.2.17", default-features = false, features = ["trace", "color"] }
