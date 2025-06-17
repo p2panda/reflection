@@ -2,7 +2,7 @@ use gio::prelude::FileExt;
 use glib::Properties;
 use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
-use p2panda_core::Hash;
+use reflection_node::p2panda_core::Hash;
 use std::sync::OnceLock;
 use tracing::error;
 
