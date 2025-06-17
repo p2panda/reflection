@@ -22,7 +22,7 @@ use gtk::prelude::*;
 use gtk::{glib, glib::clone, glib::closure_local};
 
 use crate::system_settings::ClockFormat;
-use crate::{ReflectionApplication, ReflectionWindow, open_dialog::OpenDialog};
+use crate::{DocumentView, ReflectionApplication, open_dialog::OpenDialog};
 use reflection_doc::{document::Document, documents::Documents};
 
 mod imp {
@@ -174,8 +174,8 @@ mod imp {
                     let window = this
                         .obj()
                         .root()
-                        .and_then(|w| w.downcast::<ReflectionWindow>().ok())
-                        .expect("Toplevel window needs to be a ReflectionWindow");
+                        .and_then(|w| w.downcast::<DocumentView>().ok())
+                        .expect("Toplevel window needs to be a DocumentView");
 
                     this.obj().popdown();
                     dialog.present(Some(&window));

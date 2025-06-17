@@ -39,9 +39,9 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
-    #[properties(wrapper_type = super::ReflectionWindow)]
-    #[template(resource = "/org/p2panda/reflection/window.ui")]
-    pub struct ReflectionWindow {
+    #[properties(wrapper_type = super::DocumentView)]
+    #[template(resource = "/org/p2panda/reflection/document_view.ui")]
+    pub struct DocumentView {
         // Template widgets
         #[template_child]
         pub text_view: TemplateChild<sourceview::View>,
@@ -74,9 +74,9 @@ mod imp {
     }
 
     #[glib::object_subclass]
-    impl ObjectSubclass for ReflectionWindow {
-        const NAME: &'static str = "ReflectionWindow";
-        type Type = super::ReflectionWindow;
+    impl ObjectSubclass for DocumentView {
+        const NAME: &'static str = "ReflectionDocumentView";
+        type Type = super::DocumentView;
         type ParentType = adw::ApplicationWindow;
 
         fn class_init(klass: &mut Self::Class) {
@@ -141,7 +141,7 @@ mod imp {
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for ReflectionWindow {
+    impl ObjectImpl for DocumentView {
         fn constructed(&self) {
             self.parent_constructed();
 
@@ -240,7 +240,7 @@ mod imp {
         }
     }
 
-    impl ReflectionWindow {
+    impl DocumentView {
         fn set_font_scale(&self, value: f64) {
             let font_size = self.font_size.get();
 
@@ -306,19 +306,19 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for ReflectionWindow {}
-    impl WindowImpl for ReflectionWindow {}
-    impl ApplicationWindowImpl for ReflectionWindow {}
-    impl AdwApplicationWindowImpl for ReflectionWindow {}
+    impl WidgetImpl for DocumentView {}
+    impl WindowImpl for DocumentView {}
+    impl ApplicationWindowImpl for DocumentView {}
+    impl AdwApplicationWindowImpl for DocumentView {}
 }
 
 glib::wrapper! {
-    pub struct ReflectionWindow(ObjectSubclass<imp::ReflectionWindow>)
+    pub struct DocumentView(ObjectSubclass<imp::DocumentView>)
         @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
         @implements gtk::Native, gtk::Root, gio::ActionGroup, gio::ActionMap;
 }
 
-impl ReflectionWindow {
+impl DocumentView {
     pub fn new<P: IsA<gtk::Application>>(application: &P, service: &Service) -> Self {
         glib::Object::builder()
             .property("application", application)
