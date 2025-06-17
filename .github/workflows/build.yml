@@ -29,6 +29,7 @@ jobs:
           manifest-path: org.p2panda.reflection.json
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.variant.arch }}
+          run-tests: true
 
   # The above job will build the application as a flatpak and
   # publish it as an artifact. To test it locally you can download
