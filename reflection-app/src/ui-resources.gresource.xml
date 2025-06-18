@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/p2panda/reflection">
+    <file preprocess="xml-stripblanks">error_page.ui</file>
     <file preprocess="xml-stripblanks">open_dialog/open_dialog.ui</file>
     <file preprocess="xml-stripblanks">open_popover/open_popover.ui</file>
     <file preprocess="xml-stripblanks">document_view.ui</file>

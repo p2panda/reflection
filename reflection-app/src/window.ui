@@ -11,6 +11,14 @@
         <property name="child">
           <object class="GtkStack" id="main_stack">
             <property name="transition-type">crossfade</property>
+            <child>
+              <object class="GtkStackPage">
+                <property name="name">error</property>
+                <property name="child">
+                  <object class="ReflectionErrorPage" id="error_page"/>
+                </property>
+              </object>
+            </child>
           </object>
         </property>
       </object>
