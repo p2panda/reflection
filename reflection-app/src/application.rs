@@ -159,6 +159,9 @@ impl ReflectionApplication {
     fn new_window(&self) {
         let window = Window::new(self);
         window.set_service(self.service());
+        if let Some(error) = self.imp().startup_error.borrow().as_ref() {
+            window.display_startup_error(error);
+        }
         window.present();
     }
 

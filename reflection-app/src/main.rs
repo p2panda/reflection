@@ -23,6 +23,7 @@ mod components;
 mod config;
 mod connection_popover;
 mod document_view;
+mod error_page;
 mod open_dialog;
 mod open_popover;
 mod secret;

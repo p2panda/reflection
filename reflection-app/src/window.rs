@@ -22,7 +22,9 @@ use adw::{prelude::*, subclass::prelude::*};
 use gtk::{gio, glib};
 use reflection_doc::{document::Document, service::Service};
 
-use crate::document_view::DocumentView;
+use crate::{
+    application::Error as StartupError, document_view::DocumentView, error_page::ErrorPage,
+};
 
 mod imp {
     use super::*;
@@ -35,6 +37,8 @@ mod imp {
         pub(super) toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
         main_stack: TemplateChild<gtk::Stack>,
+        #[template_child]
+        pub(super) error_page: TemplateChild<ErrorPage>,
         #[property(get = Self::service, set = Self::set_service, nullable)]
         service: PhantomData<Option<Service>>,
         #[property(get = Self::document, nullable)]
@@ -49,6 +53,7 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             DocumentView::static_type();
+            ErrorPage::static_type();
 
             klass.bind_template();
         }
@@ -117,6 +122,10 @@ impl Window {
         glib::Object::builder()
             .property("application", application)
             .build()
+    }
+
+    pub fn display_startup_error(&self, error: &StartupError) {
+        self.imp().error_page.display_startup_error(error);
     }
 
     pub fn add_toast(&self, toast: adw::Toast) {
