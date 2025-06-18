@@ -26,10 +26,10 @@ use reflection_doc::{document::DocumentId, service::Service};
 use std::{cell::OnceCell, fs};
 use tracing::error;
 
-use crate::DocumentView;
 use crate::config;
 use crate::secret;
 use crate::system_settings::SystemSettings;
+use crate::window::Window;
 
 mod imp {
     use super::*;
@@ -114,11 +114,15 @@ impl ReflectionApplication {
             .build()
     }
 
-    pub fn window_for_document_id(&self, document_id: &DocumentId) -> Option<crate::DocumentView> {
+    pub fn window_for_document_id(&self, document_id: &DocumentId) -> Option<Window> {
         self.windows()
             .into_iter()
-            .filter_map(|window| window.downcast::<super::DocumentView>().ok())
-            .find(|window| &window.document().id() == document_id)
+            .filter_map(|window| window.downcast::<Window>().ok())
+            .find(|window| {
+                window
+                    .document()
+                    .map_or(false, |document| &document.id() == document_id)
+            })
     }
 
     fn setup_gactions(&self) {
@@ -135,7 +139,8 @@ impl ReflectionApplication {
     }
 
     fn new_window(&self) {
-        let window = DocumentView::new(self, &self.service());
+        let window = Window::new(self);
+        window.set_service(Some(&self.service()));
         window.present();
     }
 

@@ -28,6 +28,7 @@ mod open_popover;
 mod secret;
 mod system_settings;
 mod textbuffer;
+mod window;
 
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
@@ -39,7 +40,6 @@ use tracing_subscriber::prelude::*;
 use self::application::ReflectionApplication;
 use self::config::*;
 use self::connection_popover::ConnectionPopover;
-use self::document_view::DocumentView;
 use self::open_popover::OpenPopover;
 use self::textbuffer::ReflectionTextBuffer;
 
