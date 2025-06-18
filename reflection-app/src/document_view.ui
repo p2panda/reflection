@@ -27,14 +27,11 @@
       </item>
     </section>
   </menu>
-  <template class="ReflectionDocumentView" parent="AdwApplicationWindow">
-    <property name="title" translatable="yes">Reflection</property>
-    <property name="default-width">800</property>
-    <property name="default-height">600</property>
+  <template class="ReflectionDocumentView" parent="AdwBin">
     <style>
       <class name="view"/>
     </style>
-    <property name="content">
+    <property name="child">
       <object class="AdwToolbarView">
         <child type="top">
           <object class="AdwHeaderBar">
@@ -117,27 +114,23 @@
           </object>
         </child>
         <property name="content">
-          <object class="AdwToastOverlay" id="toast_overlay">
+          <object class="GtkScrolledWindow">
+            <property name="height-request">180</property>
+            <property name="width-request">300</property>
             <child>
-              <object class="GtkScrolledWindow">
-                <property name="height-request">180</property>
-                <property name="width-request">300</property>
-                <child>
-                  <object class="GtkSourceView" id="text_view">
-                    <property name="top-margin">6</property>
-                    <property name="bottom-margin">12</property>
-                    <property name="left-margin">12</property>
-                    <property name="right-margin">12</property>
-                    <property name="wrap-mode">GTK_WRAP_WORD_CHAR</property>
-                    <property name="indent-width">4</property>
-                    <property name="auto-indent">True</property>
-                    <style>
-                      <class name="inline"/>
-                      <class name="editor"/>
-                      <class name="monospace"/>
-                    </style>
-                  </object>
-                </child>
+              <object class="GtkSourceView" id="text_view">
+                <property name="top-margin">6</property>
+                <property name="bottom-margin">12</property>
+                <property name="left-margin">12</property>
+                <property name="right-margin">12</property>
+                <property name="wrap-mode">GTK_WRAP_WORD_CHAR</property>
+                <property name="indent-width">4</property>
+                <property name="auto-indent">True</property>
+                <style>
+                  <class name="inline"/>
+                  <class name="editor"/>
+                  <class name="monospace"/>
+                </style>
               </object>
             </child>
           </object>

@@ -26,7 +26,7 @@ use reflection_doc::{
 };
 
 use adw::{prelude::*, subclass::prelude::*};
-use gtk::{gdk, gio, glib, glib::clone};
+use gtk::{gdk, glib, glib::clone};
 
 use crate::{
     ConnectionPopover, OpenPopover, ReflectionApplication, ReflectionTextBuffer,
@@ -49,8 +49,6 @@ mod imp {
         pub open_popover_button: TemplateChild<gtk::MenuButton>,
         #[template_child]
         pub open_popover: TemplateChild<OpenPopover>,
-        #[template_child]
-        pub toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
         pub share_popover: TemplateChild<gtk::Popover>,
         #[template_child]
@@ -77,7 +75,7 @@ mod imp {
     impl ObjectSubclass for DocumentView {
         const NAME: &'static str = "ReflectionDocumentView";
         type Type = super::DocumentView;
-        type ParentType = adw::ApplicationWindow;
+        type ParentType = adw::Bin;
 
         fn class_init(klass: &mut Self::Class) {
             ZoomLevelSelector::static_type();
@@ -232,11 +230,10 @@ mod imp {
 
             let document = Document::new(self.service.get().unwrap(), None);
             self.set_document(document);
+        }
 
-            self.obj().connect_close_request(|window| {
-                window.document().set_subscribed(false);
-                glib::Propagation::Proceed
-            });
+        fn dispose(&self) {
+            self.obj().document().set_subscribed(false);
         }
     }
 
@@ -307,26 +304,16 @@ mod imp {
     }
 
     impl WidgetImpl for DocumentView {}
-    impl WindowImpl for DocumentView {}
-    impl ApplicationWindowImpl for DocumentView {}
-    impl AdwApplicationWindowImpl for DocumentView {}
+    impl BinImpl for DocumentView {}
 }
 
 glib::wrapper! {
     pub struct DocumentView(ObjectSubclass<imp::DocumentView>)
-        @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
-        @implements gtk::Native, gtk::Root, gio::ActionGroup, gio::ActionMap;
+        @extends gtk::Widget, gtk::Window, adw::Bin;
 }
 
 impl DocumentView {
-    pub fn new<P: IsA<gtk::Application>>(application: &P, service: &Service) -> Self {
-        glib::Object::builder()
-            .property("application", application)
-            .property("service", service)
-            .build()
-    }
-
-    pub fn add_toast(&self, toast: adw::Toast) {
-        self.imp().toast_overlay.add_toast(toast);
+    pub fn new(service: &Service) -> Self {
+        glib::Object::builder().property("service", service).build()
     }
 }
