@@ -82,7 +82,9 @@ mod imp {
 
     impl ApplicationImpl for ReflectionApplication {
         fn startup(&self) {
-            self.obj().service().startup();
+            if let Err(error) = self.obj().service().startup() {
+                error!("Service failed to start: {error}");
+            }
             self.parent_startup();
         }
 
