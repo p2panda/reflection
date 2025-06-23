@@ -4,6 +4,7 @@ use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
 use reflection_node::p2panda_core::Hash;
 use std::sync::OnceLock;
+use thiserror::Error;
 use tracing::error;
 
 use crate::identity::{PrivateKey, PublicKey};
@@ -14,6 +15,12 @@ use crate::{
     documents::Documents,
 };
 use reflection_node::Node;
+
+#[derive(Error, Debug)]
+pub enum StartupError {
+    #[error(transparent)]
+    Node(#[from] anyhow::Error),
+}
 
 mod imp {
     use super::*;
@@ -52,20 +59,16 @@ impl Service {
             .build()
     }
 
-    pub fn startup(&self) {
+    pub fn startup(&self) -> Result<(), StartupError> {
         glib::MainContext::new().block_on(async move {
             let private_key = self.private_key().0.clone();
             let public_key = private_key.public_key();
             let network_id = Hash::new(b"reflection");
             let path = self.data_dir().path().expect("Valid file path");
-            if let Err(error) = self
-                .imp()
+            self.imp()
                 .node
                 .run(private_key.clone(), network_id, Some(path.as_ref()))
-                .await
-            {
-                error!("Running node failed: {error}");
-            }
+                .await?;
 
             if let Ok(documents) = self.imp().node.documents().await {
                 for document in documents {
@@ -102,7 +105,9 @@ impl Service {
                     );
                 }
             }
-        });
+
+            Ok(())
+        })
     }
 
     pub fn shutdown(&self) {
