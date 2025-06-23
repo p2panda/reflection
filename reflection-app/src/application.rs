@@ -58,7 +58,11 @@ mod imp {
             obj.setup_gactions();
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
             obj.set_accels_for_action("app.new-window", &["<control>n"]);
+        }
+    }
 
+    impl ApplicationImpl for ReflectionApplication {
+        fn startup(&self) {
             glib::MainContext::new().block_on(async move {
                 let private_key = secret::get_or_create_identity()
                     .await
@@ -72,18 +76,14 @@ mod imp {
                 }
                 let data_dir = gio::File::for_path(data_path);
 
-                self.service
-                    .set(Service::new(&private_key, &data_dir))
-                    .unwrap();
-            });
-        }
-    }
+                let service = Service::new(&private_key, &data_dir);
+                if let Err(error) = service.startup() {
+                    error!("Service failed to start: {error}");
+                }
 
-    impl ApplicationImpl for ReflectionApplication {
-        fn startup(&self) {
-            if let Err(error) = self.obj().service().startup() {
-                error!("Service failed to start: {error}");
-            }
+                self.service.set(service).unwrap();
+            });
+
             self.parent_startup();
         }
 
