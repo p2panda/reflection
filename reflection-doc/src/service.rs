@@ -61,13 +61,13 @@ impl Service {
 
     pub fn startup(&self) -> Result<(), StartupError> {
         glib::MainContext::new().block_on(async move {
-            let private_key = self.private_key().0.clone();
+            let private_key = self.private_key().0;
             let public_key = private_key.public_key();
             let network_id = Hash::new(b"reflection");
             let path = self.data_dir().path().expect("Valid file path");
             self.imp()
                 .node
-                .run(private_key.clone(), network_id, Some(path.as_ref()))
+                .run(private_key, network_id, Some(path.as_ref()))
                 .await?;
 
             if let Ok(documents) = self.imp().node.documents().await {
