@@ -7,7 +7,10 @@ project('reflection', 'rust',
 i18n = import('i18n')
 gnome = import('gnome')
 
+application_id = 'org.p2panda.reflection'
+
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
+iconsdir = get_option('datadir') / 'icons'
 
 subdir('reflection-app/data')
 subdir('reflection-app/src')
