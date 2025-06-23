@@ -39,6 +39,7 @@ jobs:
   # flatpak run org.p2panda.reflection
 
   macos:
+    if: false  # This disable macos for now.
     name: macOS
     runs-on: macos-latest
     strategy:
