@@ -59,7 +59,6 @@ mod imp {
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
             obj.set_accels_for_action("app.new-window", &["<control>n"]);
 
-            // FIXME: Don't block on loading the identity
             glib::MainContext::new().block_on(async move {
                 let private_key = secret::get_or_create_identity()
                     .await
