@@ -77,7 +77,7 @@ mod imp {
                 let data_dir = gio::File::for_path(data_path);
 
                 let service = Service::new(&private_key, &data_dir);
-                if let Err(error) = service.startup() {
+                if let Err(error) = service.startup().await {
                     error!("Service failed to start: {error}");
                 }
 
