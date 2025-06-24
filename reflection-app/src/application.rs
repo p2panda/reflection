@@ -24,12 +24,23 @@ use gettextrs::gettext;
 use gtk::{gio, glib, glib::Properties};
 use reflection_doc::{document::DocumentId, service::Service};
 use std::{cell::OnceCell, fs};
+use thiserror::Error;
 use tracing::error;
 
 use crate::config;
 use crate::secret;
 use crate::system_settings::SystemSettings;
 use crate::window::Window;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Identity(#[from] secret::Error),
+    #[error(transparent)]
+    Service(#[from] reflection_doc::service::StartupError),
+    #[error(transparent)]
+    Filesystem(#[from] std::io::Error),
+}
 
 mod imp {
     use super::*;
@@ -63,26 +74,24 @@ mod imp {
 
     impl ApplicationImpl for ReflectionApplication {
         fn startup(&self) {
-            glib::MainContext::new().block_on(async move {
-                let private_key = secret::get_or_create_identity()
-                    .await
-                    .expect("Unable to get or create identity");
+            let service: Result<Service, Error> = glib::MainContext::new().block_on(async move {
+                let private_key = secret::get_or_create_identity().await?;
 
                 let mut data_path = glib::user_data_dir();
                 data_path.push("Reflection");
                 data_path.push(private_key.public_key().to_string());
-                if let Err(error) = fs::create_dir_all(&data_path) {
-                    error!("Failed to create data directory: {error}");
-                }
+                fs::create_dir_all(&data_path)?;
                 let data_dir = gio::File::for_path(data_path);
 
                 let service = Service::new(&private_key, &data_dir);
-                if let Err(error) = service.startup().await {
-                    error!("Service failed to start: {error}");
-                }
-
-                self.service.set(service).unwrap();
+                service.startup().await?;
+                Ok(service)
             });
+
+            match service {
+                Ok(service) => self.service.set(service).unwrap(),
+                Err(error) => error!("Failed to start service: {error}"),
+            }
 
             self.parent_startup();
         }
