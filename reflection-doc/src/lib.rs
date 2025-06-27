@@ -86,8 +86,10 @@ mod tests {
 
     impl Drop for TestResource {
         fn drop(&mut self) {
-            fs::remove_dir_all(self.service.data_dir().path().unwrap())
+            if let Some(data_dir) = self.service.data_dir() {
+            fs::remove_dir_all(data_dir.path().unwrap())
                 .expect("Able to remove data dir");
+            }
         }
     }
 
@@ -102,7 +104,7 @@ mod tests {
             let data_dir = gio::File::for_path(data_path);
 
             TestResource {
-                service: Service::new(&private_key, &data_dir),
+                service: Service::new(&private_key, Some(&data_dir)),
             }
         }
 

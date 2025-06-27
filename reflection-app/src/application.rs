@@ -84,7 +84,7 @@ mod imp {
                 fs::create_dir_all(&data_path)?;
                 let data_dir = gio::File::for_path(data_path);
 
-                let service = Service::new(&private_key, &data_dir);
+                let service = Service::new(&private_key, Some(&data_dir));
                 service.startup().await?;
                 Ok(service)
             });

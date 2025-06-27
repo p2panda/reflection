@@ -31,8 +31,8 @@ mod imp {
         pub node: Node,
         #[property(get, set, construct_only, type = PrivateKey)]
         pub private_key: OnceLock<PrivateKey>,
-        #[property(get, set, construct_only, type = gio::File)]
-        pub data_dir: OnceLock<gio::File>,
+        #[property(get, set, construct_only, nullable, type = Option<gio::File>)]
+        pub data_dir: OnceLock<Option<gio::File>>,
         #[property(get)]
         documents: Documents,
     }
@@ -52,7 +52,7 @@ glib::wrapper! {
 }
 
 impl Service {
-    pub fn new(private_key: &PrivateKey, data_dir: &gio::File) -> Self {
+    pub fn new(private_key: &PrivateKey, data_dir: Option<&gio::File>) -> Self {
         glib::Object::builder()
             .property("private-key", private_key)
             .property("data-dir", data_dir)
@@ -63,10 +63,10 @@ impl Service {
         let private_key = self.private_key().0;
         let public_key = private_key.public_key();
         let network_id = Hash::new(b"reflection");
-        let path = self.data_dir().path().expect("Valid file path");
+        let path = self.data_dir().and_then(|data_dir| data_dir.path());
         self.imp()
             .node
-            .run(private_key, network_id, Some(path.as_ref()))
+            .run(private_key, network_id, path.as_deref())
             .await?;
 
         if let Ok(documents) = self.imp().node.documents().await {
