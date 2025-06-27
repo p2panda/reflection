@@ -23,7 +23,7 @@ use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gio, glib, glib::Properties};
 use reflection_doc::{document::DocumentId, service::Service};
-use std::{cell::OnceCell, fs};
+use std::{cell::RefCell, fs};
 use thiserror::Error;
 use tracing::error;
 
@@ -48,8 +48,9 @@ mod imp {
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::ReflectionApplication)]
     pub struct ReflectionApplication {
-        #[property(get)]
-        pub service: OnceCell<Service>,
+        #[property(get, nullable)]
+        pub service: RefCell<Option<Service>>,
+        pub startup_error: RefCell<Option<Error>>,
         #[property(get)]
         pub system_settings: SystemSettings,
     }
@@ -89,15 +90,22 @@ mod imp {
             });
 
             match service {
-                Ok(service) => self.service.set(service).unwrap(),
-                Err(error) => error!("Failed to start service: {error}"),
+                Ok(service) => {
+                    self.service.replace(Some(service));
+                }
+                Err(error) => {
+                    error!("Failed to start service: {error}");
+                    self.startup_error.replace(Some(error));
+                }
             }
 
             self.parent_startup();
         }
 
         fn shutdown(&self) {
-            self.obj().service().shutdown();
+            if let Some(service) = self.obj().service() {
+                service.shutdown();
+            }
             self.parent_shutdown();
         }
 
@@ -150,7 +158,7 @@ impl ReflectionApplication {
 
     fn new_window(&self) {
         let window = Window::new(self);
-        window.set_service(Some(&self.service()));
+        window.set_service(self.service());
         window.present();
     }
 
