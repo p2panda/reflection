@@ -180,7 +180,9 @@ mod imp {
                         #[weak]
                         this,
                         move |_, document_id| {
-                            let service = crate::ReflectionApplication::default().service();
+                            let service = crate::ReflectionApplication::default()
+                                .service()
+                                .expect("Service to run");
                             let document = service
                                 .documents()
                                 .by_id(document_id)
