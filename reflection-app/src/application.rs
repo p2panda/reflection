@@ -21,15 +21,26 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
-use gtk::{gio, glib, glib::Properties};
-use reflection_doc::{document::DocumentId, service::Service};
-use std::{cell::OnceCell, fs};
+use gtk::{gio, glib, glib::Properties, glib::clone};
+use reflection_doc::{document::DocumentId, identity::PrivateKey, service::Service};
+use std::{cell::RefCell, fs};
+use thiserror::Error;
 use tracing::error;
 
-use crate::ReflectionWindow;
 use crate::config;
 use crate::secret;
 use crate::system_settings::SystemSettings;
+use crate::window::Window;
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error(transparent)]
+    Identity(#[from] secret::Error),
+    #[error(transparent)]
+    Service(#[from] reflection_doc::service::StartupError),
+    #[error(transparent)]
+    Filesystem(#[from] std::io::Error),
+}
 
 mod imp {
     use super::*;
@@ -37,8 +48,9 @@ mod imp {
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::ReflectionApplication)]
     pub struct ReflectionApplication {
-        #[property(get)]
-        pub service: OnceCell<Service>,
+        #[property(get, nullable)]
+        pub service: RefCell<Option<Service>>,
+        pub startup_error: RefCell<Option<Error>>,
         #[property(get)]
         pub system_settings: SystemSettings,
     }
@@ -58,36 +70,42 @@ mod imp {
             obj.setup_gactions();
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
             obj.set_accels_for_action("app.new-window", &["<control>n"]);
-
-            // FIXME: Don't block on loading the identity
-            glib::MainContext::new().block_on(async move {
-                let private_key = secret::get_or_create_identity()
-                    .await
-                    .expect("Unable to get or create identity");
-
-                let mut data_path = glib::user_data_dir();
-                data_path.push("Reflection");
-                data_path.push(private_key.public_key().to_string());
-                if let Err(error) = fs::create_dir_all(&data_path) {
-                    error!("Failed to create data directory: {error}");
-                }
-                let data_dir = gio::File::for_path(data_path);
-
-                self.service
-                    .set(Service::new(&private_key, &data_dir))
-                    .unwrap();
-            });
         }
     }
 
     impl ApplicationImpl for ReflectionApplication {
         fn startup(&self) {
-            self.obj().service().startup();
+            let service: Result<Service, Error> = glib::MainContext::new().block_on(async move {
+                let private_key = secret::get_or_create_identity().await?;
+
+                let mut data_path = glib::user_data_dir();
+                data_path.push("Reflection");
+                data_path.push(private_key.public_key().to_string());
+                fs::create_dir_all(&data_path)?;
+                let data_dir = gio::File::for_path(data_path);
+
+                let service = Service::new(&private_key, Some(&data_dir));
+                service.startup().await?;
+                Ok(service)
+            });
+
+            match service {
+                Ok(service) => {
+                    self.service.replace(Some(service));
+                }
+                Err(error) => {
+                    error!("Failed to start service: {error}");
+                    self.startup_error.replace(Some(error));
+                }
+            }
+
             self.parent_startup();
         }
 
         fn shutdown(&self) {
-            self.obj().service().shutdown();
+            if let Some(service) = self.obj().service() {
+                service.shutdown();
+            }
             self.parent_shutdown();
         }
 
@@ -114,14 +132,15 @@ impl ReflectionApplication {
             .build()
     }
 
-    pub fn window_for_document_id(
-        &self,
-        document_id: &DocumentId,
-    ) -> Option<crate::ReflectionWindow> {
+    pub fn window_for_document_id(&self, document_id: &DocumentId) -> Option<Window> {
         self.windows()
             .into_iter()
-            .filter_map(|window| window.downcast::<super::ReflectionWindow>().ok())
-            .find(|window| &window.document().id() == document_id)
+            .filter_map(|window| window.downcast::<Window>().ok())
+            .find(|window| {
+                window
+                    .document()
+                    .map_or(false, |document| &document.id() == document_id)
+            })
     }
 
     fn setup_gactions(&self) {
@@ -134,12 +153,78 @@ impl ReflectionApplication {
         let new_window_action = gio::ActionEntry::builder("new-window")
             .activate(move |app: &Self, _, _| app.new_window())
             .build();
-        self.add_action_entries([quit_action, about_action, new_window_action]);
+        let temporary_identity_action = gio::ActionEntry::builder("new-temporary-identity")
+            .activate(move |app: &Self, _, _| {
+                glib::spawn_future_local(clone!(
+                    #[weak]
+                    app,
+                    async move {
+                        app.new_temporary_identity().await;
+                    }
+                ));
+            })
+            .build();
+        self.add_action_entries([
+            quit_action,
+            about_action,
+            new_window_action,
+            temporary_identity_action,
+        ]);
     }
 
     fn new_window(&self) {
-        let window = ReflectionWindow::new(self, &self.service());
+        let window = Window::new(self);
+        window.set_service(self.service());
+        if let Some(error) = self.imp().startup_error.borrow().as_ref() {
+            window.display_startup_error(error);
+        }
         window.present();
+    }
+
+    async fn new_temporary_identity(&self) {
+        let private_key = PrivateKey::new();
+        let service = Service::new(&private_key, None);
+
+        if let Err(error) = service.startup().await {
+            let error = error.into();
+            error!("Failed to start service: {error}");
+            for window in self.windows() {
+                if let Ok(window) = window.downcast::<Window>() {
+                    window.display_startup_error(&error);
+                }
+            }
+
+            self.imp().startup_error.replace(Some(error));
+            // Since the error isn't resolved with a temporary identity disable the action
+            self.lookup_action("new-temporary-identity")
+                .unwrap()
+                .downcast::<gio::SimpleAction>()
+                .unwrap()
+                .set_enabled(false);
+
+            return;
+        }
+
+        self.imp().service.replace(Some(service));
+
+        // FIXME: We can't use block_on() inside an async context
+        // New documents block on creating the document id, probably
+        // we should make document creating async
+        glib::source::idle_add_local(clone!(
+            #[weak(rename_to = this)]
+            self,
+            #[upgrade_or]
+            glib::ControlFlow::Break,
+            move || {
+                let service = this.service();
+                for window in this.windows() {
+                    if let Ok(window) = window.downcast::<Window>() {
+                        window.set_service(service.as_ref());
+                    }
+                }
+                glib::ControlFlow::Break
+            }
+        ));
     }
 
     fn show_about(&self) {

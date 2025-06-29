@@ -3,4 +3,4 @@
 data/org.p2panda.reflection.desktop.in
 data/org.p2panda.reflection.metainfo.xml.in
 data/org.p2panda.reflection.gschema.xml
-src/window.ui
+src/document_view.ui

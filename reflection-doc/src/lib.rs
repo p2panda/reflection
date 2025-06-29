@@ -86,8 +86,10 @@ mod tests {
 
     impl Drop for TestResource {
         fn drop(&mut self) {
-            fs::remove_dir_all(self.service.data_dir().path().unwrap())
+            if let Some(data_dir) = self.service.data_dir() {
+            fs::remove_dir_all(data_dir.path().unwrap())
                 .expect("Able to remove data dir");
+            }
         }
     }
 
@@ -102,7 +104,7 @@ mod tests {
             let data_dir = gio::File::for_path(data_path);
 
             TestResource {
-                service: Service::new(&private_key, &data_dir),
+                service: Service::new(&private_key, Some(&data_dir)),
             }
         }
 
@@ -118,7 +120,9 @@ mod tests {
         let resource = TestResource::new();
         let service = resource.service();
         let test_string = "Hello World";
-        service.startup();
+        glib::MainContext::new().block_on(async {
+            service.startup().await
+        }).unwrap();
         let document = Document::new(&service, None);
         document.set_subscribed(true);
         context.iteration(false);
@@ -132,7 +136,9 @@ mod tests {
         let test_string = "Hello World";
         let resource = TestResource::new();
         let service = resource.service();
-        service.startup();
+        glib::MainContext::new().block_on(async {
+            service.startup().await
+        }).unwrap();
 
         let document = Document::new(&service, None);
         document.set_subscribed(true);
@@ -140,7 +146,9 @@ mod tests {
 
         let resource2 = TestResource::new();
         let service2 = resource2.service();
-        service2.startup();
+        glib::MainContext::new().block_on(async {
+            service2.startup().await
+        }).unwrap();
         let document2 = Document::new(&service2, Some(&id));
         document2.set_subscribed(true);
 
@@ -168,7 +176,9 @@ mod tests {
         let expected_string = "Hello, World!";
         let resource = TestResource::new();
         let service = resource.service();
-        service.startup();
+        glib::MainContext::new().block_on(async {
+            service.startup().await
+        }).unwrap();
 
         let document = Document::new(&service, None);
         document.set_subscribed(true);
@@ -176,7 +186,9 @@ mod tests {
 
         let resource2 = TestResource::new();
         let service2 = resource2.service();
-        service2.startup();
+        glib::MainContext::new().block_on(async {
+            service2.startup().await
+        }).unwrap();
         let document2 = Document::new(&service2, Some(&id));
         document2.set_subscribed(true);
 
@@ -214,7 +226,9 @@ mod tests {
         );
         let resource = TestResource::new();
         let service = resource.service();
-        service.startup();
+        glib::MainContext::new().block_on(async {
+            service.startup().await
+        }).unwrap();
 
         let document = Document::new(&service, None);
         document.set_subscribed(true);
@@ -222,7 +236,9 @@ mod tests {
 
         let resource2 = TestResource::new();
         let service2 = resource2.service();
-        service2.startup();
+        glib::MainContext::new().block_on(async {
+            service2.startup().await
+        }).unwrap();
         let document2 = Document::new(&service2, Some(&id));
         document2.set_subscribed(true);
 

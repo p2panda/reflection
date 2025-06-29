@@ -31,22 +31,10 @@ fn attributes() -> HashMap<&'static str, String> {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("Secret Service error: {0}")]
-    Service(oo7::Error),
-    #[error("Format error: {0}")]
-    Format(IdentityError),
-}
-
-impl From<IdentityError> for Error {
-    fn from(value: IdentityError) -> Self {
-        Error::Format(value)
-    }
-}
-
-impl From<oo7::Error> for Error {
-    fn from(value: oo7::Error) -> Self {
-        Error::Service(value)
-    }
+    #[error(transparent)]
+    Service(#[from] oo7::Error),
+    #[error(transparent)]
+    Format(#[from] IdentityError),
 }
 
 pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
