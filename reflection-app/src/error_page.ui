@@ -31,6 +31,17 @@
                     <property name="description" translatable="yes">Reflection is unable to access the systems keyring to load or store your identity. You can use a temporary identity that won’t be stored between app starts.</property>
                     <property name="icon-name">key-symbolic</property>
                     <property name="vexpand">true</property>
+                    <property name="child">
+                      <object class="GtkButton">
+                        <property name="action-name">app.new-temporary-identity</property>
+                        <property name="label" translatable="yes">Use Temporary Identity</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="suggested-action"/>
+                          <class name="pill"/>
+                        </style>
+                      </object>
+                    </property>
                   </object>
                 </property>
               </object>
@@ -43,6 +54,17 @@
                     <property name="description" translatable="yes">Reflection is unable to create the necessary network service. You can try to use a temporary identity that won’t be stored between app starts.</property>
                     <property name="icon-name">network-computer-symbolic</property>
                     <property name="vexpand">true</property>
+                    <property name="child">
+                      <object class="GtkButton">
+                        <property name="action-name">app.new-temporary-identity</property>
+                        <property name="label" translatable="yes">Use Temporary Identity</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="suggested-action"/>
+                          <class name="pill"/>
+                        </style>
+                      </object>
+                    </property>
                   </object>
                 </property>
               </object>
@@ -55,6 +77,17 @@
                     <property name="description" translatable="yes">Reflection is unable to access the filesystem. You can try to use a temporary identity that won’t be stored between app starts.</property>
                     <property name="icon-name">document-text-symbolic</property>
                     <property name="vexpand">true</property>
+                    <property name="child">
+                      <object class="GtkButton">
+                        <property name="action-name">app.new-temporary-identity</property>
+                        <property name="label" translatable="yes">Use Temporary Identity</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="suggested-action"/>
+                          <class name="pill"/>
+                        </style>
+                      </object>
+                    </property>
                   </object>
                 </property>
               </object>
