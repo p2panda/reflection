@@ -21,8 +21,8 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
-use gtk::{gio, glib, glib::Properties};
-use reflection_doc::{document::DocumentId, service::Service};
+use gtk::{gio, glib, glib::Properties, glib::clone};
+use reflection_doc::{document::DocumentId, identity::PrivateKey, service::Service};
 use std::{cell::RefCell, fs};
 use thiserror::Error;
 use tracing::error;
@@ -153,7 +153,23 @@ impl ReflectionApplication {
         let new_window_action = gio::ActionEntry::builder("new-window")
             .activate(move |app: &Self, _, _| app.new_window())
             .build();
-        self.add_action_entries([quit_action, about_action, new_window_action]);
+        let temporary_identity_action = gio::ActionEntry::builder("new-temporary-identity")
+            .activate(move |app: &Self, _, _| {
+                glib::spawn_future_local(clone!(
+                    #[weak]
+                    app,
+                    async move {
+                        app.new_temporary_identity().await;
+                    }
+                ));
+            })
+            .build();
+        self.add_action_entries([
+            quit_action,
+            about_action,
+            new_window_action,
+            temporary_identity_action,
+        ]);
     }
 
     fn new_window(&self) {
@@ -163,6 +179,52 @@ impl ReflectionApplication {
             window.display_startup_error(error);
         }
         window.present();
+    }
+
+    async fn new_temporary_identity(&self) {
+        let private_key = PrivateKey::new();
+        let service = Service::new(&private_key, None);
+
+        if let Err(error) = service.startup().await {
+            let error = error.into();
+            error!("Failed to start service: {error}");
+            for window in self.windows() {
+                if let Ok(window) = window.downcast::<Window>() {
+                    window.display_startup_error(&error);
+                }
+            }
+
+            self.imp().startup_error.replace(Some(error));
+            // Since the error isn't resolved with a temporary identity disable the action
+            self.lookup_action("new-temporary-identity")
+                .unwrap()
+                .downcast::<gio::SimpleAction>()
+                .unwrap()
+                .set_enabled(false);
+
+            return;
+        }
+
+        self.imp().service.replace(Some(service));
+
+        // FIXME: We can't use block_on() inside an async context
+        // New documents block on creating the document id, probably
+        // we should make document creating async
+        glib::source::idle_add_local(clone!(
+            #[weak(rename_to = this)]
+            self,
+            #[upgrade_or]
+            glib::ControlFlow::Break,
+            move || {
+                let service = this.service();
+                for window in this.windows() {
+                    if let Ok(window) = window.downcast::<Window>() {
+                        window.set_service(service.as_ref());
+                    }
+                }
+                glib::ControlFlow::Break
+            }
+        ));
     }
 
     fn show_about(&self) {

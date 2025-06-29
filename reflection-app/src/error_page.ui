@@ -31,6 +31,17 @@
                     <property name="description" translatable="yes">Failed to access the system keyring to load or store your identity. As a workaround it's possible to use a temporary identity, but this means you will show up as a different user each time the app restarts.</property>
                     <property name="icon-name">key-symbolic</property>
                     <property name="vexpand">true</property>
+                    <property name="child">
+                      <object class="GtkButton">
+                        <property name="action-name">app.new-temporary-identity</property>
+                        <property name="label" translatable="yes">Use Temporary Identity</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="suggested-action"/>
+                          <class name="pill"/>
+                        </style>
+                      </object>
+                    </property>
                   </object>
                 </property>
               </object>
@@ -43,6 +54,17 @@
                     <property name="description" translatable="yes">Failed to create the necessary network service. As a workaround it's possible to use a temporary identity, but this means you will show up as a different user each time the app restarts.</property>
                     <property name="icon-name">network-computer-symbolic</property>
                     <property name="vexpand">true</property>
+                    <property name="child">
+                      <object class="GtkButton">
+                        <property name="action-name">app.new-temporary-identity</property>
+                        <property name="label" translatable="yes">Use Temporary Identity</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="suggested-action"/>
+                          <class name="pill"/>
+                        </style>
+                      </object>
+                    </property>
                   </object>
                 </property>
               </object>
@@ -55,6 +77,17 @@
                     <property name="description" translatable="yes">This means storing a persistent identity is not possible. As a workaround it's possible to use a temporary identity, but this means you will show up as a different user each time the app restarts.</property>
                     <property name="icon-name">folder-symbolic</property>
                     <property name="vexpand">true</property>
+                    <property name="child">
+                      <object class="GtkButton">
+                        <property name="action-name">app.new-temporary-identity</property>
+                        <property name="label" translatable="yes">Use Temporary Identity</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="suggested-action"/>
+                          <class name="pill"/>
+                        </style>
+                      </object>
+                    </property>
                   </object>
                 </property>
               </object>
