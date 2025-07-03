@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/p2panda/reflection">
+    <file preprocess="xml-stripblanks">icons/scalable/actions/about-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/status/folder-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/down-smaller-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/join-document-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/status/key-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/status/network-computer-symbolic.svg</file>
   </gresource>
 </gresources>

@@ -22,6 +22,8 @@ mod application;
 mod components;
 mod config;
 mod connection_popover;
+mod document_view;
+mod error_page;
 mod open_dialog;
 mod open_popover;
 mod secret;
@@ -41,7 +43,6 @@ use self::config::*;
 use self::connection_popover::ConnectionPopover;
 use self::open_popover::OpenPopover;
 use self::textbuffer::ReflectionTextBuffer;
-use self::window::ReflectionWindow;
 
 pub use self::config::APP_ID;
 
