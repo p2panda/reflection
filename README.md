@@ -1,6 +1,12 @@
-# Reflection
+<p align="center"><img src="reflection-app/data/icons/org.p2panda.reflection.svg">
+<h1 align="center">Reflection</h1>
 
-MVP collaborative, local-first GTK text editor :)
+<p align="center">Collaboratively take meeting notes, even when there's no internet</p>
+
+![Reflection app screenshot](reflection-app/data/screenshots/screenshot.png)
+
+> [!CAUTION]
+> The project is under active development and not considered stable yet. It probably won't eat your data, but no guarantees :)
 
 ## Development
 
@@ -19,10 +25,11 @@ and run the project. It can be installed with flatpak.
 5. Run the project with `Shift+Ctrl+Space` or click the ► icon (top-middle of
    the Builder appication).
 
-### Multiple instances
+### Multiple Instances
 
-Run builder in a separate dbus session if you need multiple instances to test
-the application: `dbus-run-session org.gnome.Builder`.
+If you need multiple instances of the app on the same computer for testing, you can run GNOME Builder in a separate dbus session:
+
+`dbus-run-session flatpak run org.gnome.Builder`
 
 ### Diagnostics
 
@@ -33,3 +40,11 @@ enable log-based diagnostics with [tracing](https://docs.rs/tracing). Example:
 ## License
 
 [GNU General Public License v3.0](COPYING)
+
+## Supported By
+
+Thanks to [NLNet](https://nlnet.nl) (via [NGI Assure](https://nlnet.nl/project/P2Panda)), the [Prototype Fund](https://www.prototypefund.de/), and the [Federal Ministry of Research, Technology and Space](https://www.bmbf.de/EN/) for funding this project in 2025.
+
+![Nlnet Logo](logo-nlnet.jpg)
+![Ministry Logo](logo-bmftr.jpg)
+![Prototype Fund Logo](logo-prototypefund.jpg)
