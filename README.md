@@ -45,6 +45,6 @@ enable log-based diagnostics with [tracing](https://docs.rs/tracing). Example:
 
 Thanks to [NLNet](https://nlnet.nl) (via [NGI Assure](https://nlnet.nl/project/P2Panda)), the [Prototype Fund](https://www.prototypefund.de/), and the [Federal Ministry of Research, Technology and Space](https://www.bmbf.de/EN/) for funding this project in 2025.
 
-![Nlnet Logo](logo-nlnet.jpg)
-![Ministry Logo](logo-bmftr.jpg)
-![Prototype Fund Logo](logo-prototypefund.jpg)
+![Nlnet Logo](assets/logo-nlnet.jpg)
+![Ministry Logo](assets/logo-bmftr.jpg)
+![Prototype Fund Logo](assets/logo-prototypefund.jpg)
