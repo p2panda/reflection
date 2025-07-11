@@ -21,8 +21,8 @@ pub struct Network {
     document_tx: RwLock<HashMap<DocumentId, mpsc::Sender<ToNetwork>>>,
 }
 
-const RELAY_URL: &str = "https://wasser.liebechaos.org/";
-const BOOTSTRAP_NODE_ID: &str = "60eefc558a4c66528746bb795228a1e2243247686b3eae54338a980b5ec2c2d3";
+const RELAY_URL: &str = "https://wiese.liebechaos.org/";
+const BOOTSTRAP_NODE_ID: &str = "466872e38dcff721077830eb0feb7bb333072ab335a7793f6f60586733ccfe27";
 
 impl Network {
     pub async fn spawn(
