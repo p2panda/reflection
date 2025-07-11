@@ -1,12 +1,12 @@
-<p align="center"><img src="reflection-app/data/icons/org.p2panda.reflection.svg">
+<p align="center"><img src="reflection-app/data/icons/org.p2panda.reflection.svg"></p>
 <h1 align="center">Reflection</h1>
-
 <p align="center">Collaboratively take meeting notes, even when there's no internet</p>
 
 ![Reflection app screenshot](reflection-app/data/screenshots/screenshot.png)
 
 > [!CAUTION]
-> The project is under active development and not considered stable yet. It probably won't eat your data, but no guarantees :)
+> The project is under active development and not considered stable yet. It
+> probably won't eat your data, but no guarantees :)
 
 ## Development
 
@@ -27,7 +27,8 @@ and run the project. It can be installed with flatpak.
 
 ### Multiple Instances
 
-If you need multiple instances of the app on the same computer for testing, you can run GNOME Builder in a separate dbus session:
+If you need multiple instances of the app on the same computer for testing, you
+can run GNOME Builder in a separate dbus session:
 
 `dbus-run-session flatpak run org.gnome.Builder`
 
@@ -43,7 +44,11 @@ enable log-based diagnostics with [tracing](https://docs.rs/tracing). Example:
 
 ## Supported By
 
-Thanks to [NLNet](https://nlnet.nl) (via [NGI Assure](https://nlnet.nl/project/P2Panda)), the [Prototype Fund](https://www.prototypefund.de/), and the [Federal Ministry of Research, Technology and Space](https://www.bmbf.de/EN/) for funding this project in 2025.
+Thanks to [NLNet](https://nlnet.nl) (via [NGI0
+ENTRUST](https://nlnet.nl/project/P2Panda-groups/)) under grant agreement No
+101069594, the [Prototype Fund](https://www.prototypefund.de/), and the
+[Federal Ministry of Research, Technology and Space](https://www.bmbf.de/EN/)
+for funding this project.
 
 ![Nlnet Logo](assets/logo-nlnet.jpg)
 ![Ministry Logo](assets/logo-bmftr.jpg)
