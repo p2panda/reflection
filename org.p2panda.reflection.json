@@ -14,7 +14,7 @@
         "--device=dri",
         "--socket=wayland",
         "--env=RUST_BACKTRACE=1",
-        "--env=RUST_LOG=reflection=INFO,reflection_doc=INFO,reflection_node=INFO"
+        "--env=RUST_LOG=WARN"
     ],
     "build-options" : {
         "append-path" : "/usr/lib/sdk/rust-stable/bin",
