@@ -38,6 +38,12 @@ Set the `RUST_LOG` environment variable to your verbosity setting and filter to
 enable log-based diagnostics with [tracing](https://docs.rs/tracing). Example:
 `RUST_LOG=debug` or `RUST_LOG=p2panda_net=INFO` etc.
 
+### Known Issues
+
+Internet connectivity is currently disabled while we debug replication
+issues. Collaboration is still possible if all peers are on the same WiFi
+network.
+
 ## License
 
 [GNU General Public License v3.0](COPYING)
