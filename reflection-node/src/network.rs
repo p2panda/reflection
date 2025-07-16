@@ -21,8 +21,8 @@ pub struct Network {
     document_tx: RwLock<HashMap<DocumentId, mpsc::Sender<ToNetwork>>>,
 }
 
-const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
-const BOOTSTRAP_NODE_ID: &str = "d825a2f929f935efcd6889bed5c3f5510b40f014969a729033d3fb7e33b97dbe";
+//const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
+//const BOOTSTRAP_NODE_ID: &str = "d825a2f929f935efcd6889bed5c3f5510b40f014969a729033d3fb7e33b97dbe";
 
 impl Network {
     pub async fn spawn(
@@ -34,12 +34,15 @@ impl Network {
         let network = NetworkBuilder::new(network_id.into())
             .private_key(private_key)
             .discovery(LocalDiscovery::new())
-            .relay(RELAY_URL.parse().expect("valid relay URL"), false, 0)
-            .direct_address(
-                BOOTSTRAP_NODE_ID.parse().expect("valid node ID"),
-                vec![],
-                None,
-            )
+            // NOTE(glyph): Internet networking is disabled until we can fix the
+            // more-than-two-peers gossip issue.
+            //
+            //.relay(RELAY_URL.parse().expect("valid relay URL"), false, 0)
+            //.direct_address(
+            //    BOOTSTRAP_NODE_ID.parse().expect("valid node ID"),
+            //    vec![],
+            //    None,
+            //)
             .gossip(GossipConfig {
                 // FIXME: This is a temporary workaround to account for larger delta patches (for
                 // example when the user Copy & Pastes a big chunk of text).
