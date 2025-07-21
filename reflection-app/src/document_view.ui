@@ -116,7 +116,7 @@
         <property name="content">
           <object class="GtkScrolledWindow">
             <child>
-              <object class="GtkSourceView" id="text_view">
+              <object class="ReflectionTextView" id="text_view">
                 <property name="top-margin">6</property>
                 <property name="bottom-margin">12</property>
                 <property name="left-margin">12</property>

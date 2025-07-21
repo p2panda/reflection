@@ -29,6 +29,7 @@ mod open_popover;
 mod secret;
 mod system_settings;
 mod textbuffer;
+mod textview;
 mod window;
 
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
@@ -43,6 +44,7 @@ use self::config::*;
 use self::connection_popover::ConnectionPopover;
 use self::open_popover::OpenPopover;
 use self::textbuffer::ReflectionTextBuffer;
+use self::textview::TextView;
 
 pub use self::config::APP_ID;
 

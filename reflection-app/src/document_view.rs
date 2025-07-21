@@ -29,7 +29,7 @@ use adw::{prelude::*, subclass::prelude::*};
 use gtk::{gdk, glib, glib::clone};
 
 use crate::{
-    ConnectionPopover, OpenPopover, ReflectionApplication, ReflectionTextBuffer,
+    ConnectionPopover, OpenPopover, ReflectionApplication, ReflectionTextBuffer, TextView,
     components::{MultilineEntry, ZoomLevelSelector},
 };
 
@@ -81,6 +81,7 @@ mod imp {
             ZoomLevelSelector::static_type();
             MultilineEntry::static_type();
             OpenPopover::static_type();
+            TextView::static_type();
 
             klass.bind_template();
 
