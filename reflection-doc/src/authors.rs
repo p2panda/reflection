@@ -110,4 +110,11 @@ impl Authors {
             self.items_changed(pos, 0, 1);
         }
     }
+
+    pub(crate) fn author(&self, author_key: PublicKey) -> Option<Author> {
+        let list = self.imp().list.lock().unwrap();
+        list.iter()
+            .find(|author| author.public_key() == author_key)
+            .cloned()
+    }
 }
