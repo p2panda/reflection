@@ -4427,6 +4427,7 @@ dependencies = [
  "glib",
  "loro",
  "reflection-node",
+ "serde",
  "test-log",
  "thiserror 2.0.12",
  "tracing",

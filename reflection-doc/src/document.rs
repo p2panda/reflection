@@ -7,10 +7,12 @@ use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
+use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use reflection_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
 use reflection_node::p2panda_core;
 use tracing::error;
 
+use crate::author::Author;
 use crate::authors::Authors;
 use crate::identity::PublicKey;
 use crate::service::Service;
@@ -31,6 +33,14 @@ impl fmt::Display for DocumentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+enum EphemerialData {
+    Cursor {
+        cursor: Option<loro::cursor::Cursor>,
+        timestamp: std::time::SystemTime,
+    },
 }
 
 mod imp {
@@ -174,6 +184,41 @@ mod imp {
             doc.commit();
 
             Ok(())
+        }
+
+        pub fn set_insert_cursor(&self, position: usize) {
+            let doc = self.crdt_doc.get().expect("crdt_doc to be set");
+            let text = doc.get_text(TEXT_CONTAINER_ID);
+
+            let cursor = EphemerialData::Cursor {
+                cursor: text.get_cursor(position, Default::default()),
+                timestamp: std::time::SystemTime::now(),
+            };
+
+            let cursor_bytes = match encode_cbor(&cursor) {
+                Ok(data) => data,
+                Err(error) => {
+                    error!("Failed to serialize cursor: {}", error);
+                    return;
+                }
+            };
+
+            let obj = self.obj();
+            glib::spawn_future(clone!(
+                #[weak]
+                obj,
+                async move {
+                    let document_id = obj.id().0;
+                    if let Err(error) = obj
+                        .service()
+                        .node()
+                        .ephemeral(document_id, cursor_bytes)
+                        .await
+                    {
+                        error!("Failed to send cursor position: {}", error);
+                    }
+                }
+            ));
         }
 
         /// Apply changes to the CRDT from a message received from another peer
@@ -380,6 +425,40 @@ mod imp {
 
             self.crdt_doc.set(doc).unwrap();
         }
+
+        pub(super) fn handle_ephemeral_data(&self, author: Author, data: EphemerialData) {
+            match data {
+                EphemerialData::Cursor { cursor, timestamp } => {
+                    // FIXME: check if the timestamp is newer then the previous ephemerial data we got
+                    let doc = self.crdt_doc.get().expect("crdt_doc to be set");
+
+                    if !author.is_new_cursor_position(timestamp) {
+                        return;
+                    }
+
+                    if let Some(cursor) = cursor {
+                        let abs_pos = match doc.get_cursor_pos(&cursor) {
+                            Ok(pos) => pos.current,
+                            Err(error) => {
+                                error!(
+                                    "Failed to get current cursor position of remote user {}: {error}",
+                                    author.name()
+                                );
+                                return;
+                            }
+                        };
+
+                        self.obj().emit_by_name::<()>("remote-insert-cursor", &[
+                            &author,
+                            &(abs_pos.pos as i32),
+                        ]);
+                    } else {
+                        self.obj()
+                            .emit_by_name::<()>("remote-insert-cursor", &[&author, &-1i32]);
+                    }
+                }
+            }
+        }
     }
 
     #[glib::derived_properties]
@@ -393,6 +472,9 @@ mod imp {
                         .build(),
                     Signal::builder("range-deleted")
                         .param_types([glib::types::Type::I32, glib::types::Type::I32])
+                        .build(),
+                    Signal::builder("remote-insert-cursor")
+                        .param_types([Author::static_type(), glib::types::Type::I32])
                         .build(),
                 ]
             })
@@ -467,6 +549,10 @@ impl Document {
             .delete_text(start_pos as usize, (end_pos - start_pos) as usize)
     }
 
+    pub fn set_insert_cursor(&self, position: i32) {
+        self.imp().set_insert_cursor(position as usize);
+    }
+
     /// Persist the snapshot.
     pub(crate) async fn store_snapshot(&self) {
         // FIXME: only store a new snapshot if it changed since the previous snapshot
@@ -529,5 +615,16 @@ impl SubscribableDocument for DocumentHandle {
         }
     }
 
-    fn ephemeral_bytes_received(&self, _author: p2panda_core::PublicKey, _data: Vec<u8>) {}
+    fn ephemeral_bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
+        if let Some(document) = self.0.upgrade() {
+            let context = glib::MainContext::ref_thread_default();
+            context.invoke(move || {
+                if let Ok(data) = decode_cbor(&data[..]) {
+                    if let Some(author) = document.authors().author(PublicKey(author)) {
+                        document.imp().handle_ephemeral_data(author, data);
+                    }
+                }
+            });
+        }
+    }
 }
