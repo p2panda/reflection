@@ -77,6 +77,7 @@ mod imp {
         #[property(name = "name", get = Self::name, type = String)]
         #[property(name = "emoji", get = Self::emoji, type = String)]
         #[property(name = "color", get = Self::color, type = String)]
+        #[property(name = "hex-color", get = Self::hex_color, type = String)]
         #[property(get, set, construct_only, type = PublicKey)]
         public_key: OnceLock<PublicKey>,
         #[property(get, set, construct_only)]
@@ -126,6 +127,15 @@ mod imp {
                 .fold(0u8, |acc, b| acc ^ b) as usize
                 % COLORS.len();
             COLORS[selector_color].0.to_string()
+        }
+
+        fn hex_color(&self) -> String {
+            let bytes = self.public_key.get().unwrap().as_bytes();
+            let selector_color = bytes[..(bytes.len() / 2)]
+                .iter()
+                .fold(0u8, |acc, b| acc ^ b) as usize
+                % COLORS.len();
+            COLORS[selector_color].1.to_string()
         }
     }
 }
