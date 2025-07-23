@@ -16,9 +16,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gtk::glib;
-use gtk::subclass::prelude::*;
+use gtk::{gdk, glib, graphene};
+use gtk::{prelude::*, subclass::prelude::*};
 use sourceview::subclass::prelude::ViewImpl;
+
+use crate::textbuffer::ReflectionTextBuffer;
 
 mod imp {
     use super::*;
@@ -35,7 +37,43 @@ mod imp {
 
     impl ObjectImpl for TextView {}
     impl WidgetImpl for TextView {}
-    impl TextViewImpl for TextView {}
+
+    impl TextViewImpl for TextView {
+        fn snapshot_layer(&self, layer: gtk::TextViewLayer, snapshot: gtk::Snapshot) {
+            if layer != gtk::TextViewLayer::AboveText {
+                return;
+            }
+
+            let buffer: ReflectionTextBuffer = self
+                .obj()
+                .buffer()
+                .downcast()
+                .expect("ReflectionTextView needs to have a ReflectionTextBuffer");
+
+            for (author, mark) in buffer.remote_cursors().iter() {
+                let color =
+                    gdk::RGBA::parse(author.hex_color()).expect("Author color to be in hex format");
+                let iter = buffer.iter_at_mark(mark);
+                let location = self.obj().iter_location(&iter);
+                let aspect_ratio = self.obj().settings().gtk_cursor_aspect_ratio() as f32;
+                let cursor_width = location.height() as f32 * aspect_ratio + 1f32;
+
+                // FIXME: Handle angled cursors (e.g. for italic)
+                // See draw_insertation_cursor() in gtk/gtkrenderlayout.c for angle calculation
+                // GTK uses cairo to draw the cursor, we could use `gtk_snapshot_append_stroke()`
+                // or rotate the appended color.
+
+                let bounds = graphene::Rect::new(
+                    location.x() as f32,
+                    location.y() as f32,
+                    cursor_width,
+                    location.height() as f32,
+                );
+                snapshot.append_color(&color, &bounds);
+            }
+        }
+    }
+
     impl ViewImpl for TextView {}
 }
 

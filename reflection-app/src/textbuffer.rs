@@ -18,16 +18,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::cell::{Cell, OnceCell, RefCell};
+use std::{
+    cell::{Cell, OnceCell, RefCell},
+    collections::HashMap,
+};
 
 use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use gtk::{glib, glib::clone};
-use reflection_doc::document::Document;
+use reflection_doc::{author::Author, document::Document};
 use sourceview::prelude::BufferExt;
 use sourceview::subclass::prelude::*;
 use sourceview::*;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 mod imp {
     use super::*;
@@ -39,6 +42,7 @@ mod imp {
         pub document_handlers: OnceCell<glib::SignalGroup>,
         #[property(get, set = Self::set_document)]
         pub document: RefCell<Option<Document>>,
+        pub(super) remote_cursors: RefCell<HashMap<Author, gtk::TextMark>>,
     }
 
     impl ReflectionTextBuffer {
@@ -137,6 +141,52 @@ mod imp {
                 ),
             );
 
+            document_handlers.connect_local(
+                "remote-insert-cursor",
+                false,
+                clone!(
+                    #[weak]
+                    buffer,
+                    #[upgrade_or]
+                    None,
+                    move |values| {
+                        let author: Author = values.get(1).unwrap().get().unwrap();
+                        let pos: i32 = values.get(2).unwrap().get().unwrap();
+                        let mut remote_cursors = buffer.imp().remote_cursors.borrow_mut();
+                        let author_name = author.name();
+
+                        if pos < 0 {
+                            if let Some(mark) = remote_cursors.remove(&author) {
+                                buffer.delete_mark(&mark);
+                                debug!("Cursor mark for author {author_name} was removed");
+                            }
+                            return None;
+                        }
+
+                        let mark = remote_cursors
+                            .entry(author)
+                            .or_insert_with(|| gtk::TextMark::new(None, false));
+                        let iter = buffer.iter_at_offset(pos);
+
+                        // New markers are deleted so we need to add them when we create them
+                        if mark.is_deleted() {
+                            buffer.add_mark(mark, &iter);
+                        } else {
+                            buffer.move_mark(mark, &iter);
+                        }
+
+                        // WORKAROUND: We need to invalidate the display cache,
+                        // no idea if there is a better way to do this
+                        mark.set_visible(true);
+                        mark.set_visible(false);
+
+                        debug!("Cursor mark for author {author_name} was added at {pos}");
+
+                        None
+                    }
+                ),
+            );
+
             self.document_handlers.set(document_handlers).unwrap();
         }
     }
@@ -194,6 +244,22 @@ mod imp {
                 self.parent_delete_range(start, end);
             }
         }
+
+        fn mark_set(&self, location: &gtk::TextIter, mark: &gtk::TextMark) {
+            if let Some(name) = mark.name() {
+                match name.as_str() {
+                    "insert" => {
+                        if let Some(document) = self.obj().document() {
+                            document.set_insert_cursor(location.offset());
+                        }
+                    }
+                    "selection_bound" => {}
+                    _ => {}
+                }
+            }
+
+            self.parent_mark_set(location, mark);
+        }
     }
 
     impl BufferImpl for ReflectionTextBuffer {}
@@ -219,6 +285,10 @@ impl ReflectionTextBuffer {
 
     pub fn full_text(&self) -> String {
         self.text(&self.start_iter(), &self.end_iter(), true).into()
+    }
+
+    pub fn remote_cursors(&self) -> HashMap<Author, gtk::TextMark> {
+        self.imp().remote_cursors.borrow().to_owned()
     }
 }
 
