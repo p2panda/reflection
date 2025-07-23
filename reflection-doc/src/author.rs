@@ -86,6 +86,7 @@ mod imp {
         pub is_online: Cell<bool>,
         #[property(get)]
         pub is_this_device: Cell<bool>,
+        pub last_cursor_update: Mutex<Option<std::time::SystemTime>>,
     }
 
     #[glib::object_subclass]
@@ -176,5 +177,16 @@ impl Author {
             self.notify_last_seen();
         }
         self.notify_is_online();
+    }
+
+    pub(crate) fn is_new_cursor_position(&self, timestamp: std::time::SystemTime) -> bool {
+        let mut last_cursor_update = self.imp().last_cursor_update.lock().unwrap();
+
+        if last_cursor_update.is_none() || timestamp >= last_cursor_update.unwrap() {
+            *last_cursor_update = Some(timestamp);
+            true
+        } else {
+            false
+        }
     }
 }
