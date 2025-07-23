@@ -181,7 +181,7 @@ mod imp {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
 
             if let Err(err) = doc.import_with(&bytes, "delta") {
-                eprintln!("received invalid message: {}", err);
+                error!("received invalid message: {}", err);
             }
         }
 
