@@ -20,6 +20,7 @@ p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "5e3816cc63a
 p2panda-stream = { git = "https://github.com/p2panda/p2panda", rev = "5e3816cc63af30ea5a8f3745e73ada265e700cf9" }
 p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "5e3816cc63af30ea5a8f3745e73ada265e700cf9", features = ["log-sync"] }
 serde = { version = "1.0.215", features = ["derive"] }
+serde_bytes = "0.11.17"
 sqlx = { version = "0.8.5", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false}
 tokio = { version = "1.44.2", features = ["rt", "sync"] }
 tokio-stream = "0.1.17"

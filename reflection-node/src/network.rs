@@ -1,12 +1,16 @@
 use crate::document::DocumentId;
-use crate::operation::{ReflectionExtensions, decode_gossip_message, encode_gossip_operation};
+use crate::operation::ReflectionExtensions;
+use crate::persistent_operation::PersistentOperation;
 use crate::store::OperationStore;
 use anyhow::Result;
-use p2panda_core::{Hash, Operation, PrivateKey};
+use p2panda_core::{
+    Hash, Operation, PrivateKey,
+    cbor::{decode_cbor, encode_cbor},
+};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, SystemEvent, ToNetwork};
-use p2panda_stream::{DecodeExt, IngestExt};
+use p2panda_stream::IngestExt;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
@@ -88,25 +92,30 @@ impl Network {
         // Incoming gossip payloads have a slightly different shape than sync. We convert them
         // here to follow the p2panda operation tuple of a "header" and separate "body".
         let stream = stream.filter_map(|event| match event {
-            FromNetwork::GossipMessage { bytes, .. } => match decode_gossip_message(&bytes) {
-                Ok(result) => Some(result),
+            FromNetwork::GossipMessage { bytes, .. } => {
+                match decode_cbor::<PersistentOperation, _>(&bytes[..]) {
+                    Ok(operation) => match operation.unpack() {
+                        Ok(data) => Some(data),
+                        Err(err) => {
+                            error!("Failed to unpack operation: {err}");
+                            None
+                        }
+                    },
+                    Err(err) => {
+                        error!("Failed to decode gossip message: {err}");
+                        None
+                    }
+                }
+            }
+            FromNetwork::SyncMessage {
+                header, payload, ..
+            } => match PersistentOperation::from_serialized(header, payload).unpack() {
+                Ok(data) => Some(data),
                 Err(err) => {
-                    error!("decoding gossip message failed: {err}");
+                    error!("Failed to unpack operation: {err}");
                     None
                 }
             },
-            FromNetwork::SyncMessage {
-                header, payload, ..
-            } => Some((header, payload)),
-        });
-
-        // Decode p2panda operations (they are encoded in CBOR).
-        let stream = stream.decode().filter_map(|result| match result {
-            Ok(operation) => Some(operation),
-            Err(err) => {
-                error!("decoding operation failed: {err}");
-                None
-            }
         });
 
         // Ingest does multiple things for us:
@@ -180,12 +189,8 @@ impl Network {
                 .expect("Not subscribed to document with id {document_id}")
         };
 
-        let encoded_gossip_operation = encode_gossip_operation(operation.header, operation.body)?;
-        document_tx
-            .send(ToNetwork::Message {
-                bytes: encoded_gossip_operation,
-            })
-            .await?;
+        let bytes = encode_cbor(&PersistentOperation::new(operation))?;
+        document_tx.send(ToNetwork::Message { bytes }).await?;
 
         Ok(())
     }
