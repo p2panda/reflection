@@ -4,7 +4,7 @@ use crate::persistent_operation::PersistentOperation;
 use crate::store::OperationStore;
 use anyhow::Result;
 use p2panda_core::{
-    Hash, Operation, PrivateKey,
+    Body, Hash, Header, Operation, PrivateKey,
     cbor::{decode_cbor, encode_cbor},
 };
 use p2panda_discovery::mdns::LocalDiscovery;
@@ -17,6 +17,11 @@ use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+enum MessageType {
+    Persistent(PersistentOperation),
+}
 
 #[derive(Debug)]
 pub struct Network {
@@ -80,43 +85,46 @@ impl Network {
     {
         // Join a gossip overlay with peers who are interested in the same document and start sync
         // with them.
-        let (document_tx, document_rx, _gossip_ready) = self.network.subscribe(document).await?;
+        let (document_tx, mut document_rx, _gossip_ready) =
+            self.network.subscribe(document).await?;
 
         {
             let mut store = self.document_tx.write().await;
             store.insert(document.clone(), document_tx);
         }
 
-        let stream = ReceiverStream::new(document_rx);
+        let (persistent_tx, persistent_rx) =
+            mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
 
-        // Incoming gossip payloads have a slightly different shape than sync. We convert them
-        // here to follow the p2panda operation tuple of a "header" and separate "body".
-        let stream = stream.filter_map(|event| match event {
-            FromNetwork::GossipMessage { bytes, .. } => {
-                match decode_cbor::<PersistentOperation, _>(&bytes[..]) {
-                    Ok(operation) => match operation.unpack() {
-                        Ok(data) => Some(data),
+        tokio::task::spawn(async move {
+            while let Some(event) = document_rx.recv().await {
+                match event {
+                    FromNetwork::GossipMessage { bytes, .. } => match decode_cbor(&bytes[..]) {
+                        Ok(MessageType::Persistent(operation)) => match operation.unpack() {
+                            Ok(data) => {
+                                persistent_tx.send(data).await.unwrap();
+                            }
+                            Err(err) => {
+                                error!("Failed to unpack operation: {err}");
+                            }
+                        },
                         Err(err) => {
-                            error!("Failed to unpack operation: {err}");
-                            None
+                            error!("Failed to decode gossip message: {err}");
                         }
                     },
-                    Err(err) => {
-                        error!("Failed to decode gossip message: {err}");
-                        None
-                    }
+                    FromNetwork::SyncMessage {
+                        header, payload, ..
+                    } => match PersistentOperation::from_serialized(header, payload).unpack() {
+                        Ok(data) => persistent_tx.send(data).await.unwrap(),
+                        Err(err) => {
+                            error!("Failed to unpack operation: {err}");
+                        }
+                    },
                 }
             }
-            FromNetwork::SyncMessage {
-                header, payload, ..
-            } => match PersistentOperation::from_serialized(header, payload).unpack() {
-                Ok(data) => Some(data),
-                Err(err) => {
-                    error!("Failed to unpack operation: {err}");
-                    None
-                }
-            },
         });
+
+        let stream = ReceiverStream::new(persistent_rx);
 
         // Ingest does multiple things for us:
         //
@@ -189,7 +197,9 @@ impl Network {
                 .expect("Not subscribed to document with id {document_id}")
         };
 
-        let bytes = encode_cbor(&PersistentOperation::new(operation))?;
+        let bytes = encode_cbor(&MessageType::Persistent(PersistentOperation::new(
+            operation,
+        )))?;
         document_tx.send(ToNetwork::Message { bytes }).await?;
 
         Ok(())
