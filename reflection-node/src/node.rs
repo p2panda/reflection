@@ -14,6 +14,7 @@ use tokio::sync::{Notify, RwLock, Semaphore};
 use tracing::{error, info, warn};
 
 use crate::document::{Document, DocumentId, SubscribableDocument};
+use crate::ephemerial_operation::EphemerialOperation;
 use crate::network::Network;
 use crate::operation::{LogType, create_operation, validate_operation};
 use crate::store::{DocumentStore, OperationStore};
@@ -295,44 +296,60 @@ impl Node {
 
         let inner_clone = inner.clone();
         let document_clone = document.clone();
+        let document_clone2 = document.clone();
         inner
             .runtime
             .spawn(async move {
                 let inner_clone2 = inner_clone.clone();
                 inner_clone2
                     .network
-                    .subscribe(document_id, move |operation| {
-                        let inner_clone = inner_clone.clone();
-                        let document_clone = document_clone.clone();
-                        async move {
-                            // Process the operations and forward application messages to app layer. This is where
-                            // we "materialize" our application state from incoming "application events".
-                            // Validation for our custom "document" extension.
-                            if let Err(err) = validate_operation(&operation, &document_id) {
-                                warn!(
-                                    public_key = %operation.header.public_key,
-                                    seq_num = %operation.header.seq_num,
-                                    "{err}"
-                                );
-                                return;
-                            }
+                    .subscribe(
+                        document_id,
+                        move |operation| {
+                            let inner_clone = inner_clone.clone();
+                            let document_clone = document_clone.clone();
+                            async move {
+                                // Process the operations and forward application messages to app layer. This is where
+                                // we "materialize" our application state from incoming "application events".
+                                // Validation for our custom "document" extension.
+                                if let Err(err) = validate_operation(&operation, &document_id) {
+                                    warn!(
+                                        public_key = %operation.header.public_key,
+                                        seq_num = %operation.header.seq_num,
+                                        "{err}"
+                                    );
+                                    return;
+                                }
 
-                            // When we discover a new author we need to add them to our document store.
-                            if let Err(error) = inner_clone
-                                .document_store
-                                .add_author(&document_id, &operation.header.public_key)
-                                .await
-                            {
-                                error!("Can't store author to database: {error}");
-                            }
+                                // When we discover a new author we need to add them to our document store.
+                                if let Err(error) = inner_clone
+                                    .document_store
+                                    .add_author(&document_id, &operation.header.public_key)
+                                    .await
+                                {
+                                    error!("Can't store author to database: {error}");
+                                }
 
-                            // Forward the payload up to the app.
-                            if let Some(body) = operation.body {
-                                document_clone
-                                    .bytes_received(operation.header.public_key, body.to_bytes());
+                                // Forward the payload up to the app.
+                                if let Some(body) = operation.body {
+                                    document_clone.bytes_received(
+                                        operation.header.public_key,
+                                        body.to_bytes(),
+                                    );
+                                }
                             }
-                        }
-                    })
+                        },
+                        move |operation| {
+                            let document_clone = document_clone2.clone();
+                            async move {
+                                if let Some((author, body)) = operation.validate_and_unpack() {
+                                    document_clone.ephemeral_bytes_received(author, body);
+                                } else {
+                                    warn!("Got ephemeral operation with a bad signature");
+                                }
+                            }
+                        },
+                    )
                     .await
             })
             .await??;
@@ -462,6 +479,27 @@ impl Node {
             .await??;
 
         info!("Snapshot saved for document with id {}", document_id);
+
+        Ok(())
+    }
+
+    pub async fn ephemeral(&self, document_id: DocumentId, data: Vec<u8>) -> Result<()> {
+        let inner = self.inner().await;
+
+        let operation = EphemerialOperation::new(data, &inner.private_key);
+        let inner_clone = inner.clone();
+        inner
+            .runtime
+            .spawn(async move {
+                // Broadcast ephemeral data on gossip overlay.
+                inner_clone
+                    .network
+                    .send_ephemeral(&document_id, operation)
+                    .await
+            })
+            .await??;
+
+        info!("Ephemeral data send for document with id {}", document_id);
 
         Ok(())
     }
