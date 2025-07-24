@@ -528,4 +528,6 @@ impl SubscribableDocument for DocumentHandle {
             });
         }
     }
+
+    fn ephemeral_bytes_received(&self, _author: p2panda_core::PublicKey, _data: Vec<u8>) {}
 }

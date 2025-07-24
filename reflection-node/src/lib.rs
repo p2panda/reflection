@@ -1,4 +1,5 @@
 pub mod document;
+mod ephemerial_operation;
 mod network;
 mod node;
 mod operation;
@@ -59,6 +60,7 @@ mod tests {
 
         fn authors_joined(&self, _authors: Vec<PublicKey>) {}
         fn author_set_online(&self, _author: PublicKey, _is_online: bool) {}
+        fn ephemeral_bytes_received(&self, _author: PublicKey, _data: Vec<u8>) {}
     }
 
     #[test(tokio::test(flavor = "multi_thread", worker_threads = 1))]

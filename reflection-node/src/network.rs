@@ -1,4 +1,5 @@
 use crate::document::DocumentId;
+use crate::ephemerial_operation::EphemerialOperation;
 use crate::operation::ReflectionExtensions;
 use crate::persistent_operation::PersistentOperation;
 use crate::store::OperationStore;
@@ -21,6 +22,7 @@ use tracing::error;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 enum MessageType {
     Persistent(PersistentOperation),
+    Ephemeral(EphemerialOperation),
 }
 
 #[derive(Debug)]
@@ -75,13 +77,15 @@ impl Network {
         Ok(())
     }
 
-    pub async fn subscribe<Fut>(
+    pub async fn subscribe<Fut, Fut2>(
         &self,
         document: DocumentId,
         f: impl Fn(Operation<ReflectionExtensions>) -> Fut + Send + 'static,
+        f_ephemeral: impl Fn(EphemerialOperation) -> Fut2 + Send + 'static,
     ) -> Result<()>
     where
         Fut: Future<Output = ()> + Send,
+        Fut2: Future<Output = ()> + Send,
     {
         // Join a gossip overlay with peers who are interested in the same document and start sync
         // with them.
@@ -100,6 +104,9 @@ impl Network {
             while let Some(event) = document_rx.recv().await {
                 match event {
                     FromNetwork::GossipMessage { bytes, .. } => match decode_cbor(&bytes[..]) {
+                        Ok(MessageType::Ephemeral(operation)) => {
+                            f_ephemeral(operation).await;
+                        }
                         Ok(MessageType::Persistent(operation)) => match operation.unpack() {
                             Ok(data) => {
                                 persistent_tx.send(data).await.unwrap();
@@ -200,6 +207,29 @@ impl Network {
         let bytes = encode_cbor(&MessageType::Persistent(PersistentOperation::new(
             operation,
         )))?;
+        document_tx.send(ToNetwork::Message { bytes }).await?;
+
+        Ok(())
+    }
+
+    /// Send ephemeral data to the gossip overlay for `document`.
+    ///
+    /// This will panic if the `document` wasn't subscribed to.
+    pub async fn send_ephemeral(
+        &self,
+        document: &DocumentId,
+        operation: EphemerialOperation,
+    ) -> Result<()> {
+        let document_tx = {
+            self.document_tx
+                .read()
+                .await
+                .get(document)
+                .cloned()
+                .expect("Not subscribed to document with id {document_id}")
+        };
+
+        let bytes = encode_cbor(&MessageType::Ephemeral(operation))?;
         document_tx.send(ToNetwork::Message { bytes }).await?;
 
         Ok(())
