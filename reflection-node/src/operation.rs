@@ -2,8 +2,7 @@ use std::hash::Hash as StdHash;
 use std::time::SystemTime;
 
 use anyhow::{Result, bail};
-use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Body, Extension, Extensions, Header, Operation, PrivateKey, PruneFlag};
+use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::LogStore;
 use p2panda_store::OperationStore as TraitOperationStore;
 use serde::{Deserialize, Serialize};
@@ -217,17 +216,4 @@ pub fn validate_operation(
         }
     }
     Ok(())
-}
-
-pub fn encode_gossip_operation<E>(header: Header<E>, body: Option<Body>) -> Result<Vec<u8>>
-where
-    E: Extensions + Serialize,
-{
-    let bytes = encode_cbor(&(header.to_bytes(), body.map(|body| body.to_bytes())))?;
-    Ok(bytes)
-}
-
-pub fn decode_gossip_message(bytes: &[u8]) -> Result<(Vec<u8>, Option<Vec<u8>>)> {
-    let result = decode_cbor(bytes)?;
-    Ok(result)
 }

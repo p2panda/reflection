@@ -4447,6 +4447,7 @@ dependencies = [
  "p2panda-stream",
  "p2panda-sync",
  "serde",
+ "serde_bytes",
  "sqlx",
  "test-log",
  "tokio",

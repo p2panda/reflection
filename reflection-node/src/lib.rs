@@ -2,6 +2,7 @@ pub mod document;
 mod network;
 mod node;
 mod operation;
+mod persistent_operation;
 mod store;
 mod utils;
 
