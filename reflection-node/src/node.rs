@@ -127,16 +127,14 @@ impl Node {
         // Random number generator seeded from local public key bytes.
         let rng = Rng::from_seed(*private_key.public_key().as_bytes());
 
-        let private_key = PrivateKey::from_bytes(&rng.random_array().unwrap());
-        let my_id: ActorId = private_key.public_key().into();
-
-        // Init key manager with randomly generated secret key.
+        // Init key manager with randomly generated identity secret key.
         let key_manager_y = {
             let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
             KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap()
         };
 
         // Init the spaces store.
+        let my_id: ActorId = private_key.public_key().into();
         let spaces_store = SpacesMemoryStore::new(my_id, key_manager_y);
 
         // Init the forge.
