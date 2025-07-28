@@ -1,5 +1,7 @@
 pub mod document;
 mod ephemerial_operation;
+mod forge;
+mod manager;
 mod network;
 mod node;
 mod operation;

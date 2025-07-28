@@ -19,7 +19,8 @@ p2panda-net = { path = "../../p2panda/p2panda-net"}
 p2panda-store = { path = "../../p2panda/p2panda-store", features = ["sqlite"], default-features = false}
 p2panda-stream = { path = "../../p2panda/p2panda-stream"}
 p2panda-sync = { path = "../../p2panda/p2panda-sync", features = ["log-sync"] }
-p2panda-spaces = { path = "../../p2panda/p2panda-spaces"}
+p2panda-spaces = { path = "../../p2panda/p2panda-spaces", features = ["test_utils"] }
+p2panda-encryption = { path = "../../p2panda/p2panda-encryption", features = ["test_utils"] }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_bytes = "0.11.17"
 sqlx = { version = "0.8.5", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false}
@@ -27,3 +28,4 @@ tokio = { version = "1.44.2", features = ["rt", "sync"] }
 tokio-stream = "0.1.17"
 tracing = "0.1"
 test-log = { version = "0.2.17", default-features = false, features = ["trace", "color"] }
+thiserror = "2.0.12"

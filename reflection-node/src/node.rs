@@ -5,7 +5,13 @@ use std::sync::{Arc, OnceLock};
 use anyhow::Result;
 use chrono::Utc;
 use p2panda_core::{Hash, PrivateKey};
+use p2panda_encryption::Rng;
+use p2panda_encryption::crypto::x25519::SecretKey;
+use p2panda_encryption::key_bundle::Lifetime;
+use p2panda_encryption::key_manager::KeyManager;
 use p2panda_net::{SyncConfiguration, SystemEvent};
+use p2panda_spaces::manager::Manager;
+use p2panda_spaces::types::ActorId;
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
@@ -15,8 +21,10 @@ use tracing::{error, info, warn};
 
 use crate::document::{Document, DocumentId, SubscribableDocument};
 use crate::ephemerial_operation::EphemerialOperation;
+use crate::forge::ReflectionForge;
+use crate::manager::{ReflectionManager, SpacesMemoryStore};
 use crate::network::Network;
-use crate::operation::{LogType, create_operation, validate_operation};
+use crate::operation::validate_operation;
 use crate::store::{DocumentStore, OperationStore};
 use crate::utils::CombinedMigrationSource;
 
@@ -38,6 +46,7 @@ struct NodeInner {
     runtime: Runtime,
     operation_store: OperationStore,
     document_store: DocumentStore,
+    manager: ReflectionManager,
     network: Network,
     private_key: PrivateKey,
 }
@@ -115,6 +124,27 @@ impl Node {
             SyncConfiguration::<DocumentId>::new(sync)
         };
 
+        // Random number generator seeded from local public key bytes.
+        let rng = Rng::from_seed(*private_key.public_key().as_bytes());
+
+        let private_key = PrivateKey::from_bytes(&rng.random_array().unwrap());
+        let my_id: ActorId = private_key.public_key().into();
+
+        // Init key manager with randomly generated secret key.
+        let key_manager_y = {
+            let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
+            KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap()
+        };
+
+        // Init the spaces store.
+        let spaces_store = SpacesMemoryStore::new(my_id, key_manager_y);
+
+        // Init the forge.
+        let forge = ReflectionForge::new(private_key.clone(), operation_store.clone());
+
+        // Init manager.
+        let manager = Manager::new(spaces_store, forge, rng)?;
+
         let network = Network::spawn(
             network_id,
             private_key.clone(),
@@ -127,6 +157,7 @@ impl Node {
             operation_store,
             document_store,
             network,
+            manager,
             private_key,
         });
 
@@ -201,20 +232,9 @@ impl Node {
         inner
             .runtime
             .spawn(async move {
-                let operation = create_operation(
-                    &mut inner_clone.operation_store.clone(),
-                    &inner_clone.private_key,
-                    LogType::Snapshot,
-                    None,
-                    None,
-                    false,
-                )
-                .await?;
-
-                let document_id: DocumentId = operation
-                    .header
-                    .extension()
-                    .expect("document id from our own logs");
+                // @TODO: set initial members to hardcoded public keys.
+                let (space, _) = inner_clone.manager.create_space(&[]).await?;
+                let document_id = space.id().into();
                 inner_clone
                     .document_store
                     .add_document(&document_id)
@@ -387,37 +407,9 @@ impl Node {
     ///
     /// This should be used to inform all subscribed peers about small changes to the text
     /// document (Delta-Based CRDT).
-    pub async fn delta(&self, document_id: DocumentId, bytes: Vec<u8>) -> Result<()> {
-        let inner = self.inner().await;
-        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
-
-        let inner_clone = inner.clone();
-        inner
-            .runtime
-            .spawn(async move {
-                let mut operation_store = inner_clone.operation_store.clone();
-                // Append one operation to our "ephemeral" delta log.
-                let operation = create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Delta,
-                    Some(document_id),
-                    Some(&bytes),
-                    false,
-                )
-                .await?;
-
-                // Broadcast operation on gossip overlay.
-                inner_clone
-                    .network
-                    .send_operation(&document_id, operation)
-                    .await
-            })
-            .await??;
-
-        info!("Delta operation sent for document with id {}", document_id);
-
-        Ok(())
+    pub async fn delta(&self, _document_id: DocumentId, _bytes: Vec<u8>) -> Result<()> {
+        // NOTE: in this integration with p2panda-spaces we don't support publishing delta states
+        unimplemented!()
     }
 
     /// Same as [`Self::Delta`] next to persisting a whole snapshot and pruning.
@@ -436,45 +428,17 @@ impl Node {
         inner
             .runtime
             .spawn(async move {
-                let mut operation_store = inner_clone.operation_store.clone();
+                let mut space = inner_clone
+                    .manager
+                    .space(&document_id.into())
+                    .await?
+                    .expect("space exists before data is published");
 
-                // Append an operation to our "snapshot" log and set the prune flag to
-                // true. This will remove previous snapshots.
-                //
-                // Snapshots are not broadcasted on the gossip overlay as they would be
-                // too large. Peers will sync them up when they join the document.
-                create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Snapshot,
-                    Some(document_id),
-                    Some(&snapshot_bytes),
-                    true,
-                )
-                .await?;
+                let _operation = space.publish(&snapshot_bytes).await?;
 
-                // Append an operation to our "ephemeral" delta log and set the prune
-                // flag to true.
-                //
-                // This signals removing all previous "delta" operations now. This is
-                // some sort of garbage collection whenever we snapshot. Snapshots
-                // already contain all history, there is no need to keep duplicate
-                // "delta" data around.
-                let operation = create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Delta,
-                    Some(document_id),
-                    None,
-                    true,
-                )
-                .await?;
+                // NOTE: we don't publish a prune point into the delta log here as pruning isn't supported in this integration to p2panda-spaces.
 
-                // Broadcast operation on gossip overlay.
-                inner_clone
-                    .network
-                    .send_operation(&document_id, operation)
-                    .await
+                Ok::<(), anyhow::Error>(())
             })
             .await??;
 

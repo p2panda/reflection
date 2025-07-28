@@ -1,10 +1,11 @@
-use std::fmt;
+use std::{convert::Infallible, fmt};
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use p2panda_core::{Hash, HashError, PublicKey};
+use p2panda_core::{PublicKey, identity::PUBLIC_KEY_LEN};
 use p2panda_net::TopicId;
+use p2panda_spaces::types::ActorId;
 use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 use sqlx::{
@@ -15,41 +16,57 @@ use sqlx::{
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct DocumentId(Hash);
+pub struct DocumentId(PublicKey);
 
 impl DocumentId {
     pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_ref()
+        self.0.as_bytes()
     }
 }
 
 impl TopicQuery for DocumentId {}
 
 impl TopicId for DocumentId {
-    fn id(&self) -> [u8; 32] {
+    fn id(&self) -> [u8; PUBLIC_KEY_LEN] {
         *self.0.as_bytes()
     }
 }
 
-impl From<[u8; 32]> for DocumentId {
-    fn from(bytes: [u8; 32]) -> Self {
-        Self(Hash::from_bytes(bytes))
+impl From<[u8; PUBLIC_KEY_LEN]> for DocumentId {
+    fn from(bytes: [u8; PUBLIC_KEY_LEN]) -> Self {
+        // @TODO: implement TryFrom and handle errors.
+        Self(PublicKey::from_bytes(&bytes).unwrap())
     }
 }
 
-impl From<Hash> for DocumentId {
-    fn from(document_id: Hash) -> Self {
-        Self(document_id)
+impl From<PublicKey> for DocumentId {
+    fn from(public_key: PublicKey) -> Self {
+        Self(public_key)
     }
 }
 
-impl From<DocumentId> for Hash {
+impl From<ActorId> for DocumentId {
+    fn from(actor_id: ActorId) -> Self {
+        let public_key: PublicKey = actor_id.into();
+        Self(public_key)
+    }
+}
+
+
+impl From<DocumentId> for ActorId {
+    fn from(document_id: DocumentId) -> Self {
+        let public_key: PublicKey = document_id.into();
+        public_key.into()
+    }
+}
+
+impl From<DocumentId> for PublicKey {
     fn from(document: DocumentId) -> Self {
         document.0
     }
 }
 
-impl From<&DocumentId> for Hash {
+impl From<&DocumentId> for PublicKey {
     fn from(value: &DocumentId) -> Self {
         value.0
     }
@@ -62,18 +79,20 @@ impl fmt::Display for DocumentId {
 }
 
 impl FromStr for DocumentId {
-    type Err = HashError;
+    type Err = Infallible;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Ok(Hash::from_str(value)?.into())
+        // @TODO: handle errors.
+        Ok(PublicKey::from_str(value).unwrap().into())
     }
 }
 
 impl TryFrom<&[u8]> for DocumentId {
-    type Error = HashError;
+    type Error = Infallible;
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Hash::try_from(value)?.into())
+        // @TODO: handle errors.
+        Ok(PublicKey::try_from(value).unwrap().into())
     }
 }
 

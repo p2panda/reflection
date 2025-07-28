@@ -3867,6 +3867,7 @@ name = "p2panda-auth"
 version = "0.4.0"
 dependencies = [
  "petgraph",
+ "rand 0.9.0",
  "serde",
  "thiserror 2.0.12",
 ]
@@ -4693,6 +4694,7 @@ dependencies = [
  "ciborium",
  "p2panda-core",
  "p2panda-discovery",
+ "p2panda-encryption",
  "p2panda-net",
  "p2panda-spaces",
  "p2panda-store",
@@ -4702,6 +4704,7 @@ dependencies = [
  "serde_bytes",
  "sqlx",
  "test-log",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tracing",
