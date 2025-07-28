@@ -3,6 +3,8 @@ use std::time::SystemTime;
 
 use anyhow::{Result, bail};
 use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
+use p2panda_spaces::message::SpacesArgs;
+use p2panda_spaces::types::Conditions;
 use p2panda_store::LogStore;
 use p2panda_store::OperationStore as TraitOperationStore;
 use serde::{Deserialize, Serialize};
@@ -42,6 +44,9 @@ pub struct ReflectionExtensions {
     /// we take the hash of the header itself to derive the document id.
     #[serde(rename = "d")]
     pub document: Option<DocumentId>,
+
+    #[serde(rename = "a")]
+    pub spaces_args: Option<ReflectionSpacesArgs>,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
@@ -111,6 +116,20 @@ impl Extension<LogId> for ReflectionExtensions {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, PartialOrd, Deserialize, Serialize)]
+pub struct ReflectionConditions {}
+
+impl Conditions for ReflectionConditions {}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ReflectionSpacesArgs(SpacesArgs<ReflectionConditions>);
+
+impl Extension<ReflectionSpacesArgs> for ReflectionExtensions {
+    fn extract(header: &Header<Self>) -> Option<ReflectionSpacesArgs> {
+        header.extension()
+    }
+}
+
 /// Creates, signs and stores new operation in the author's append-only log.
 ///
 /// If no document is specified we create a new operation in a new log. The resulting hash of the
@@ -147,6 +166,7 @@ pub async fn create_operation(
         prune_flag: PruneFlag::new(prune_flag),
         log_type,
         document,
+        spaces_args: None,
     };
 
     let mut header = Header {
