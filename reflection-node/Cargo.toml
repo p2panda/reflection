@@ -19,6 +19,7 @@ p2panda-net = { git = "https://github.com/p2panda/p2panda", rev = "aee7327ce469a
 p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "aee7327ce469ac647e566355a8779bed5be13654", features = ["sqlite"], default-features = false}
 p2panda-stream = { git = "https://github.com/p2panda/p2panda", rev = "aee7327ce469ac647e566355a8779bed5be13654" }
 p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "aee7327ce469ac647e566355a8779bed5be13654", features = ["log-sync"] }
+p2panda-spaces = { git = "https://github.com/p2panda/p2panda", rev = "aee7327ce469ac647e566355a8779bed5be13654" }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_bytes = "0.11.17"
 sqlx = { version = "0.8.5", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false}
