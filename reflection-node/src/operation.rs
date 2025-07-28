@@ -11,7 +11,7 @@ use crate::document::DocumentId;
 use crate::store::{LogId, OperationStore};
 
 /// Custom extensions for p2panda header.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ReflectionExtensions {
     /// If flag is true we can remove all previous operations in this log.
     ///
