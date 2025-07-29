@@ -1,8 +1,7 @@
 use std::hash::Hash as StdHash;
 
 use anyhow::{Result, bail};
-use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
+use p2panda_core::{Extension, Header, Operation, PruneFlag};
 use p2panda_spaces::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use p2panda_spaces::types::Conditions;
 use serde::{Deserialize, Serialize};
@@ -60,16 +59,15 @@ pub struct ReflectionExtensions {
 
     /// Arguments required for interacting with `p2panda-spaces`.
     #[serde(rename = "s")]
-    pub spaces_args: Option<ReflectionSpacesArgs>,
+    pub spaces_args: ReflectionSpacesArgs,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub enum LogType {
-    // Log to contain control messages for p2panda-spaces.
-    Spaces,
-    Snapshot,
+    // @TODO: We write everything into one log for now (system messages, snapshots and deltas, as
+    // there's no message ordering in place, handling dependencies across logs).
     #[default]
-    Delta,
+    Spaces,
 }
 
 impl Extension<PruneFlag> for ReflectionExtensions {
@@ -145,16 +143,13 @@ impl AuthoredMessage for ReflectionOperation {
 
 impl SpacesMessage<ReflectionConditions> for ReflectionOperation {
     fn args(&self) -> &SpacesArgs<ReflectionConditions> {
-        &self
+        let extensions = self
             .0
             .header
             .extensions
             .as_ref()
-            .expect("all operation contain extensions")
-            .spaces_args
-            .as_ref()
-            .expect("all operation extensions contain spaces args")
-            .0
+            .expect("operations contain extensions");
+        &extensions.spaces_args.0
     }
 }
 

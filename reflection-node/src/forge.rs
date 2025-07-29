@@ -1,7 +1,8 @@
 use std::time::{SystemTime, SystemTimeError};
 
 use p2panda_core::{Body, Header, Operation, PrivateKey, PruneFlag, PublicKey};
-use p2panda_spaces::{forge::Forge, message::SpacesArgs};
+use p2panda_spaces::forge::Forge;
+use p2panda_spaces::message::SpacesArgs;
 use p2panda_store::{LogStore, OperationStore as OperationStoreTrait, SqliteStoreError};
 use thiserror::Error;
 
@@ -43,13 +44,12 @@ impl Forge<ReflectionOperation, ReflectionConditions> for ReflectionForge {
             }
         };
 
+        // @TODO: There is no way to tell the forge from the outside which application message type
+        // this is (snapshot or delta).
         let (document_id, log_type) = match args {
             SpacesArgs::KeyBundle {} => unimplemented!(),
             SpacesArgs::ControlMessage { id, .. } => (id.into(), LogType::Spaces),
-            // @TODO: There is no way to tell the forge from the outside which
-            // application message type this is (snapshot or delta), for now we
-            // assume all application messages are snapshots here.
-            SpacesArgs::Application { space_id, .. } => (space_id.into(), LogType::Snapshot),
+            SpacesArgs::Application { space_id, .. } => (space_id.into(), LogType::Spaces),
         };
 
         let public_key = self.private_key.public_key();

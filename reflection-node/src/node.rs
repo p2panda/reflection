@@ -9,6 +9,7 @@ use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::Lifetime;
 use p2panda_encryption::key_manager::KeyManager;
+use p2panda_encryption::traits::KeyBundle;
 use p2panda_net::{SyncConfiguration, SystemEvent};
 use p2panda_spaces::manager::Manager;
 use p2panda_spaces::types::ActorId;
@@ -124,24 +125,33 @@ impl Node {
             SyncConfiguration::<DocumentId>::new(sync)
         };
 
-        // Random number generator seeded from local public key bytes.
-        let rng = Rng::from_seed(*private_key.public_key().as_bytes());
+        // Setup p2panda space
+        // ~~~~~~~~~~~~~~~~~~~
 
-        // Init key manager with randomly generated identity secret key.
-        let key_manager_y = {
-            let identity_secret = SecretKey::from_bytes(rng.random_array().unwrap());
-            KeyManager::init(&identity_secret, Lifetime::default(), &rng).unwrap()
+        // @TODO: We're hard-coding the private key for test purposes for now, this is why we're
+        // deriving all spaces-related randomness from it to make the setup deterministic. Later we
+        // need to seed the rng with fresh entropy.
+        let rng = Rng::from_seed(*private_key.as_bytes());
+
+        let spaces_store = {
+            let key_manager_y = {
+                let identity_secret = SecretKey::from_bytes(rng.random_array()?);
+                KeyManager::init(&identity_secret, Lifetime::default(), &rng)?
+            };
+
+            let my_id: ActorId = private_key.public_key().into();
+
+            SpacesMemoryStore::new(my_id, key_manager_y)
         };
 
-        // Init the spaces store.
-        let my_id: ActorId = private_key.public_key().into();
-        let spaces_store = SpacesMemoryStore::new(my_id, key_manager_y);
-
-        // Init the forge.
         let forge = ReflectionForge::new(private_key.clone(), operation_store.clone());
-
-        // Init manager.
         let manager = Manager::new(spaces_store, forge, rng)?;
+
+        let me = manager.me().await?;
+
+        info!(my_id = %me.id(), identity_key = %me.key_bundle().identity_key());
+
+        // ~~~~~~~~~~~~~~~~~~~
 
         let network = Network::spawn(
             network_id,
