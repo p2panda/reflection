@@ -1,11 +1,12 @@
-use std::{convert::Infallible, fmt};
+use std::fmt;
 use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use p2panda_core::{PublicKey, identity::PUBLIC_KEY_LEN};
+use p2panda_core::PublicKey;
 use p2panda_net::TopicId;
-use p2panda_spaces::types::ActorId;
+use p2panda_spaces::types::ACTOR_ID_SIZE;
+use p2panda_spaces::{ActorId, types::ActorIdError};
 use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 use sqlx::{
@@ -15,11 +16,13 @@ use sqlx::{
     sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef},
 };
 
+pub type DocumentIdError = ActorIdError;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct DocumentId(PublicKey);
+pub struct DocumentId(ActorId);
 
 impl DocumentId {
-    pub fn as_bytes(&self) -> &[u8] {
+    pub fn as_bytes(&self) -> &[u8; ACTOR_ID_SIZE] {
         self.0.as_bytes()
     }
 }
@@ -27,72 +30,50 @@ impl DocumentId {
 impl TopicQuery for DocumentId {}
 
 impl TopicId for DocumentId {
-    fn id(&self) -> [u8; PUBLIC_KEY_LEN] {
+    fn id(&self) -> [u8; 32] {
         *self.0.as_bytes()
-    }
-}
-
-impl From<[u8; PUBLIC_KEY_LEN]> for DocumentId {
-    fn from(bytes: [u8; PUBLIC_KEY_LEN]) -> Self {
-        // @TODO: implement TryFrom and handle errors.
-        Self(PublicKey::from_bytes(&bytes).unwrap())
-    }
-}
-
-impl From<PublicKey> for DocumentId {
-    fn from(public_key: PublicKey) -> Self {
-        Self(public_key)
     }
 }
 
 impl From<ActorId> for DocumentId {
     fn from(actor_id: ActorId) -> Self {
-        let public_key: PublicKey = actor_id.into();
-        Self(public_key)
+        Self(actor_id)
     }
 }
-
 
 impl From<DocumentId> for ActorId {
     fn from(document_id: DocumentId) -> Self {
-        let public_key: PublicKey = document_id.into();
-        public_key.into()
+        document_id.0
     }
 }
 
-impl From<DocumentId> for PublicKey {
-    fn from(document: DocumentId) -> Self {
-        document.0
+impl TryFrom<[u8; ACTOR_ID_SIZE]> for DocumentId {
+    type Error = ActorIdError;
+
+    fn try_from(bytes: [u8; ACTOR_ID_SIZE]) -> Result<Self, Self::Error> {
+        Ok(Self(ActorId::from_bytes(&bytes)?))
     }
 }
 
-impl From<&DocumentId> for PublicKey {
-    fn from(value: &DocumentId) -> Self {
-        value.0
+impl TryFrom<&[u8]> for DocumentId {
+    type Error = ActorIdError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(ActorId::try_from(bytes)?))
+    }
+}
+
+impl FromStr for DocumentId {
+    type Err = ActorIdError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self(ActorId::from_str(value)?))
     }
 }
 
 impl fmt::Display for DocumentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for DocumentId {
-    type Err = Infallible;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        // @TODO: handle errors.
-        Ok(PublicKey::from_str(value).unwrap().into())
-    }
-}
-
-impl TryFrom<&[u8]> for DocumentId {
-    type Error = Infallible;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        // @TODO: handle errors.
-        Ok(PublicKey::try_from(value).unwrap().into())
     }
 }
 
@@ -111,7 +92,7 @@ impl<'q> Encode<'q, Sqlite> for &'q DocumentId {
         &self,
         args: &mut Vec<SqliteArgumentValue<'q>>,
     ) -> Result<IsNull, BoxDynError> {
-        <&[u8] as Encode<Sqlite>>::encode_by_ref(&self.as_bytes(), args)
+        <&[u8] as Encode<Sqlite>>::encode_by_ref(&self.as_bytes().as_slice(), args)
     }
 }
 

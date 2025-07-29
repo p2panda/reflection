@@ -168,14 +168,21 @@ impl Node {
                 let documents = documents.clone();
                 let inner_clone = inner_clone.clone();
                 async move {
+                    // @TODO(adz): This current callback doesn't allow us to handle errors, but I
+                    // believe we will find another approach anyhow in the future, so for now we'll
+                    // just "unwrap".
                     match system_event {
                         SystemEvent::GossipJoined { topic_id, peers } => {
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+                            if let Some(document) =
+                                documents.read().await.get(&topic_id.try_into().unwrap())
+                            {
                                 document.authors_joined(peers);
                             }
                         }
                         SystemEvent::GossipNeighborUp { topic_id, peer } => {
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+                            if let Some(document) =
+                                documents.read().await.get(&topic_id.try_into().unwrap())
+                            {
                                 document.author_set_online(peer, true);
                             }
                         }
@@ -187,7 +194,9 @@ impl Node {
                             {
                                 error!("Failed to set last seen for author {peer}: {error}");
                             }
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+                            if let Some(document) =
+                                documents.read().await.get(&topic_id.try_into().unwrap())
+                            {
                                 document.author_set_online(peer, false);
                             }
                         }

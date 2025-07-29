@@ -3865,7 +3865,7 @@ dependencies = [
 [[package]]
 name = "p2panda-auth"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "petgraph",
  "rand 0.9.0",
@@ -3876,7 +3876,7 @@ dependencies = [
 [[package]]
 name = "p2panda-core"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "blake3",
  "ciborium",
@@ -3891,7 +3891,7 @@ dependencies = [
 [[package]]
 name = "p2panda-discovery"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "anyhow",
  "base32",
@@ -3911,7 +3911,7 @@ dependencies = [
 [[package]]
 name = "p2panda-encryption"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "chacha20poly1305",
  "curve25519-dalek",
@@ -3934,7 +3934,7 @@ dependencies = [
 [[package]]
 name = "p2panda-net"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3961,7 +3961,7 @@ dependencies = [
 [[package]]
 name = "p2panda-spaces"
 version = "0.1.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "p2panda-auth",
  "p2panda-core",
@@ -3975,7 +3975,7 @@ dependencies = [
 [[package]]
 name = "p2panda-store"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "ciborium",
  "hex",
@@ -3988,7 +3988,7 @@ dependencies = [
 [[package]]
 name = "p2panda-stream"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "ciborium",
  "futures-channel",
@@ -4003,7 +4003,7 @@ dependencies = [
 [[package]]
 name = "p2panda-sync"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=6df9fa0b601b0192d627fd081b522a6147dd1457#6df9fa0b601b0192d627fd081b522a6147dd1457"
+source = "git+https://github.com/p2panda/p2panda?rev=d8b79d3b7d3692da59f584ac9acdd6afab2e03cf#d8b79d3b7d3692da59f584ac9acdd6afab2e03cf"
 dependencies = [
  "async-trait",
  "futures",
