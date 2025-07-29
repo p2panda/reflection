@@ -58,7 +58,8 @@ pub struct ReflectionExtensions {
     #[serde(rename = "d")]
     pub document: Option<DocumentId>,
 
-    #[serde(rename = "a")]
+    /// Arguments required for interacting with `p2panda-spaces`.
+    #[serde(rename = "s")]
     pub spaces_args: Option<ReflectionSpacesArgs>,
 }
 
