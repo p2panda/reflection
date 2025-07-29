@@ -348,6 +348,10 @@ impl Node {
                                     error!("Can't store author to database: {error}");
                                 }
 
+                                // @TODO:
+                                // - process the operation on the manager
+                                // - get (decrypted) application message bytes from returned events and pass them up to the app
+
                                 // Forward the payload up to the app.
                                 if let Some(body) = operation.body {
                                     document_clone.bytes_received(
