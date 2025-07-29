@@ -4,10 +4,11 @@ use anyhow::{Result, bail};
 use p2panda_core::{Extension, Header, Operation, PruneFlag};
 use p2panda_spaces::message::{AuthoredMessage, SpacesArgs, SpacesMessage};
 use p2panda_spaces::types::Conditions;
+use p2panda_store::OperationStore as OperationStoreTrait;
 use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentId;
-use crate::store::LogId;
+use crate::store::{LogId, OperationStore};
 
 #[derive(Clone, Debug)]
 pub struct ReflectionOperation(pub Operation<ReflectionExtensions>);
@@ -58,16 +59,17 @@ pub struct ReflectionExtensions {
     pub document: Option<DocumentId>,
 
     /// Arguments required for interacting with `p2panda-spaces`.
+    // TODO: The ciphertext is both here _and_ in the body!
     #[serde(rename = "s")]
     pub spaces_args: ReflectionSpacesArgs,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub enum LogType {
-    // @TODO: We write everything into one log for now (system messages, snapshots and deltas, as
-    // there's no message ordering in place, handling dependencies across logs).
-    #[default]
     Spaces,
+    #[default]
+    Delta,
+    Snapshot,
 }
 
 impl Extension<PruneFlag> for ReflectionExtensions {
@@ -100,14 +102,8 @@ impl Extension<DocumentId> for ReflectionExtensions {
 
 impl Extension<LogId> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<LogId> {
-        let log_type: Option<LogType> = header.extension();
         let document: Option<DocumentId> = header.extension();
-
-        if let (Some(log_type), Some(document)) = (log_type, document) {
-            Some(LogId::new(log_type, &document))
-        } else {
-            None
-        }
+        document.map(|document| LogId::new(&document))
     }
 }
 
@@ -151,6 +147,24 @@ impl SpacesMessage<ReflectionConditions> for ReflectionOperation {
             .expect("operations contain extensions");
         &extensions.spaces_args.0
     }
+}
+
+pub async fn insert_operation(
+    store: &mut OperationStore,
+    log_id: LogId,
+    operation: &Operation<ReflectionExtensions>,
+) -> Result<()> {
+    store
+        .insert_operation(
+            operation.hash,
+            &operation.header,
+            operation.body.as_ref(),
+            operation.header.to_bytes().as_slice(),
+            &log_id,
+        )
+        .await?;
+
+    Ok(())
 }
 
 /// Custom validation for our own operation headers.

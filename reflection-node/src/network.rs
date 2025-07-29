@@ -17,7 +17,7 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::error;
+use tracing::{error, info};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 enum MessageType {
@@ -195,6 +195,8 @@ impl Network {
         document: &DocumentId,
         operation: Operation<ReflectionExtensions>,
     ) -> Result<()> {
+        info!("{:#?}", operation);
+
         let document_tx = {
             self.document_tx
                 .read()

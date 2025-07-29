@@ -4,13 +4,14 @@ use std::sync::{Arc, OnceLock};
 
 use anyhow::Result;
 use chrono::Utc;
-use p2panda_core::{Hash, PrivateKey};
+use p2panda_core::{Hash, Operation, PrivateKey};
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::Lifetime;
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::traits::KeyBundle;
 use p2panda_net::{SyncConfiguration, SystemEvent};
+use p2panda_spaces::event::Event;
 use p2panda_spaces::manager::Manager;
 use p2panda_spaces::types::ActorId;
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
@@ -25,8 +26,10 @@ use crate::ephemerial_operation::EphemerialOperation;
 use crate::forge::ReflectionForge;
 use crate::manager::{ReflectionManager, SpacesMemoryStore};
 use crate::network::Network;
-use crate::operation::validate_operation;
-use crate::store::{DocumentStore, OperationStore};
+use crate::operation::{
+    ReflectionExtensions, ReflectionOperation, insert_operation, validate_operation,
+};
+use crate::store::{DocumentStore, LogId, OperationStore};
 use crate::utils::CombinedMigrationSource;
 
 pub struct Node {
@@ -250,8 +253,16 @@ impl Node {
             .runtime
             .spawn(async move {
                 // @TODO: set initial members to hardcoded public keys.
-                let (space, _) = inner_clone.manager.create_space(&[]).await?;
+                let (space, operation) = inner_clone.manager.create_space(&[]).await?;
                 let document_id = space.id().into();
+
+                {
+                    let log_id = LogId::new(&document_id);
+                    let operation: Operation<ReflectionExtensions> = operation.into();
+                    insert_operation(&mut inner_clone.operation_store.clone(), log_id, &operation)
+                        .await?;
+                }
+
                 inner_clone
                     .document_store
                     .add_document(&document_id)
@@ -346,8 +357,10 @@ impl Node {
                             let inner_clone = inner_clone.clone();
                             let document_clone = document_clone.clone();
                             async move {
-                                // Process the operations and forward application messages to app layer. This is where
-                                // we "materialize" our application state from incoming "application events".
+                                // Process the operations and forward application messages to app
+                                // layer. This is where we "materialize" our application state from
+                                // incoming "application events".
+
                                 // Validation for our custom "document" extension.
                                 if let Err(err) = validate_operation(&operation, &document_id) {
                                     warn!(
@@ -358,7 +371,8 @@ impl Node {
                                     return;
                                 }
 
-                                // When we discover a new author we need to add them to our document store.
+                                // When we discover a new author we need to add them to our
+                                // document store.
                                 if let Err(error) = inner_clone
                                     .document_store
                                     .add_author(&document_id, &operation.header.public_key)
@@ -367,16 +381,24 @@ impl Node {
                                     error!("Can't store author to database: {error}");
                                 }
 
-                                // @TODO:
-                                // - process the operation on the manager
-                                // - get (decrypted) application message bytes from returned events and pass them up to the app
+                                let public_key = operation.header.public_key;
 
-                                // Forward the payload up to the app.
-                                if let Some(body) = operation.body {
-                                    document_clone.bytes_received(
-                                        operation.header.public_key,
-                                        body.to_bytes(),
-                                    );
+                                match inner_clone.manager.process(&ReflectionOperation(operation)).await {
+                                    Ok(events) => {
+                                        for event in events {
+                                            match event {
+                                                Event::Application { data, .. } => {
+                                                    document_clone.bytes_received(
+                                                        public_key,
+                                                        data,
+                                                    );
+                                                },
+                                            }
+                                        }
+                                    },
+                                    Err(error) => warn!(
+                                        "could not process incoming message in spaces manager: {error}"
+                                    ),
                                 }
                             }
                         },
@@ -428,9 +450,39 @@ impl Node {
     ///
     /// This should be used to inform all subscribed peers about small changes to the text
     /// document (Delta-Based CRDT).
-    pub async fn delta(&self, _document_id: DocumentId, _bytes: Vec<u8>) -> Result<()> {
-        // NOTE: in this integration with p2panda-spaces we don't support publishing delta states
-        unimplemented!()
+    pub async fn delta(&self, document_id: DocumentId, bytes: Vec<u8>) -> Result<()> {
+        let inner = self.inner().await;
+        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
+
+        let inner_clone = inner.clone();
+        inner
+            .runtime
+            .spawn(async move {
+                let space = inner_clone
+                    .manager
+                    .space(&document_id.into())
+                    .await?
+                    .expect("space exists before data is published");
+
+                let operation: Operation<ReflectionExtensions> =
+                    space.publish(&bytes).await?.into();
+
+                let log_id = LogId::new(&document_id);
+
+                insert_operation(&mut inner_clone.operation_store.clone(), log_id, &operation)
+                    .await?;
+
+                // Broadcast operation on gossip overlay.
+                inner_clone
+                    .network
+                    .send_operation(&document_id, operation.into())
+                    .await
+            })
+            .await??;
+
+        info!("Delta saved for document with id {}", document_id);
+
+        Ok(())
     }
 
     /// Same as [`Self::Delta`] next to persisting a whole snapshot and pruning.
@@ -449,17 +501,25 @@ impl Node {
         inner
             .runtime
             .spawn(async move {
-                let mut space = inner_clone
+                let space = inner_clone
                     .manager
                     .space(&document_id.into())
                     .await?
                     .expect("space exists before data is published");
 
-                let _operation = space.publish(&snapshot_bytes).await?;
+                let operation: Operation<ReflectionExtensions> =
+                    space.publish(&snapshot_bytes).await?.into();
 
-                // NOTE: we don't publish a prune point into the delta log here as pruning isn't supported in this integration to p2panda-spaces.
+                let log_id = LogId::new(&document_id);
 
-                Ok::<(), anyhow::Error>(())
+                insert_operation(&mut inner_clone.operation_store.clone(), log_id, &operation)
+                    .await?;
+
+                // Broadcast operation on gossip overlay.
+                inner_clone
+                    .network
+                    .send_operation(&document_id, operation.into())
+                    .await
             })
             .await??;
 

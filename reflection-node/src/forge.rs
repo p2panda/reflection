@@ -3,10 +3,9 @@ use std::time::{SystemTime, SystemTimeError};
 use p2panda_core::{Body, Header, Operation, PrivateKey, PruneFlag, PublicKey};
 use p2panda_spaces::forge::Forge;
 use p2panda_spaces::message::SpacesArgs;
-use p2panda_store::{LogStore, OperationStore as OperationStoreTrait, SqliteStoreError};
+use p2panda_store::{LogStore, SqliteStoreError};
 use thiserror::Error;
 
-use crate::document::DocumentId;
 use crate::operation::{LogType, ReflectionConditions, ReflectionExtensions, ReflectionOperation};
 use crate::store::{LogId, OperationStore};
 
@@ -55,7 +54,7 @@ impl Forge<ReflectionOperation, ReflectionConditions> for ReflectionForge {
         let public_key = self.private_key.public_key();
 
         let latest_operation = {
-            let log_id = LogId::new(log_type, &document_id);
+            let log_id = LogId::new(&document_id);
             self.operation_store
                 .latest_operation(&public_key, &log_id)
                 .await?
@@ -71,10 +70,12 @@ impl Forge<ReflectionOperation, ReflectionConditions> for ReflectionForge {
             .as_secs();
 
         let extensions = ReflectionExtensions {
+            // NOTE: we don't publish a prune point into the delta log here as pruning isn't
+            // supported yet in this integration to p2panda-spaces.
             prune_flag: PruneFlag::new(false),
             log_type: log_type,
             document: Some(document_id),
-            spaces_args: Some(args.into()),
+            spaces_args: args.into(),
         };
 
         let mut header = Header {
@@ -91,32 +92,19 @@ impl Forge<ReflectionOperation, ReflectionConditions> for ReflectionForge {
         };
         header.sign(&self.private_key);
 
-        let document: DocumentId = header.extension().expect("document id from our own logs");
-        let log_id = LogId::new(log_type, &document);
-
         let operation = Operation {
             hash: header.hash(),
             header,
             body,
         };
 
-        self.operation_store
-            .insert_operation(
-                operation.hash,
-                &operation.header,
-                operation.body.as_ref(),
-                operation.header.to_bytes().as_slice(),
-                &log_id,
-            )
-            .await?;
-
         Ok(operation.into())
     }
 
     async fn forge_ephemeral(
         &mut self,
-        private_key: PrivateKey,
-        args: SpacesArgs<ReflectionConditions>,
+        _private_key: PrivateKey,
+        _args: SpacesArgs<ReflectionConditions>,
     ) -> Result<ReflectionOperation, Self::Error> {
         unimplemented!()
     }

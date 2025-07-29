@@ -12,7 +12,7 @@ use sqlx::Row;
 use tracing::error;
 
 use crate::document::{Author, Document, DocumentId};
-use crate::operation::{LogType, ReflectionExtensions, validate_operation};
+use crate::operation::{ReflectionExtensions, validate_operation};
 
 #[derive(Clone, Debug)]
 pub struct DocumentStore {
@@ -175,10 +175,7 @@ impl DocumentStore {
     ) -> sqlx::Result<Vec<p2panda_core::Operation<ReflectionExtensions>>> {
         let authors = self.authors(document_id).await?;
 
-        let log_ids = [
-            LogId::new(LogType::Delta, document_id),
-            LogId::new(LogType::Snapshot, document_id),
-        ];
+        let log_ids = [LogId::new(document_id)];
 
         let mut result = Vec::new();
 
@@ -217,12 +214,15 @@ impl DocumentStore {
     }
 }
 
+// TODO: We remove the `LogType` for now to write everything into one log for now. The reason is
+// that we don't have message ordering yet (across logs) which is required for p2panda-spaces. For
+// now we just rely on the total ordering of one single log.
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct LogId(LogType, DocumentId);
+pub struct LogId(DocumentId);
 
 impl LogId {
-    pub fn new(log_type: LogType, document: &DocumentId) -> Self {
-        Self(log_type, *document)
+    pub fn new(document: &DocumentId) -> Self {
+        Self(*document)
     }
 }
 
@@ -232,11 +232,7 @@ impl TopicLogMap<DocumentId, LogId> for DocumentStore {
         let Ok(authors) = self.authors(topic).await else {
             return None;
         };
-        let log_ids = [
-            LogId::new(LogType::Spaces, topic),
-            LogId::new(LogType::Delta, topic),
-            LogId::new(LogType::Snapshot, topic),
-        ];
+        let log_ids = [LogId::new(topic)];
         Some(
             authors
                 .into_iter()
