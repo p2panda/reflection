@@ -233,6 +233,7 @@ impl TopicLogMap<DocumentId, LogId> for DocumentStore {
             return None;
         };
         let log_ids = [
+            LogId::new(LogType::Spaces, topic),
             LogId::new(LogType::Delta, topic),
             LogId::new(LogType::Snapshot, topic),
         ];

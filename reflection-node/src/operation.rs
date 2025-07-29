@@ -64,6 +64,7 @@ pub struct ReflectionExtensions {
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub enum LogType {
+    // Log to contain control messages for p2panda-spaces.
     Spaces,
     Snapshot,
     #[default]
