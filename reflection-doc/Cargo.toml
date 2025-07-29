@@ -18,3 +18,4 @@ thiserror = "2.0.11"
 tracing = "0.1"
 test-log = { version = "0.2.17", default-features = false, features = ["trace", "color"] }
 serde = { version = "1.0.215", features = ["derive"] }
+hex = "0.4.3"

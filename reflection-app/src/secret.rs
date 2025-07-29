@@ -16,51 +16,38 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::collections::HashMap;
 use thiserror::Error;
-use tracing::info;
 
-use crate::APP_ID;
 use reflection_doc::identity::{IdentityError, PrivateKey};
 
-const XDG_SCHEMA: &'static str = "xdg:schema";
+const ALICE_PRIVATE_KEY: &str = "c13ae3388b1d99d27daba169af73b294537634f7fb8b9789c409c5874c4043b5";
 
-fn attributes() -> HashMap<&'static str, String> {
-    HashMap::from([(XDG_SCHEMA, APP_ID.to_owned())])
-}
+const BOB_PRIVATE_KEY: &str = "f0849b0b8b3d1702e7d8cd470ebe2e3446337c08f9d34b4b86d238d3a2ff06ea";
 
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
     Service(#[from] oo7::Error),
+
     #[error(transparent)]
     Format(#[from] IdentityError),
 }
 
 pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
-    let keyring = oo7::Keyring::new().await?;
+    let Ok(id) = std::env::var("SPACES_PEER_ID") else {
+        panic!(
+            "this is an experimental version of reflection with p2panda-spaces integration. You
+            _need_ to set a SPACES_PEER_ID env var"
+        );
+    };
 
-    keyring.unlock().await?;
-
-    let private_key: PrivateKey =
-        if let Some(item) = keyring.search_items(&attributes()).await?.get(0) {
-            item.unlock().await?;
-            let private_key = PrivateKey::try_from(item.secret().await?.as_bytes())?;
-            info!("Found existing identity: {}", private_key.public_key());
-
-            private_key
-        } else {
-            let private_key = PrivateKey::new();
-            keyring
-                .create_item("Reflection", &attributes(), private_key.as_bytes(), true)
-                .await?;
-
-            info!(
-                "No existing identity found. Create new identity: {}",
-                private_key.public_key()
-            );
-            private_key
-        };
+    let private_key = match id.as_str() {
+        "alice" => ALICE_PRIVATE_KEY.parse().expect("correct private key"),
+        "bob" => BOB_PRIVATE_KEY.parse().expect("correct private key"),
+        _ => {
+            panic!("unknown SPACES_PEER_ID value, we only know alice or bob")
+        }
+    };
 
     Ok(private_key)
 }

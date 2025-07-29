@@ -13,14 +13,14 @@ anyhow = "1.0.94"
 async-trait = "0.1.83"
 chrono = "0.4.40"
 ciborium = "0.2.2"
-p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "8879c44e6b459cf7297d4874f0e0f678c931988e"}
-p2panda-discovery = { git = "https://github.com/p2panda/p2panda", rev = "8879c44e6b459cf7297d4874f0e0f678c931988e", features = ["mdns"] }
-p2panda-net = { git = "https://github.com/p2panda/p2panda", rev = "8879c44e6b459cf7297d4874f0e0f678c931988e"}
-p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "8879c44e6b459cf7297d4874f0e0f678c931988e", features = ["sqlite"], default-features = false}
-p2panda-stream = { git = "https://github.com/p2panda/p2panda", rev = "8879c44e6b459cf7297d4874f0e0f678c931988e"}
-p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "8879c44e6b459cf7297d4874f0e0f678c931988e", features = ["log-sync"] }
-p2panda-spaces = { git = "https://github.com/p2panda/p2panda", rev = "8879c44e6b459cf7297d4874f0e0f678c931988e", features = ["test_utils"] }
-p2panda-encryption = { git = "https://github.com/p2panda/p2panda", rev = "8879c44e6b459cf7297d4874f0e0f678c931988e", features = ["test_utils"] }
+p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "3ddcfd0aa9f3acbfd12bd8e3d8b20cf8a41c35d6"}
+p2panda-discovery = { git = "https://github.com/p2panda/p2panda", rev = "3ddcfd0aa9f3acbfd12bd8e3d8b20cf8a41c35d6", features = ["mdns"] }
+p2panda-net = { git = "https://github.com/p2panda/p2panda", rev = "3ddcfd0aa9f3acbfd12bd8e3d8b20cf8a41c35d6"}
+p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "3ddcfd0aa9f3acbfd12bd8e3d8b20cf8a41c35d6", features = ["sqlite"], default-features = false}
+p2panda-stream = { git = "https://github.com/p2panda/p2panda", rev = "3ddcfd0aa9f3acbfd12bd8e3d8b20cf8a41c35d6"}
+p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "3ddcfd0aa9f3acbfd12bd8e3d8b20cf8a41c35d6", features = ["log-sync"] }
+p2panda-spaces = { git = "https://github.com/p2panda/p2panda", rev = "3ddcfd0aa9f3acbfd12bd8e3d8b20cf8a41c35d6", features = ["test_utils"] }
+p2panda-encryption = { git = "https://github.com/p2panda/p2panda", rev = "3ddcfd0aa9f3acbfd12bd8e3d8b20cf8a41c35d6", features = ["test_utils"] }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_bytes = "0.11.17"
 sqlx = { version = "0.8.5", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false}
@@ -29,3 +29,4 @@ tokio-stream = "0.1.17"
 tracing = "0.1"
 test-log = { version = "0.2.17", default-features = false, features = ["trace", "color"] }
 thiserror = "2.0.12"
+hex = "0.4.3"

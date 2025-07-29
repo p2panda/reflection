@@ -43,7 +43,7 @@ impl Forge<ReflectionOperation, ReflectionConditions> for ReflectionForge {
             }
         };
 
-        // @TODO: There is no way to tell the forge from the outside which application message type
+        // TODO: There is no way to tell the forge from the outside which application message type
         // this is (snapshot or delta).
         let (document_id, log_type) = match args {
             SpacesArgs::KeyBundle {} => unimplemented!(),

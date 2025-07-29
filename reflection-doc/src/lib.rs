@@ -7,7 +7,7 @@ pub mod service;
 pub mod identity {
     use reflection_node::p2panda_core;
     pub use reflection_node::p2panda_core::identity::IdentityError;
-    use std::fmt;
+    use std::{fmt, str::FromStr};
 
     #[derive(Clone, Debug, glib::Boxed)]
     #[boxed_type(name = "ReflectionPrivateKey", nullable)]
@@ -24,6 +24,19 @@ pub mod identity {
 
         pub fn as_bytes(&self) -> &[u8] {
             self.0.as_bytes().as_slice()
+        }
+    }
+
+    impl FromStr for PrivateKey {
+        type Err = p2panda_core::IdentityError;
+
+        fn from_str(s: &str) -> Result<Self, Self::Err> {
+            let bytes = hex::decode(s)?;
+            let len = bytes.len();
+            let bytes: [u8; 32] = bytes
+                .try_into()
+                .map_err(|_| IdentityError::InvalidLength(len, 32))?;
+            Ok(Self(p2panda_core::PrivateKey::from_bytes(&bytes)))
         }
     }
 

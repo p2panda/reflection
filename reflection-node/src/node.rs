@@ -4,15 +4,17 @@ use std::sync::{Arc, OnceLock};
 
 use anyhow::Result;
 use chrono::Utc;
+use p2panda_core::cbor::decode_cbor;
 use p2panda_core::{Hash, Operation, PrivateKey};
 use p2panda_encryption::Rng;
 use p2panda_encryption::crypto::x25519::SecretKey;
-use p2panda_encryption::key_bundle::Lifetime;
+use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle};
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::traits::KeyBundle;
 use p2panda_net::{SyncConfiguration, SystemEvent};
 use p2panda_spaces::event::Event;
 use p2panda_spaces::manager::Manager;
+use p2panda_spaces::member::Member;
 use p2panda_spaces::types::ActorId;
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
@@ -31,6 +33,20 @@ use crate::operation::{
 };
 use crate::store::{DocumentStore, LogId, OperationStore};
 use crate::utils::CombinedMigrationSource;
+
+// alice
+// identity_key=0a68a7579a51a61704677137fb77eff1cf4e15ce7ccf4771f78c07651bf80927
+
+const ALICE_ID: &str = "fa7341f2fd8efb0ab6196c514a7df3cabf4806fd8d5c6fd897a6a1840ecb18a5";
+
+const ALICE_KEY_BUNDLE: &str = "a36c6964656e746974795f6b657958200a68a7579a51a61704677137fb77eff1cf4e15ce7ccf4771f78c07651bf809276d7369676e65645f7072656b6579825820b80841fe07200fbcc24dd632ea4f1803fcd3bf8fc3e72901487992fb6ebd412aa26a6e6f745f6265666f72651a6888fdfd696e6f745f61667465721a68f7ca0d707072656b65795f7369676e6174757265584069634cad1edd897693ca001206204a49f227fdd7ef12dfee877d31b03fad2f417a7191ee54f78e096a47c4fca724de16f6d87a1a9317aa544e6d73510f91810f";
+
+// bob
+// identity_key=1fec1a7cea479da412e6f0f1286a5073ce15f07fbdf4e0634ae550db35a24d36
+
+const BOB_ID: &str = "1e655cdc700d055d25fe56f157a0016bf77858b2e13cd370299083e23cbf565f";
+
+const BOB_KEY_BUNDLE: &str = "a36c6964656e746974795f6b657958201fec1a7cea479da412e6f0f1286a5073ce15f07fbdf4e0634ae550db35a24d366d7369676e65645f7072656b6579825820399f45495fe79cda4e4a776d791c18451caac49021d7219daad50420e444fc2fa26a6e6f745f6265666f72651a6888fe5f696e6f745f61667465721a68f7ca6f707072656b65795f7369676e61747572655840c01aabbfec5af0b91b5def639220bc9cbaf208e5ca36b0b282afd22f38139b47ac3b8ff9c66cb8a1b84073a49888d3319d15000713534f7ff1c38b9b89df0d05";
 
 pub struct Node {
     inner: OnceLock<Arc<NodeInner>>,
@@ -131,7 +147,7 @@ impl Node {
         // Setup p2panda space
         // ~~~~~~~~~~~~~~~~~~~
 
-        // @TODO: We're hard-coding the private key for test purposes for now, this is why we're
+        // TODO: We're hard-coding the private key for test purposes for now, this is why we're
         // deriving all spaces-related randomness from it to make the setup deterministic. Later we
         // need to seed the rng with fresh entropy.
         let rng = Rng::from_seed(*private_key.as_bytes());
@@ -153,6 +169,38 @@ impl Node {
         let me = manager.me().await?;
 
         info!(my_id = %me.id(), identity_key = %me.key_bundle().identity_key());
+
+        // ~~~~~~~~~~~~~~~~~~~
+
+        // Usually we would register the key bundles of all participants before creating the
+        // document but we don't have the UI for this yet, this is why we're doing it manually
+        // here.
+
+        {
+            let id: ActorId = ALICE_ID.parse().expect("correct actor id");
+
+            if me.id() != id {
+                let key_bundle: LongTermKeyBundle =
+                    decode_cbor(&hex::decode(ALICE_KEY_BUNDLE).expect("correct hex encoding")[..])
+                        .expect("correct key bundle");
+                manager
+                    .register_member(&Member::new(id, key_bundle))
+                    .await?;
+            }
+        }
+
+        {
+            let id: ActorId = BOB_ID.parse().expect("correct actor id");
+
+            if me.id() != id {
+                let key_bundle: LongTermKeyBundle =
+                    decode_cbor(&hex::decode(BOB_KEY_BUNDLE).expect("correct hex encoding")[..])
+                        .expect("correct key bundle");
+                manager
+                    .register_member(&Member::new(id, key_bundle))
+                    .await?;
+            }
+        }
 
         // ~~~~~~~~~~~~~~~~~~~
 
@@ -181,7 +229,7 @@ impl Node {
                 let documents = documents.clone();
                 let inner_clone = inner_clone.clone();
                 async move {
-                    // @TODO(adz): This current callback doesn't allow us to handle errors, but I
+                    // TODO(adz): This current callback doesn't allow us to handle errors, but I
                     // believe we will find another approach anyhow in the future, so for now we'll
                     // just "unwrap".
                     match system_event {
@@ -252,7 +300,7 @@ impl Node {
         inner
             .runtime
             .spawn(async move {
-                // @TODO: set initial members to hardcoded public keys.
+                // TODO: set initial members to hardcoded public keys.
                 let (space, operation) = inner_clone.manager.create_space(&[]).await?;
                 let document_id = space.id().into();
 

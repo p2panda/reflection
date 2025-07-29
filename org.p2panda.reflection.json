@@ -13,6 +13,7 @@
         "--socket=fallback-x11",
         "--device=dri",
         "--socket=wayland",
+        "--env=SPACES_PEER_ID=bob",
         "--env=RUST_BACKTRACE=1",
         "--env=RUST_LOG=reflection=INFO,reflection_doc=INFO,reflection_node=INFO"
     ],
