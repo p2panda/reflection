@@ -4,6 +4,7 @@ use std::sync::{Arc, OnceLock};
 
 use anyhow::Result;
 use chrono::Utc;
+use p2panda_auth::Access;
 use p2panda_core::cbor::decode_cbor;
 use p2panda_core::{Hash, Operation, PrivateKey};
 use p2panda_encryption::Rng;
@@ -300,8 +301,15 @@ impl Node {
         inner
             .runtime
             .spawn(async move {
-                // TODO: set initial members to hardcoded public keys.
-                let (space, operation) = inner_clone.manager.create_space(&[]).await?;
+                // Always add alice and bob to every new space.
+                let alice: ActorId = ALICE_ID.parse().expect("correct actor id");
+                let bob: ActorId = BOB_ID.parse().expect("correct actor id");
+
+                let (space, operation) = inner_clone
+                    .manager
+                    .create_space(&[(alice, Access::manage()), (bob, Access::manage())])
+                    .await?;
+
                 let document_id = space.id().into();
 
                 {
@@ -362,33 +370,34 @@ impl Node {
         let inner = self.inner().await;
         let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
-        let inner_clone = inner.clone();
-        let stored_operations = inner
-            .runtime
-            .spawn(async move {
-                inner_clone
-                    .document_store
-                    .add_document(&document_id)
-                    .await?;
-                // Add ourselves as an author to the document store.
-                inner_clone
-                    .document_store
-                    .add_author(&document_id, &inner_clone.private_key.public_key())
-                    .await?;
-                inner_clone
-                    .document_store
-                    .operations_for_document(&inner_clone.operation_store, &document_id)
-                    .await
-            })
-            .await??;
+        // TODO: Remove this for now as we're not storing any plaintext in the database.
+        // let inner_clone = inner.clone();
+        // let stored_operations = inner
+        //     .runtime
+        //     .spawn(async move {
+        //         inner_clone
+        //             .document_store
+        //             .add_document(&document_id)
+        //             .await?;
+        //         // Add ourselves as an author to the document store.
+        //         inner_clone
+        //             .document_store
+        //             .add_author(&document_id, &inner_clone.private_key.public_key())
+        //             .await?;
+        //         inner_clone
+        //             .document_store
+        //             .operations_for_document(&inner_clone.operation_store, &document_id)
+        //             .await
+        //     })
+        //     .await??;
 
-        for operation in stored_operations {
-            // Send all stored operation bytes to the app,
-            // it doesn't matter if the app already knows some or all of them
-            if let Some(body) = operation.body {
-                document.bytes_received(operation.header.public_key, body.to_bytes());
-            }
-        }
+        // for operation in stored_operations {
+        //     // Send all stored operation bytes to the app,
+        //     // it doesn't matter if the app already knows some or all of them
+        //     if let Some(body) = operation.body {
+        //         document.bytes_received(operation.header.public_key, body.to_bytes());
+        //     }
+        // }
 
         let inner_clone = inner.clone();
         let document_clone = document.clone();

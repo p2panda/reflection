@@ -4,15 +4,14 @@ use std::hash::Hash as StdHash;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use p2panda_core::PublicKey;
-use p2panda_store::{LogStore, SqliteStore};
+use p2panda_store::SqliteStore;
 use p2panda_sync::log_sync::TopicLogMap;
 use serde::{Deserialize, Serialize};
 use sqlx;
 use sqlx::Row;
-use tracing::error;
 
 use crate::document::{Author, Document, DocumentId};
-use crate::operation::{ReflectionExtensions, validate_operation};
+use crate::operation::ReflectionExtensions;
 
 #[derive(Clone, Debug)]
 pub struct DocumentStore {
@@ -166,51 +165,6 @@ impl DocumentStore {
         .await?;
 
         Ok(())
-    }
-
-    pub async fn operations_for_document(
-        &self,
-        operation_store: &OperationStore,
-        document_id: &DocumentId,
-    ) -> sqlx::Result<Vec<p2panda_core::Operation<ReflectionExtensions>>> {
-        let authors = self.authors(document_id).await?;
-
-        let log_ids = [LogId::new(document_id)];
-
-        let mut result = Vec::new();
-
-        for author in authors.iter() {
-            for log_id in &log_ids {
-                let operations = match operation_store.get_log(author, log_id, None).await {
-                    Ok(Some(operations)) => {
-                        operations.into_iter().map(|(header, body)| {
-                            let operation = p2panda_core::Operation {
-                                hash: header.hash(),
-                                header,
-                                body,
-                            };
-
-                            // Stored operations are always valid
-                            assert!(validate_operation(&operation, &document_id).is_ok());
-                            operation
-                        })
-                    }
-                    Ok(None) => {
-                        continue;
-                    }
-                    Err(error) => {
-                        error!(
-                            "Failed to load operation for {author} with log type {log_id:?}: {error}"
-                        );
-                        continue;
-                    }
-                };
-
-                result.extend(operations);
-            }
-        }
-
-        Ok(result)
     }
 }
 

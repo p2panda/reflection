@@ -1,6 +1,6 @@
 use std::time::{SystemTime, SystemTimeError};
 
-use p2panda_core::{Body, Header, Operation, PrivateKey, PruneFlag, PublicKey};
+use p2panda_core::{Header, Operation, PrivateKey, PruneFlag, PublicKey};
 use p2panda_spaces::forge::Forge;
 use p2panda_spaces::message::SpacesArgs;
 use p2panda_store::{LogStore, SqliteStoreError};
@@ -35,14 +35,6 @@ impl Forge<ReflectionOperation, ReflectionConditions> for ReflectionForge {
         &mut self,
         args: SpacesArgs<ReflectionConditions>,
     ) -> Result<ReflectionOperation, Self::Error> {
-        let body = {
-            if let SpacesArgs::Application { ciphertext, .. } = &args {
-                Some(Body::new(ciphertext))
-            } else {
-                None
-            }
-        };
-
         // TODO: There is no way to tell the forge from the outside which application message type
         // this is (snapshot or delta).
         let (document_id, log_type) = match args {
@@ -82,8 +74,8 @@ impl Forge<ReflectionOperation, ReflectionConditions> for ReflectionForge {
             version: 1,
             public_key,
             signature: None,
-            payload_size: body.as_ref().map_or(0, |body| body.size()),
-            payload_hash: body.as_ref().map(|body| body.hash()),
+            payload_size: 0,
+            payload_hash: None,
             timestamp,
             seq_num,
             backlink,
@@ -95,7 +87,8 @@ impl Forge<ReflectionOperation, ReflectionConditions> for ReflectionForge {
         let operation = Operation {
             hash: header.hash(),
             header,
-            body,
+            // TODO: The ciphertext is currently in the "spaces args" in the header.
+            body: None,
         };
 
         Ok(operation.into())
