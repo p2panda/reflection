@@ -19,6 +19,7 @@
 use thiserror::Error;
 
 use reflection_doc::identity::{IdentityError, PrivateKey};
+use tracing::info;
 
 const ALICE_PRIVATE_KEY: &str = "c13ae3388b1d99d27daba169af73b294537634f7fb8b9789c409c5874c4043b5";
 
@@ -42,8 +43,14 @@ pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
     };
 
     let private_key = match id.as_str() {
-        "alice" => ALICE_PRIVATE_KEY.parse().expect("correct private key"),
-        "bob" => BOB_PRIVATE_KEY.parse().expect("correct private key"),
+        "alice" => {
+            info!("I'm alice!");
+            ALICE_PRIVATE_KEY.parse().expect("correct private key")
+        }
+        "bob" => {
+            info!("I'm bob!");
+            BOB_PRIVATE_KEY.parse().expect("correct private key")
+        }
         _ => {
             panic!("unknown SPACES_PEER_ID value, we only know alice or bob")
         }
