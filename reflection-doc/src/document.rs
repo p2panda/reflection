@@ -8,7 +8,9 @@ use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use reflection_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
+use reflection_node::document::{
+    DocumentId as DocumentIdNode, DocumentIdError, SubscribableDocument,
+};
 use reflection_node::p2panda_core;
 use tracing::error;
 
@@ -22,7 +24,7 @@ use crate::service::Service;
 pub struct DocumentId(pub(crate) DocumentIdNode);
 
 impl FromStr for DocumentId {
-    type Err = p2panda_core::HashError;
+    type Err = DocumentIdError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(DocumentId(DocumentIdNode::from_str(value)?))
@@ -448,10 +450,10 @@ mod imp {
                             }
                         };
 
-                        self.obj().emit_by_name::<()>("remote-insert-cursor", &[
-                            &author,
-                            &(abs_pos.pos as i32),
-                        ]);
+                        self.obj().emit_by_name::<()>(
+                            "remote-insert-cursor",
+                            &[&author, &(abs_pos.pos as i32)],
+                        );
                     } else {
                         self.obj()
                             .emit_by_name::<()>("remote-insert-cursor", &[&author, &-1i32]);

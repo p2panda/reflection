@@ -1,11 +1,22 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 use anyhow::Result;
 use chrono::Utc;
-use p2panda_core::{Hash, PrivateKey};
+use p2panda_auth::Access;
+use p2panda_core::cbor::decode_cbor;
+use p2panda_core::{Hash, Operation, PrivateKey};
+use p2panda_encryption::Rng;
+use p2panda_encryption::crypto::x25519::SecretKey;
+use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle};
+use p2panda_encryption::key_manager::KeyManager;
+use p2panda_encryption::traits::KeyBundle;
 use p2panda_net::{SyncConfiguration, SystemEvent};
+use p2panda_spaces::event::Event;
+use p2panda_spaces::manager::Manager;
+use p2panda_spaces::member::Member;
+use p2panda_spaces::types::ActorId;
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
@@ -15,10 +26,28 @@ use tracing::{error, info, warn};
 
 use crate::document::{Document, DocumentId, SubscribableDocument};
 use crate::ephemerial_operation::EphemerialOperation;
+use crate::forge::ReflectionForge;
+use crate::manager::{ReflectionManager, SpacesMemoryStore};
 use crate::network::Network;
-use crate::operation::{LogType, create_operation, validate_operation};
-use crate::store::{DocumentStore, OperationStore};
+use crate::operation::{
+    ReflectionExtensions, ReflectionOperation, insert_operation, validate_operation,
+};
+use crate::store::{DocumentStore, LogId, OperationStore};
 use crate::utils::CombinedMigrationSource;
+
+// alice
+// identity_key=0a68a7579a51a61704677137fb77eff1cf4e15ce7ccf4771f78c07651bf80927
+
+const ALICE_ID: &str = "fa7341f2fd8efb0ab6196c514a7df3cabf4806fd8d5c6fd897a6a1840ecb18a5";
+
+const ALICE_KEY_BUNDLE: &str = "a36c6964656e746974795f6b657958200a68a7579a51a61704677137fb77eff1cf4e15ce7ccf4771f78c07651bf809276d7369676e65645f7072656b6579825820b80841fe07200fbcc24dd632ea4f1803fcd3bf8fc3e72901487992fb6ebd412aa26a6e6f745f6265666f72651a6888fdfd696e6f745f61667465721a68f7ca0d707072656b65795f7369676e6174757265584069634cad1edd897693ca001206204a49f227fdd7ef12dfee877d31b03fad2f417a7191ee54f78e096a47c4fca724de16f6d87a1a9317aa544e6d73510f91810f";
+
+// bob
+// identity_key=1fec1a7cea479da412e6f0f1286a5073ce15f07fbdf4e0634ae550db35a24d36
+
+const BOB_ID: &str = "1e655cdc700d055d25fe56f157a0016bf77858b2e13cd370299083e23cbf565f";
+
+const BOB_KEY_BUNDLE: &str = "a36c6964656e746974795f6b657958201fec1a7cea479da412e6f0f1286a5073ce15f07fbdf4e0634ae550db35a24d366d7369676e65645f7072656b6579825820399f45495fe79cda4e4a776d791c18451caac49021d7219daad50420e444fc2fa26a6e6f745f6265666f72651a6888fe5f696e6f745f61667465721a68f7ca6f707072656b65795f7369676e61747572655840c01aabbfec5af0b91b5def639220bc9cbaf208e5ca36b0b282afd22f38139b47ac3b8ff9c66cb8a1b84073a49888d3319d15000713534f7ff1c38b9b89df0d05";
 
 pub struct Node {
     inner: OnceLock<Arc<NodeInner>>,
@@ -38,6 +67,8 @@ struct NodeInner {
     runtime: Runtime,
     operation_store: OperationStore,
     document_store: DocumentStore,
+    processed_store: RwLock<HashSet<Hash>>,
+    manager: ReflectionManager,
     network: Network,
     private_key: PrivateKey,
 }
@@ -69,7 +100,7 @@ impl Node {
         &self,
         private_key: PrivateKey,
         network_id: Hash,
-        db_location: Option<&Path>,
+        _db_location: Option<&Path>,
     ) -> Result<()> {
         let runtime = Builder::new_multi_thread()
             .worker_threads(1)
@@ -80,23 +111,16 @@ impl Node {
 
         let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
             .shared_cache(true)
-            .create_if_missing(true);
-        let connection_options = if let Some(db_location) = db_location {
-            let db_file = db_location.join("database.sqlite");
-            info!("Database file location: {db_file:?}");
-            connection_options.filename(db_file)
-        } else {
-            connection_options.in_memory(true)
-        };
+            .create_if_missing(true)
+            // NOTE: For this spaces-integration we keep things only in-memory (as every created
+            // space id is fully deterministic right now and we would append "create" messages on
+            // top of each other in the same log).
+            .in_memory(true);
 
-        let pool = if db_location.is_some() {
-            sqlx::sqlite::SqlitePool::connect_with(connection_options).await?
-        } else {
-            // FIXME: we need to set max connection to 1 for in memory sqlite DB.
-            // Probably has to do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
-            let pool_options = sqlite::SqlitePoolOptions::new().max_connections(1);
-            pool_options.connect_with(connection_options).await?
-        };
+        // FIXME: we need to set max connection to 1 for in memory sqlite DB.
+        // Probably has to do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
+        let pool_options = sqlite::SqlitePoolOptions::new().max_connections(1);
+        let pool = pool_options.connect_with(connection_options).await?;
 
         // Run migration for p2panda OperationStore and for the our DocumentStore
         Migrator::new(CombinedMigrationSource::new(vec![
@@ -115,6 +139,66 @@ impl Node {
             SyncConfiguration::<DocumentId>::new(sync)
         };
 
+        // Setup p2panda space
+        // ~~~~~~~~~~~~~~~~~~~
+
+        // TODO: We're hard-coding the private key for test purposes for now, this is why we're
+        // deriving all spaces-related randomness from it to make the setup deterministic. Later we
+        // need to seed the rng with fresh entropy.
+        let rng = Rng::from_seed(*private_key.as_bytes());
+
+        let spaces_store = {
+            let key_manager_y = {
+                let identity_secret = SecretKey::from_bytes(rng.random_array()?);
+                KeyManager::init(&identity_secret, Lifetime::default(), &rng)?
+            };
+
+            let my_id: ActorId = private_key.public_key().into();
+
+            SpacesMemoryStore::new(my_id, key_manager_y)
+        };
+
+        let forge = ReflectionForge::new(private_key.clone(), operation_store.clone());
+        let manager = Manager::new(spaces_store, forge, rng)?;
+
+        let me = manager.me().await?;
+
+        info!(my_id = %me.id(), identity_key = %me.key_bundle().identity_key());
+
+        // ~~~~~~~~~~~~~~~~~~~
+
+        // Usually we would register the key bundles of all participants before creating the
+        // document but we don't have the UI for this yet, this is why we're doing it manually
+        // here.
+
+        {
+            let id: ActorId = ALICE_ID.parse().expect("correct actor id");
+
+            if me.id() != id {
+                let key_bundle: LongTermKeyBundle =
+                    decode_cbor(&hex::decode(ALICE_KEY_BUNDLE).expect("correct hex encoding")[..])
+                        .expect("correct key bundle");
+                manager
+                    .register_member(&Member::new(id, key_bundle))
+                    .await?;
+            }
+        }
+
+        {
+            let id: ActorId = BOB_ID.parse().expect("correct actor id");
+
+            if me.id() != id {
+                let key_bundle: LongTermKeyBundle =
+                    decode_cbor(&hex::decode(BOB_KEY_BUNDLE).expect("correct hex encoding")[..])
+                        .expect("correct key bundle");
+                manager
+                    .register_member(&Member::new(id, key_bundle))
+                    .await?;
+            }
+        }
+
+        // ~~~~~~~~~~~~~~~~~~~
+
         let network = Network::spawn(
             network_id,
             private_key.clone(),
@@ -126,7 +210,9 @@ impl Node {
             runtime,
             operation_store,
             document_store,
+            processed_store: RwLock::new(HashSet::new()),
             network,
+            manager,
             private_key,
         });
 
@@ -139,18 +225,39 @@ impl Node {
                 let documents = documents.clone();
                 let inner_clone = inner_clone.clone();
                 async move {
+                    // TODO(adz): This current callback doesn't allow us to handle errors, but I
+                    // believe we will find another approach anyhow in the future, so for now we'll
+                    // just "unwrap".
                     match system_event {
                         SystemEvent::GossipJoined { topic_id, peers } => {
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+                            // The topic id can also be the "network wide gossip overlay", filter
+                            // everything out which doesn't translate to a space id.
+                            let Ok(document_id) = DocumentId::try_from(topic_id) else {
+                                return;
+                            };
+
+                            if let Some(document) = documents.read().await.get(&document_id) {
                                 document.authors_joined(peers);
                             }
                         }
                         SystemEvent::GossipNeighborUp { topic_id, peer } => {
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+                            // The topic id can also be the "network wide gossip overlay", filter
+                            // everything out which doesn't translate to a space id.
+                            let Ok(document_id) = DocumentId::try_from(topic_id) else {
+                                return;
+                            };
+
+                            if let Some(document) = documents.read().await.get(&document_id) {
                                 document.author_set_online(peer, true);
                             }
                         }
                         SystemEvent::GossipNeighborDown { topic_id, peer } => {
+                            // The topic id can also be the "network wide gossip overlay", filter
+                            // everything out which doesn't translate to a space id.
+                            let Ok(document_id) = DocumentId::try_from(topic_id) else {
+                                return;
+                            };
+
                             if let Err(error) = inner_clone
                                 .document_store
                                 .set_last_seen_for_author(peer, Some(Utc::now()))
@@ -158,7 +265,8 @@ impl Node {
                             {
                                 error!("Failed to set last seen for author {peer}: {error}");
                             }
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
+
+                            if let Some(document) = documents.read().await.get(&document_id) {
                                 document.author_set_online(peer, false);
                             }
                         }
@@ -201,20 +309,24 @@ impl Node {
         inner
             .runtime
             .spawn(async move {
-                let operation = create_operation(
-                    &mut inner_clone.operation_store.clone(),
-                    &inner_clone.private_key,
-                    LogType::Snapshot,
-                    None,
-                    None,
-                    false,
-                )
-                .await?;
+                // Always add alice and bob to every new space.
+                let alice: ActorId = ALICE_ID.parse().expect("correct actor id");
+                let bob: ActorId = BOB_ID.parse().expect("correct actor id");
 
-                let document_id: DocumentId = operation
-                    .header
-                    .extension()
-                    .expect("document id from our own logs");
+                let (space, operation) = inner_clone
+                    .manager
+                    .create_space(&[(alice, Access::manage()), (bob, Access::manage())])
+                    .await?;
+
+                let document_id = space.id().into();
+
+                {
+                    let log_id = LogId::new(&document_id);
+                    let operation: Operation<ReflectionExtensions> = operation.into();
+                    insert_operation(&mut inner_clone.operation_store.clone(), log_id, &operation)
+                        .await?;
+                }
+
                 inner_clone
                     .document_store
                     .add_document(&document_id)
@@ -266,33 +378,34 @@ impl Node {
         let inner = self.inner().await;
         let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
-        let inner_clone = inner.clone();
-        let stored_operations = inner
-            .runtime
-            .spawn(async move {
-                inner_clone
-                    .document_store
-                    .add_document(&document_id)
-                    .await?;
-                // Add ourselves as an author to the document store.
-                inner_clone
-                    .document_store
-                    .add_author(&document_id, &inner_clone.private_key.public_key())
-                    .await?;
-                inner_clone
-                    .document_store
-                    .operations_for_document(&inner_clone.operation_store, &document_id)
-                    .await
-            })
-            .await??;
+        // TODO: Remove this for now as we're not storing any plaintext in the database.
+        // let inner_clone = inner.clone();
+        // let stored_operations = inner
+        //     .runtime
+        //     .spawn(async move {
+        //         inner_clone
+        //             .document_store
+        //             .add_document(&document_id)
+        //             .await?;
+        //         // Add ourselves as an author to the document store.
+        //         inner_clone
+        //             .document_store
+        //             .add_author(&document_id, &inner_clone.private_key.public_key())
+        //             .await?;
+        //         inner_clone
+        //             .document_store
+        //             .operations_for_document(&inner_clone.operation_store, &document_id)
+        //             .await
+        //     })
+        //     .await??;
 
-        for operation in stored_operations {
-            // Send all stored operation bytes to the app,
-            // it doesn't matter if the app already knows some or all of them
-            if let Some(body) = operation.body {
-                document.bytes_received(operation.header.public_key, body.to_bytes());
-            }
-        }
+        // for operation in stored_operations {
+        //     // Send all stored operation bytes to the app,
+        //     // it doesn't matter if the app already knows some or all of them
+        //     if let Some(body) = operation.body {
+        //         document.bytes_received(operation.header.public_key, body.to_bytes());
+        //     }
+        // }
 
         let inner_clone = inner.clone();
         let document_clone = document.clone();
@@ -308,9 +421,23 @@ impl Node {
                         move |operation| {
                             let inner_clone = inner_clone.clone();
                             let document_clone = document_clone.clone();
+
                             async move {
-                                // Process the operations and forward application messages to app layer. This is where
-                                // we "materialize" our application state from incoming "application events".
+                                // Process the operations and forward application messages to app
+                                // layer. This is where we "materialize" our application state from
+                                // incoming "application events".
+
+                                // Hack to make sure that we don't re-process the same operations
+                                // again.
+                                let has_processed = {
+                                    let processed_store = inner_clone.processed_store.read().await;
+                                    processed_store.contains(&operation.header.hash())
+                                };
+
+                                if has_processed {
+                                    return;
+                                }
+
                                 // Validation for our custom "document" extension.
                                 if let Err(err) = validate_operation(&operation, &document_id) {
                                     warn!(
@@ -321,7 +448,8 @@ impl Node {
                                     return;
                                 }
 
-                                // When we discover a new author we need to add them to our document store.
+                                // When we discover a new author we need to add them to our
+                                // document store.
                                 if let Err(error) = inner_clone
                                     .document_store
                                     .add_author(&document_id, &operation.header.public_key)
@@ -330,13 +458,32 @@ impl Node {
                                     error!("Can't store author to database: {error}");
                                 }
 
-                                // Forward the payload up to the app.
-                                if let Some(body) = operation.body {
-                                    document_clone.bytes_received(
-                                        operation.header.public_key,
-                                        body.to_bytes(),
-                                    );
+                                let public_key = operation.header.public_key;
+
+                                info!(id = %operation.header.hash(), seq_num = %operation.header.seq_num, "received remote operation");
+
+                                match inner_clone.manager.process(&ReflectionOperation(operation.clone())).await {
+                                    Ok(events) => {
+                                        for event in events {
+                                            match event {
+                                                Event::Application { data, .. } => {
+                                                    document_clone.bytes_received(
+                                                        public_key,
+                                                        data,
+                                                    );
+                                                },
+                                            }
+                                        }
+
+                                        let mut processed_store = inner_clone.processed_store.write().await;
+                                        processed_store.insert(operation.header.hash());
+                                    },
+                                    Err(error) => warn!(
+                                        "could not process incoming message in spaces manager: {error}"
+                                    ),
                                 }
+
+
                             }
                         },
                         move |operation| {
@@ -395,27 +542,29 @@ impl Node {
         inner
             .runtime
             .spawn(async move {
-                let mut operation_store = inner_clone.operation_store.clone();
-                // Append one operation to our "ephemeral" delta log.
-                let operation = create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Delta,
-                    Some(document_id),
-                    Some(&bytes),
-                    false,
-                )
-                .await?;
+                let space = inner_clone
+                    .manager
+                    .space(&document_id.into())
+                    .await?
+                    .expect("space exists before data is published");
+
+                let operation: Operation<ReflectionExtensions> =
+                    space.publish(&bytes).await?.into();
+
+                let log_id = LogId::new(&document_id);
+
+                insert_operation(&mut inner_clone.operation_store.clone(), log_id, &operation)
+                    .await?;
 
                 // Broadcast operation on gossip overlay.
                 inner_clone
                     .network
-                    .send_operation(&document_id, operation)
+                    .send_operation(&document_id, operation.into())
                     .await
             })
             .await??;
 
-        info!("Delta operation sent for document with id {}", document_id);
+        info!("Delta saved for document with id {}", document_id);
 
         Ok(())
     }
@@ -436,44 +585,24 @@ impl Node {
         inner
             .runtime
             .spawn(async move {
-                let mut operation_store = inner_clone.operation_store.clone();
+                let space = inner_clone
+                    .manager
+                    .space(&document_id.into())
+                    .await?
+                    .expect("space exists before data is published");
 
-                // Append an operation to our "snapshot" log and set the prune flag to
-                // true. This will remove previous snapshots.
-                //
-                // Snapshots are not broadcasted on the gossip overlay as they would be
-                // too large. Peers will sync them up when they join the document.
-                create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Snapshot,
-                    Some(document_id),
-                    Some(&snapshot_bytes),
-                    true,
-                )
-                .await?;
+                let operation: Operation<ReflectionExtensions> =
+                    space.publish(&snapshot_bytes).await?.into();
 
-                // Append an operation to our "ephemeral" delta log and set the prune
-                // flag to true.
-                //
-                // This signals removing all previous "delta" operations now. This is
-                // some sort of garbage collection whenever we snapshot. Snapshots
-                // already contain all history, there is no need to keep duplicate
-                // "delta" data around.
-                let operation = create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Delta,
-                    Some(document_id),
-                    None,
-                    true,
-                )
-                .await?;
+                let log_id = LogId::new(&document_id);
+
+                insert_operation(&mut inner_clone.operation_store.clone(), log_id, &operation)
+                    .await?;
 
                 // Broadcast operation on gossip overlay.
                 inner_clone
                     .network
-                    .send_operation(&document_id, operation)
+                    .send_operation(&document_id, operation.into())
                     .await
             })
             .await??;

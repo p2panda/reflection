@@ -3,8 +3,10 @@ use std::hash::Hash as StdHash;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use p2panda_core::{Hash, HashError, PublicKey};
+use p2panda_core::PublicKey;
 use p2panda_net::TopicId;
+use p2panda_spaces::types::ACTOR_ID_SIZE;
+use p2panda_spaces::{ActorId, types::ActorIdError};
 use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
 use sqlx::{
@@ -14,12 +16,14 @@ use sqlx::{
     sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef},
 };
 
+pub type DocumentIdError = ActorIdError;
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct DocumentId(Hash);
+pub struct DocumentId(ActorId);
 
 impl DocumentId {
-    pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_ref()
+    pub fn as_bytes(&self) -> &[u8; ACTOR_ID_SIZE] {
+        self.0.as_bytes()
     }
 }
 
@@ -31,49 +35,45 @@ impl TopicId for DocumentId {
     }
 }
 
-impl From<[u8; 32]> for DocumentId {
-    fn from(bytes: [u8; 32]) -> Self {
-        Self(Hash::from_bytes(bytes))
+impl From<ActorId> for DocumentId {
+    fn from(actor_id: ActorId) -> Self {
+        Self(actor_id)
     }
 }
 
-impl From<Hash> for DocumentId {
-    fn from(document_id: Hash) -> Self {
-        Self(document_id)
+impl From<DocumentId> for ActorId {
+    fn from(document_id: DocumentId) -> Self {
+        document_id.0
     }
 }
 
-impl From<DocumentId> for Hash {
-    fn from(document: DocumentId) -> Self {
-        document.0
+impl TryFrom<[u8; ACTOR_ID_SIZE]> for DocumentId {
+    type Error = ActorIdError;
+
+    fn try_from(bytes: [u8; ACTOR_ID_SIZE]) -> Result<Self, Self::Error> {
+        Ok(Self(ActorId::from_bytes(&bytes)?))
     }
 }
 
-impl From<&DocumentId> for Hash {
-    fn from(value: &DocumentId) -> Self {
-        value.0
+impl TryFrom<&[u8]> for DocumentId {
+    type Error = ActorIdError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+        Ok(Self(ActorId::try_from(bytes)?))
+    }
+}
+
+impl FromStr for DocumentId {
+    type Err = ActorIdError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self(ActorId::from_str(value)?))
     }
 }
 
 impl fmt::Display for DocumentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for DocumentId {
-    type Err = HashError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Ok(Hash::from_str(value)?.into())
-    }
-}
-
-impl TryFrom<&[u8]> for DocumentId {
-    type Error = HashError;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Hash::try_from(value)?.into())
     }
 }
 
@@ -92,7 +92,7 @@ impl<'q> Encode<'q, Sqlite> for &'q DocumentId {
         &self,
         args: &mut Vec<SqliteArgumentValue<'q>>,
     ) -> Result<IsNull, BoxDynError> {
-        <&[u8] as Encode<Sqlite>>::encode_by_ref(&self.as_bytes(), args)
+        <&[u8] as Encode<Sqlite>>::encode_by_ref(&self.as_bytes().as_slice(), args)
     }
 }
 
