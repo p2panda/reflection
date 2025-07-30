@@ -195,7 +195,7 @@ impl Network {
         document: &DocumentId,
         operation: Operation<ReflectionExtensions>,
     ) -> Result<()> {
-        info!("{:#?}", operation);
+        info!(id = %operation.header.hash(), seq_num = %operation.header.seq_num, "send operation");
 
         let document_tx = {
             self.document_tx

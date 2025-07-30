@@ -446,6 +446,8 @@ impl Node {
 
                                 let public_key = operation.header.public_key;
 
+                                info!(id = %operation.header.hash(), seq_num = %operation.header.seq_num, "received remote operation");
+
                                 match inner_clone.manager.process(&ReflectionOperation(operation)).await {
                                     Ok(events) => {
                                         for event in events {
