@@ -12,7 +12,7 @@ use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle};
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::traits::KeyBundle;
-use p2panda_net::{SyncConfiguration, SystemEvent};
+use p2panda_net::{SyncConfiguration, SystemEvent, TopicId};
 use p2panda_spaces::event::Event;
 use p2panda_spaces::manager::Manager;
 use p2panda_spaces::member::Member;
@@ -235,20 +235,34 @@ impl Node {
                     // just "unwrap".
                     match system_event {
                         SystemEvent::GossipJoined { topic_id, peers } => {
-                            if let Some(document) =
-                                documents.read().await.get(&topic_id.try_into().unwrap())
-                            {
+                            // The topic id can also be the "network wide gossip overlay", filter
+                            // everything out which doesn't translate to a space id.
+                            let Ok(document_id) = DocumentId::try_from(topic_id) else {
+                                return;
+                            };
+
+                            if let Some(document) = documents.read().await.get(&document_id) {
                                 document.authors_joined(peers);
                             }
                         }
                         SystemEvent::GossipNeighborUp { topic_id, peer } => {
-                            if let Some(document) =
-                                documents.read().await.get(&topic_id.try_into().unwrap())
-                            {
+                            // The topic id can also be the "network wide gossip overlay", filter
+                            // everything out which doesn't translate to a space id.
+                            let Ok(document_id) = DocumentId::try_from(topic_id) else {
+                                return;
+                            };
+
+                            if let Some(document) = documents.read().await.get(&document_id) {
                                 document.author_set_online(peer, true);
                             }
                         }
                         SystemEvent::GossipNeighborDown { topic_id, peer } => {
+                            // The topic id can also be the "network wide gossip overlay", filter
+                            // everything out which doesn't translate to a space id.
+                            let Ok(document_id) = DocumentId::try_from(topic_id) else {
+                                return;
+                            };
+
                             if let Err(error) = inner_clone
                                 .document_store
                                 .set_last_seen_for_author(peer, Some(Utc::now()))
@@ -256,9 +270,8 @@ impl Node {
                             {
                                 error!("Failed to set last seen for author {peer}: {error}");
                             }
-                            if let Some(document) =
-                                documents.read().await.get(&topic_id.try_into().unwrap())
-                            {
+
+                            if let Some(document) = documents.read().await.get(&document_id) {
                                 document.author_set_online(peer, false);
                             }
                         }
