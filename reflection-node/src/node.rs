@@ -12,7 +12,7 @@ use p2panda_encryption::crypto::x25519::SecretKey;
 use p2panda_encryption::key_bundle::{Lifetime, LongTermKeyBundle};
 use p2panda_encryption::key_manager::KeyManager;
 use p2panda_encryption::traits::KeyBundle;
-use p2panda_net::{SyncConfiguration, SystemEvent, TopicId};
+use p2panda_net::{SyncConfiguration, SystemEvent};
 use p2panda_spaces::event::Event;
 use p2panda_spaces::manager::Manager;
 use p2panda_spaces::member::Member;
@@ -99,7 +99,7 @@ impl Node {
         &self,
         private_key: PrivateKey,
         network_id: Hash,
-        db_location: Option<&Path>,
+        _db_location: Option<&Path>,
     ) -> Result<()> {
         let runtime = Builder::new_multi_thread()
             .worker_threads(1)
@@ -110,23 +110,16 @@ impl Node {
 
         let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
             .shared_cache(true)
-            .create_if_missing(true);
-        let connection_options = if let Some(db_location) = db_location {
-            let db_file = db_location.join("database.sqlite");
-            info!("Database file location: {db_file:?}");
-            connection_options.filename(db_file)
-        } else {
-            connection_options.in_memory(true)
-        };
+            .create_if_missing(true)
+            // NOTE: For this spaces-integration we keep things only in-memory (as every created
+            // space id is fully deterministic right now and we would append "create" messages on
+            // top of each other in the same log).
+            .in_memory(true);
 
-        let pool = if db_location.is_some() {
-            sqlx::sqlite::SqlitePool::connect_with(connection_options).await?
-        } else {
-            // FIXME: we need to set max connection to 1 for in memory sqlite DB.
-            // Probably has to do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
-            let pool_options = sqlite::SqlitePoolOptions::new().max_connections(1);
-            pool_options.connect_with(connection_options).await?
-        };
+        // FIXME: we need to set max connection to 1 for in memory sqlite DB.
+        // Probably has to do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
+        let pool_options = sqlite::SqlitePoolOptions::new().max_connections(1);
+        let pool = pool_options.connect_with(connection_options).await?;
 
         // Run migration for p2panda OperationStore and for the our DocumentStore
         Migrator::new(CombinedMigrationSource::new(vec![
