@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
@@ -67,6 +67,7 @@ struct NodeInner {
     runtime: Runtime,
     operation_store: OperationStore,
     document_store: DocumentStore,
+    processed_store: RwLock<HashSet<Hash>>,
     manager: ReflectionManager,
     network: Network,
     private_key: PrivateKey,
@@ -209,6 +210,7 @@ impl Node {
             runtime,
             operation_store,
             document_store,
+            processed_store: RwLock::new(HashSet::new()),
             network,
             manager,
             private_key,
@@ -419,10 +421,22 @@ impl Node {
                         move |operation| {
                             let inner_clone = inner_clone.clone();
                             let document_clone = document_clone.clone();
+
                             async move {
                                 // Process the operations and forward application messages to app
                                 // layer. This is where we "materialize" our application state from
                                 // incoming "application events".
+
+                                // Hack to make sure that we don't re-process the same operations
+                                // again.
+                                let has_processed = {
+                                    let processed_store = inner_clone.processed_store.read().await;
+                                    processed_store.contains(&operation.header.hash())
+                                };
+
+                                if has_processed {
+                                    return;
+                                }
 
                                 // Validation for our custom "document" extension.
                                 if let Err(err) = validate_operation(&operation, &document_id) {
@@ -448,7 +462,7 @@ impl Node {
 
                                 info!(id = %operation.header.hash(), seq_num = %operation.header.seq_num, "received remote operation");
 
-                                match inner_clone.manager.process(&ReflectionOperation(operation)).await {
+                                match inner_clone.manager.process(&ReflectionOperation(operation.clone())).await {
                                     Ok(events) => {
                                         for event in events {
                                             match event {
@@ -460,11 +474,16 @@ impl Node {
                                                 },
                                             }
                                         }
+
+                                        let mut processed_store = inner_clone.processed_store.write().await;
+                                        processed_store.insert(operation.header.hash());
                                     },
                                     Err(error) => warn!(
                                         "could not process incoming message in spaces manager: {error}"
                                     ),
                                 }
+
+
                             }
                         },
                         move |operation| {
