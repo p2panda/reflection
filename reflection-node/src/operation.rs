@@ -49,31 +49,25 @@ pub enum LogType {
 
 impl Extension<PruneFlag> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<PruneFlag> {
-        header
-            .extensions
-            .as_ref()
-            .map(|extensions| extensions.prune_flag.clone())
+        Some(header.extensions.as_ref()?.prune_flag.clone())
     }
 }
 
 impl Extension<LogType> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<LogType> {
-        header
-            .extensions
-            .as_ref()
-            .map(|extensions| extensions.log_type)
+        Some(header.extensions.as_ref()?.log_type)
     }
 }
 
 impl Extension<DocumentId> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<DocumentId> {
         // Check if header mentions an document.
-        let document = header
+        let document_id = header
             .extensions
             .as_ref()
             .and_then(|extensions| extensions.document);
-        if document.is_some() {
-            return document;
+        if document_id.is_some() {
+            return document_id;
         }
 
         // No document was mentioned, we must be creating a new document.
@@ -86,23 +80,16 @@ impl Extension<DocumentId> for ReflectionExtensions {
         // fail.
         match header.seq_num {
             0 => Some(header.hash().into()),
-            _ => header
-                .extensions
-                .as_ref()
-                .and_then(|extensions| extensions.document),
+            _ => None,
         }
     }
 }
 
 impl Extension<LogId> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<LogId> {
-        let log_type: Option<LogType> = header.extension();
-        let document: Option<DocumentId> = header.extension();
+        let log_type: LogType = header.extension()?;
+        let document_id: DocumentId = header.extension()?;
 
-        if let (Some(log_type), Some(document)) = (log_type, document) {
-            Some(LogId::new(log_type, &document))
-        } else {
-            None
-        }
+        Some(LogId::new(log_type, &document_id))
     }
 }
