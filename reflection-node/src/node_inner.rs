@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::ephemerial_operation::EphemerialOperation;
-use crate::operation::{LogType, ReflectionExtensions, validate_operation};
+use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
 use crate::store::DocumentStore;
@@ -145,21 +145,25 @@ impl NodeInner {
                                     warn!("Got ephemeral operation with a bad signature");
                                 }
                             }
-                            Ok(MessageType::Persistent(operation)) => match operation.unpack() {
-                                Ok(data) => {
-                                    persistent_tx.send(data).await.unwrap();
+                            Ok(MessageType::Persistent(operation)) => {
+                                match operation.validate_and_unpack(document_id) {
+                                    Ok(data) => {
+                                        persistent_tx.send(data).await.unwrap();
+                                    }
+                                    Err(err) => {
+                                        error!("Failed to unpack operation: {err}");
+                                    }
                                 }
-                                Err(err) => {
-                                    error!("Failed to unpack operation: {err}");
-                                }
-                            },
+                            }
                             Err(err) => {
                                 error!("Failed to decode gossip message: {err}");
                             }
                         },
                         FromNetwork::SyncMessage {
                             header, payload, ..
-                        } => match PersistentOperation::from_serialized(header, payload).unpack() {
+                        } => match PersistentOperation::from_serialized(header, payload)
+                            .validate_and_unpack(document_id)
+                        {
                             Ok(data) => persistent_tx.send(data).await.unwrap(),
                             Err(err) => {
                                 error!("Failed to unpack operation: {err}");
@@ -199,18 +203,6 @@ impl NodeInner {
             .runtime
             .spawn(async move {
                 while let Some(operation) = stream.next().await {
-                    // Process the operations and forward application messages to app layer. This is where
-                    // we "materialize" our application state from incoming "application events".
-                    // Validation for our custom "document" extension.
-                    if let Err(err) = validate_operation(&operation, &document_id) {
-                        warn!(
-                            public_key = %operation.header.public_key,
-                            seq_num = %operation.header.seq_num,
-                            "{err}"
-                        );
-                        return;
-                    }
-
                     // When we discover a new author we need to add them to our document store.
                     if let Err(error) = inner_clone
                         .document_store
