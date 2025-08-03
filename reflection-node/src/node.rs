@@ -10,7 +10,7 @@ use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
 use tokio::runtime::Builder;
-use tokio::sync::{Notify, RwLock, Semaphore};
+use tokio::sync::{RwLock, Semaphore};
 use tracing::{error, info, warn};
 
 use crate::document::{Document, DocumentId, SubscribableDocument};
@@ -22,7 +22,7 @@ use crate::utils::CombinedMigrationSource;
 
 pub struct Node {
     inner: OnceLock<Arc<NodeInner>>,
-    ready_notify: Arc<Notify>,
+    wait_for_inner: Arc<Semaphore>,
     documents: Arc<RwLock<HashMap<DocumentId, Arc<dyn SubscribableDocument>>>>,
     semaphore_operation_store: Semaphore,
 }
@@ -37,7 +37,7 @@ impl Node {
     pub fn new() -> Self {
         Self {
             inner: OnceLock::new(),
-            ready_notify: Arc::new(Notify::new()),
+            wait_for_inner: Arc::new(Semaphore::new(0)),
             documents: Arc::new(RwLock::new(HashMap::new())),
             // FIXME: This makes sure we only create one operation at the time and not in parallel
             // Since we would mess up the sequence of operations
@@ -46,14 +46,16 @@ impl Node {
     }
 
     async fn inner(&self) -> &Arc<NodeInner> {
-        if let Some(inner) = self.inner.get() {
-            inner
-        } else {
-            self.ready_notify.notified().await;
-            self.inner
-                .get()
-                .expect("Inner should always be set at this point")
+        if !self.wait_for_inner.is_closed() {
+            // We don't care whether we fail to acquire a permit,
+            // once the semaphore is closed `NodeInner` exsists
+            let _permit = self.wait_for_inner.acquire().await;
+            self.wait_for_inner.close();
         }
+
+        self.inner
+            .get()
+            .expect("Inner should always be set at this point")
     }
 
     pub async fn run(
@@ -156,7 +158,7 @@ impl Node {
             .await?;
 
         self.inner.set(inner).expect("Node can be run only once");
-        self.ready_notify.notify_waiters();
+        self.wait_for_inner.add_permits(1);
 
         Ok(())
     }
