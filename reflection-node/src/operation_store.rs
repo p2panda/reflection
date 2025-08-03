@@ -103,8 +103,7 @@ impl OperationStore {
         };
         header.sign(private_key);
 
-        let document: DocumentId = header.extension().expect("document id from our own logs");
-        let log_id = LogId::new(log_type, &document);
+        let log_id: LogId = header.extension().expect("LogId from our own logs");
 
         let operation = Operation {
             hash: header.hash(),
