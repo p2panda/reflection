@@ -12,7 +12,7 @@ use sqlx::Row;
 use tracing::error;
 
 use crate::document::{Author, Document, DocumentId};
-use crate::operation::{LogType, ReflectionExtensions, validate_operation};
+use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
 
 #[derive(Clone, Debug)]
@@ -188,17 +188,13 @@ impl DocumentStore {
             for log_id in &log_ids {
                 let operations = match operation_store.get_log(author, log_id, None).await {
                     Ok(Some(operations)) => {
-                        operations.into_iter().map(|(header, body)| {
-                            let operation = p2panda_core::Operation {
+                        operations
+                            .into_iter()
+                            .map(|(header, body)| p2panda_core::Operation {
                                 hash: header.hash(),
                                 header,
                                 body,
-                            };
-
-                            // Stored operations are always valid
-                            assert!(validate_operation(&operation, &document_id).is_ok());
-                            operation
-                        })
+                            })
                     }
                     Ok(None) => {
                         continue;

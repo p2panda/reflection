@@ -1,7 +1,6 @@
 use std::hash::Hash as StdHash;
 
-use anyhow::{Result, bail};
-use p2panda_core::{Extension, Header, Operation, PruneFlag};
+use p2panda_core::{Extension, Header, PruneFlag};
 use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentId;
@@ -106,27 +105,4 @@ impl Extension<LogId> for ReflectionExtensions {
             None
         }
     }
-}
-
-/// Custom validation for our own operation headers.
-pub fn validate_operation(
-    operation: &Operation<ReflectionExtensions>,
-    expected_document: &DocumentId,
-) -> Result<()> {
-    let given_document: Option<DocumentId> = operation.header.extension();
-    match given_document {
-        Some(given_document) => {
-            if &given_document != expected_document {
-                bail!(
-                    "document id mismatch (expected: {}, received: {})",
-                    expected_document,
-                    given_document
-                );
-            }
-        }
-        None => {
-            bail!("document id missing (expected: {})", expected_document);
-        }
-    }
-    Ok(())
 }
