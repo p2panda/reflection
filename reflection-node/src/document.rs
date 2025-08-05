@@ -3,6 +3,7 @@ use std::hash::Hash as StdHash;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::author_tracker::AuthorMessage;
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node_inner::MessageType;
 use crate::node_inner::NodeInner;
@@ -147,6 +148,8 @@ pub enum DocumentError {
     Send(#[from] mpsc::error::SendError<ToNetwork>),
     #[error(transparent)]
     Runtime(#[from] JoinError),
+    #[error(transparent)]
+    GossipSetup(#[from] tokio::sync::oneshot::error::RecvError),
     // FIXME: remove anyhow but p2panda uses anyhow
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
@@ -154,8 +157,8 @@ pub enum DocumentError {
 
 pub trait SubscribableDocument: Sync + Send {
     fn bytes_received(&self, author: PublicKey, data: Vec<u8>);
-    fn authors_joined(&self, authors: Vec<PublicKey>);
-    fn author_set_online(&self, author: PublicKey, is_online: bool);
+    fn author_joined(&self, author: PublicKey);
+    fn author_left(&self, author: PublicKey);
     fn ephemeral_bytes_received(&self, author: PublicKey, data: Vec<u8>);
 }
 
@@ -281,6 +284,14 @@ impl Subscription {
         // Abort all tokio tasks created during subscription
         for handle in self.abort_handles {
             handle.abort();
+        }
+
+        // Send good bye message to the network
+        if let Err(error) = AuthorMessage::Bye
+            .send(&self.tx, &self.node.private_key)
+            .await
+        {
+            error!("Failed to sent bye message to the network: {error}");
         }
 
         info!("Unsubscribed from document {document_id}");

@@ -1,3 +1,4 @@
+mod author_tracker;
 pub mod document;
 mod ephemerial_operation;
 mod node;
@@ -75,8 +76,8 @@ mod tests {
             self.tx.send(data).unwrap();
         }
 
-        fn authors_joined(&self, _authors: Vec<PublicKey>) {}
-        fn author_set_online(&self, _author: PublicKey, _is_online: bool) {}
+        fn author_joined(&self, _author: PublicKey) {}
+        fn author_left(&self, _author: PublicKey) {}
         fn ephemeral_bytes_received(&self, _author: PublicKey, _data: Vec<u8>) {}
     }
 
