@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::author_tracker::{AuthorMessage, AuthorTracker};
 use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::operation::{LogType, ReflectionExtensions};
@@ -20,6 +21,7 @@ use tracing::{error, info, warn};
 pub(crate) enum MessageType {
     Persistent(PersistentOperation),
     Ephemeral(EphemerialOperation),
+    AuthorEphemeral(EphemerialOperation),
 }
 
 #[derive(Debug)]
@@ -125,12 +127,16 @@ impl NodeInner {
 
         // Join a gossip overlay with peers who are interested in the same document and start sync
         // with them.
-        let (document_tx, mut document_rx, _gossip_ready) =
+        let (document_tx, mut document_rx, gossip_ready) =
             self.network.subscribe(document_id).await?;
 
         let (persistent_tx, persistent_rx) =
             mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
 
+        let author_tracker =
+            AuthorTracker::new(self.clone(), document.clone(), document_tx.clone());
+
+        let author_tracker_clone = author_tracker.clone();
         let document_clone = document.clone();
         let subscription_abort_handle = self
             .runtime
@@ -143,6 +149,20 @@ impl NodeInner {
                                     document_clone.ephemeral_bytes_received(author, body);
                                 } else {
                                     warn!("Got ephemeral operation with a bad signature");
+                                }
+                            }
+                            Ok(MessageType::AuthorEphemeral(operation)) => {
+                                if let Some((author, body)) = operation.validate_and_unpack() {
+                                    match AuthorMessage::try_from(&body[..]) {
+                                        Ok(message) => {
+                                            author_tracker_clone.received(message, author).await;
+                                        }
+                                        Err(error) => {
+                                            warn!("Failed to deserialize AuthorMessage: {error}");
+                                        }
+                                    }
+                                } else {
+                                    warn!("Got internal ephemeral operation with a bad signature");
                                 }
                             }
                             Ok(MessageType::Persistent(operation)) => {
@@ -220,13 +240,28 @@ impl NodeInner {
             })
             .abort_handle();
 
+        let author_tracker_abort_handle = self
+            .runtime
+            .spawn(async move {
+                // Only start track authors once we have joined the gossip overlay
+                if let Err(error) = gossip_ready.await {
+                    error!("Failed to join the gossip overlay: {error}");
+                }
+                author_tracker.spawn().await;
+            })
+            .abort_handle();
+
         info!("Subscribed to document {document_id}");
 
         Ok(Subscription {
             tx: document_tx,
             id: document_id,
             node: self,
-            abort_handles: vec![subscription_abort_handle, subscription2_abort_handle],
+            abort_handles: vec![
+                author_tracker_abort_handle,
+                subscription_abort_handle,
+                subscription2_abort_handle,
+            ],
         })
     }
 }

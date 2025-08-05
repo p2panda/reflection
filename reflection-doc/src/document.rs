@@ -657,22 +657,18 @@ impl SubscribableDocument for DocumentHandle {
         }
     }
 
-    fn authors_joined(&self, authors: Vec<p2panda_core::PublicKey>) {
+    fn author_joined(&self, author: p2panda_core::PublicKey) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                for author in authors.into_iter() {
-                    document.authors().add_or_update(PublicKey(author), true);
-                }
+                document.authors().add_or_update(PublicKey(author), true);
             });
         }
     }
 
-    fn author_set_online(&self, author: p2panda_core::PublicKey, is_online: bool) {
+    fn author_left(&self, author: p2panda_core::PublicKey) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                document
-                    .authors()
-                    .add_or_update(PublicKey(author), is_online);
+                document.authors().add_or_update(PublicKey(author), false);
             });
         }
     }
