@@ -4,7 +4,7 @@ use p2panda_core::{Extension, Header, PruneFlag};
 use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentId;
-use crate::store::LogId;
+use crate::document_store::LogId;
 
 /// Custom extensions for p2panda header.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use crate::author_tracker::{AuthorMessage, AuthorTracker};
 use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
+use crate::document_store::DocumentStore;
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
-use crate::store::DocumentStore;
 use anyhow::Result;
 use p2panda_core::{Body, Hash, Header, PrivateKey, cbor::decode_cbor};
 use p2panda_discovery::mdns::LocalDiscovery;

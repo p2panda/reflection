@@ -1,12 +1,12 @@
 mod author_tracker;
 pub mod document;
+mod document_store;
 mod ephemerial_operation;
 mod node;
 mod node_inner;
 mod operation;
 mod operation_store;
 mod persistent_operation;
-mod store;
 mod utils;
 
 pub use document::SubscribableDocument;
