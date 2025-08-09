@@ -1,6 +1,8 @@
-use crate::document::DocumentId;
+use std::sync::Arc;
+
+use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::ephemerial_operation::EphemerialOperation;
-use crate::operation::ReflectionExtensions;
+use crate::operation::{ReflectionExtensions, validate_operation};
 use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
 use crate::store::DocumentStore;
@@ -19,7 +21,7 @@ use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::error;
+use tracing::{error, info, warn};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) enum MessageType {
@@ -87,59 +89,80 @@ impl NodeInner {
         Ok(())
     }
 
-    pub async fn subscribe<Fut, Fut2>(
-        &self,
-        document: DocumentId,
-        f: impl Fn(Operation<ReflectionExtensions>) -> Fut + Send + 'static,
-        f_ephemeral: impl Fn(EphemerialOperation) -> Fut2 + Send + 'static,
-    ) -> Result<()>
-    where
-        Fut: Future<Output = ()> + Send,
-        Fut2: Future<Output = ()> + Send,
-    {
+    pub async fn subscribe(
+        self: Arc<Self>,
+        document_id: DocumentId,
+        document: Arc<impl SubscribableDocument + 'static>,
+    ) -> Result<Subscription, DocumentError> {
+        self.document_store.add_document(&document_id).await?;
+        // Add ourselves as an author to the document store.
+        self.document_store
+            .add_author(&document_id, &self.private_key.public_key())
+            .await?;
+        let stored_operations = self
+            .document_store
+            .operations_for_document(&self.operation_store, &document_id)
+            .await?;
+
+        for operation in stored_operations {
+            // Send all stored operation bytes to the app,
+            // it doesn't matter if the app already knows some or all of them
+            if let Some(body) = operation.body {
+                document.bytes_received(operation.header.public_key, body.to_bytes());
+            }
+        }
+
         // Join a gossip overlay with peers who are interested in the same document and start sync
         // with them.
         let (document_tx, mut document_rx, _gossip_ready) =
-            self.network.subscribe(document).await?;
+            self.network.subscribe(document_id).await?;
 
         {
             let mut store = self.document_tx.write().await;
-            store.insert(document.clone(), document_tx);
+            store.insert(document_id.clone(), document_tx.clone());
         }
 
         let (persistent_tx, persistent_rx) =
             mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
 
-        tokio::task::spawn(async move {
-            while let Some(event) = document_rx.recv().await {
-                match event {
-                    FromNetwork::GossipMessage { bytes, .. } => match decode_cbor(&bytes[..]) {
-                        Ok(MessageType::Ephemeral(operation)) => {
-                            f_ephemeral(operation).await;
-                        }
-                        Ok(MessageType::Persistent(operation)) => match operation.unpack() {
-                            Ok(data) => {
-                                persistent_tx.send(data).await.unwrap();
+        let document_clone = document.clone();
+        let subscription_abort_handle = self
+            .runtime
+            .spawn(async move {
+                while let Some(event) = document_rx.recv().await {
+                    match event {
+                        FromNetwork::GossipMessage { bytes, .. } => match decode_cbor(&bytes[..]) {
+                            Ok(MessageType::Ephemeral(operation)) => {
+                                if let Some((author, body)) = operation.validate_and_unpack() {
+                                    document_clone.ephemeral_bytes_received(author, body);
+                                } else {
+                                    warn!("Got ephemeral operation with a bad signature");
+                                }
                             }
+                            Ok(MessageType::Persistent(operation)) => match operation.unpack() {
+                                Ok(data) => {
+                                    persistent_tx.send(data).await.unwrap();
+                                }
+                                Err(err) => {
+                                    error!("Failed to unpack operation: {err}");
+                                }
+                            },
+                            Err(err) => {
+                                error!("Failed to decode gossip message: {err}");
+                            }
+                        },
+                        FromNetwork::SyncMessage {
+                            header, payload, ..
+                        } => match PersistentOperation::from_serialized(header, payload).unpack() {
+                            Ok(data) => persistent_tx.send(data).await.unwrap(),
                             Err(err) => {
                                 error!("Failed to unpack operation: {err}");
                             }
                         },
-                        Err(err) => {
-                            error!("Failed to decode gossip message: {err}");
-                        }
-                    },
-                    FromNetwork::SyncMessage {
-                        header, payload, ..
-                    } => match PersistentOperation::from_serialized(header, payload).unpack() {
-                        Ok(data) => persistent_tx.send(data).await.unwrap(),
-                        Err(err) => {
-                            error!("Failed to unpack operation: {err}");
-                        }
-                    },
+                    }
                 }
-            }
-        });
+            })
+            .abort_handle();
 
         let stream = ReceiverStream::new(persistent_rx);
 
@@ -163,14 +186,50 @@ impl NodeInner {
                 }
             });
 
+        let inner_clone = self.clone();
+        let document_clone = document.clone();
         // Send checked and ingested operations for this document to application layer.
-        tokio::task::spawn(async move {
-            while let Some(operation) = stream.next().await {
-                f(operation).await;
-            }
-        });
+        let subscription2_abort_handle = self
+            .runtime
+            .spawn(async move {
+                while let Some(operation) = stream.next().await {
+                    // Process the operations and forward application messages to app layer. This is where
+                    // we "materialize" our application state from incoming "application events".
+                    // Validation for our custom "document" extension.
+                    if let Err(err) = validate_operation(&operation, &document_id) {
+                        warn!(
+                            public_key = %operation.header.public_key,
+                            seq_num = %operation.header.seq_num,
+                            "{err}"
+                        );
+                        return;
+                    }
 
-        Ok(())
+                    // When we discover a new author we need to add them to our document store.
+                    if let Err(error) = inner_clone
+                        .document_store
+                        .add_author(&document_id, &operation.header.public_key)
+                        .await
+                    {
+                        error!("Can't store author to database: {error}");
+                    }
+
+                    // Forward the payload up to the app.
+                    if let Some(body) = operation.body {
+                        document_clone.bytes_received(operation.header.public_key, body.to_bytes());
+                    }
+                }
+            })
+            .abort_handle();
+
+        info!("Subscribed to document {document_id}");
+
+        Ok(Subscription {
+            tx: document_tx,
+            id: document_id,
+            node: self,
+            abort_handles: vec![subscription_abort_handle, subscription2_abort_handle],
+        })
     }
 
     pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
