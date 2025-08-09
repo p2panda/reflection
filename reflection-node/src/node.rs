@@ -1,22 +1,27 @@
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
-use anyhow::Result;
 use p2panda_core::{Hash, PrivateKey};
-use p2panda_net::SyncConfiguration;
-use p2panda_store::sqlite::store::migrations as operation_store_migrations;
-use p2panda_sync::log_sync::LogSyncProtocol;
-use sqlx::{migrate::Migrator, sqlite};
-use tokio::runtime::Builder;
+use thiserror::Error;
 use tokio::sync::Semaphore;
-use tracing::info;
 
 use crate::document::{Document, DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::node_inner::NodeInner;
 
-use crate::document_store::DocumentStore;
-use crate::operation_store::OperationStore;
-use crate::utils::CombinedMigrationSource;
+#[derive(Debug, Error)]
+pub enum NodeError {
+    #[error(transparent)]
+    RuntimeStartup(#[from] std::io::Error),
+    #[error(transparent)]
+    RuntimeSpawn(#[from] tokio::task::JoinError),
+    #[error(transparent)]
+    Datebase(#[from] sqlx::Error),
+    #[error(transparent)]
+    DatebaseMigration(#[from] sqlx::migrate::MigrateError),
+    // FIXME: remove anyhow but p2panda uses anyhow
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
+}
 
 pub struct Node {
     inner: OnceLock<Arc<NodeInner>>,
@@ -55,62 +60,8 @@ impl Node {
         private_key: PrivateKey,
         network_id: Hash,
         db_location: Option<&Path>,
-    ) -> Result<()> {
-        let runtime = Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()?;
-
-        let _guard = runtime.enter();
-
-        let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
-            .shared_cache(true)
-            .create_if_missing(true);
-        let connection_options = if let Some(db_location) = db_location {
-            let db_file = db_location.join("database.sqlite");
-            info!("Database file location: {db_file:?}");
-            connection_options.filename(db_file)
-        } else {
-            connection_options.in_memory(true)
-        };
-
-        let pool = if db_location.is_some() {
-            sqlx::sqlite::SqlitePool::connect_with(connection_options).await?
-        } else {
-            // FIXME: we need to set max connection to 1 for in memory sqlite DB.
-            // Probably has to do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
-            let pool_options = sqlite::SqlitePoolOptions::new().max_connections(1);
-            pool_options.connect_with(connection_options).await?
-        };
-
-        // Run migration for p2panda OperationStore and for the our DocumentStore
-        Migrator::new(CombinedMigrationSource::new(vec![
-            operation_store_migrations(),
-            sqlx::migrate!(),
-        ]))
-        .await?
-        .run(&pool)
-        .await?;
-
-        let operation_store = OperationStore::new(pool.clone());
-        let document_store = DocumentStore::new(pool);
-
-        let sync_config = {
-            let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone_inner());
-            SyncConfiguration::<DocumentId>::new(sync)
-        };
-
-        let inner = Arc::new(
-            NodeInner::new(
-                runtime,
-                network_id,
-                private_key,
-                sync_config,
-                operation_store,
-                document_store,
-            )
-            .await?,
-        );
+    ) -> Result<(), NodeError> {
+        let inner = Arc::new(NodeInner::new(network_id, private_key, db_location).await?);
 
         self.inner.set(inner).expect("Node can be run only once");
         self.wait_for_inner.add_permits(1);
@@ -118,7 +69,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn shutdown(&self) -> Result<()> {
+    pub async fn shutdown(&self) -> Result<(), NodeError> {
         let inner = self.inner().await;
 
         let inner_clone = inner.clone();
@@ -130,7 +81,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn documents(&self) -> Result<Vec<Document>> {
+    pub async fn documents(&self) -> Result<Vec<Document>, DocumentError> {
         let inner = self.inner().await;
 
         let inner_clone = inner.clone();
