@@ -11,12 +11,12 @@ use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
 use tokio::runtime::Builder;
 use tokio::sync::{RwLock, Semaphore};
-use tracing::{error, info, warn};
+use tracing::info;
 
-use crate::document::{Document, DocumentId, SubscribableDocument};
+use crate::document::{Document, DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node_inner::NodeInner;
-use crate::operation::{LogType, validate_operation};
+use crate::operation::LogType;
 use crate::operation_store::OperationStore;
 use crate::store::DocumentStore;
 use crate::utils::CombinedMigrationSource;
@@ -204,106 +204,24 @@ impl Node {
         Ok(())
     }
 
-    // TODO: check if peers are online and call SubscribableDocument::author_set_online().
-    // This requires system events tracking
     pub async fn subscribe<T: SubscribableDocument + 'static>(
         &self,
         document_id: DocumentId,
-        document: T,
-    ) -> Result<()> {
-        let document = Arc::new(document);
+        document_handle: T,
+    ) -> Result<Subscription, DocumentError> {
+        let document_handle = Arc::new(document_handle);
+
+        self.documents
+            .write()
+            .await
+            .insert(document_id, document_handle.clone());
+
         let inner = self.inner().await;
-
         let inner_clone = inner.clone();
-        let stored_operations = inner
-            .runtime
-            .spawn(async move {
-                inner_clone
-                    .document_store
-                    .add_document(&document_id)
-                    .await?;
-                // Add ourselves as an author to the document store.
-                inner_clone
-                    .document_store
-                    .add_author(&document_id, &inner_clone.private_key.public_key())
-                    .await?;
-                inner_clone
-                    .document_store
-                    .operations_for_document(&inner_clone.operation_store, &document_id)
-                    .await
-            })
-            .await??;
-
-        for operation in stored_operations {
-            // Send all stored operation bytes to the app,
-            // it doesn't matter if the app already knows some or all of them
-            if let Some(body) = operation.body {
-                document.bytes_received(operation.header.public_key, body.to_bytes());
-            }
-        }
-
-        let inner_clone = inner.clone();
-        let document_clone = document.clone();
-        let document_clone2 = document.clone();
         inner
             .runtime
-            .spawn(async move {
-                let inner_clone2 = inner_clone.clone();
-                inner_clone2
-                    .subscribe(
-                        document_id,
-                        move |operation| {
-                            let inner_clone = inner_clone.clone();
-                            let document_clone = document_clone.clone();
-                            async move {
-                                // Process the operations and forward application messages to app layer. This is where
-                                // we "materialize" our application state from incoming "application events".
-                                // Validation for our custom "document" extension.
-                                if let Err(err) = validate_operation(&operation, &document_id) {
-                                    warn!(
-                                        public_key = %operation.header.public_key,
-                                        seq_num = %operation.header.seq_num,
-                                        "{err}"
-                                    );
-                                    return;
-                                }
-
-                                // When we discover a new author we need to add them to our document store.
-                                if let Err(error) = inner_clone
-                                    .document_store
-                                    .add_author(&document_id, &operation.header.public_key)
-                                    .await
-                                {
-                                    error!("Can't store author to database: {error}");
-                                }
-
-                                // Forward the payload up to the app.
-                                if let Some(body) = operation.body {
-                                    document_clone.bytes_received(
-                                        operation.header.public_key,
-                                        body.to_bytes(),
-                                    );
-                                }
-                            }
-                        },
-                        move |operation| {
-                            let document_clone = document_clone2.clone();
-                            async move {
-                                if let Some((author, body)) = operation.validate_and_unpack() {
-                                    document_clone.ephemeral_bytes_received(author, body);
-                                } else {
-                                    warn!("Got ephemeral operation with a bad signature");
-                                }
-                            }
-                        },
-                    )
-                    .await
-            })
-            .await??;
-
-        self.documents.write().await.insert(document_id, document);
-
-        Ok(())
+            .spawn(async move { inner_clone.subscribe(document_id, document_handle).await })
+            .await?
     }
 
     pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
