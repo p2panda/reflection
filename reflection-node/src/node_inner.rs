@@ -11,7 +11,7 @@ use p2panda_core::{
 };
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
-use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, SystemEvent, ToNetwork};
+use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
 use p2panda_stream::IngestExt;
 use std::collections::HashMap;
 use tokio::runtime::Runtime;
@@ -175,24 +175,6 @@ impl NodeInner {
 
     pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
         self.document_tx.write().await.remove(document_id);
-
-        Ok(())
-    }
-
-    pub async fn subscribe_events<Fut>(
-        &self,
-        f: impl Fn(SystemEvent<DocumentId>) -> Fut + Send + 'static,
-    ) -> Result<()>
-    where
-        Fut: Future<Output = ()> + Send,
-    {
-        let mut events = self.network.events().await?;
-
-        tokio::task::spawn(async move {
-            while let Ok(event) = events.recv().await {
-                f(event).await;
-            }
-        });
 
         Ok(())
     }

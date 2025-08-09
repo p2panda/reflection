@@ -5,7 +5,7 @@ use std::sync::{Arc, OnceLock};
 use anyhow::Result;
 use chrono::Utc;
 use p2panda_core::{Hash, PrivateKey};
-use p2panda_net::{SyncConfiguration, SystemEvent};
+use p2panda_net::SyncConfiguration;
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
@@ -116,43 +116,6 @@ impl Node {
             )
             .await?,
         );
-
-        let documents = self.documents.clone();
-
-        let inner_clone = inner.clone();
-        inner
-            .subscribe_events(move |system_event| {
-                let documents = documents.clone();
-                let inner_clone = inner_clone.clone();
-                async move {
-                    match system_event {
-                        SystemEvent::GossipJoined { topic_id, peers } => {
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
-                                document.authors_joined(peers);
-                            }
-                        }
-                        SystemEvent::GossipNeighborUp { topic_id, peer } => {
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
-                                document.author_set_online(peer, true);
-                            }
-                        }
-                        SystemEvent::GossipNeighborDown { topic_id, peer } => {
-                            if let Err(error) = inner_clone
-                                .document_store
-                                .set_last_seen_for_author(peer, Some(Utc::now()))
-                                .await
-                            {
-                                error!("Failed to set last seen for author {peer}: {error}");
-                            }
-                            if let Some(document) = documents.read().await.get(&topic_id.into()) {
-                                document.author_set_online(peer, false);
-                            }
-                        }
-                        _ => {}
-                    };
-                }
-            })
-            .await?;
 
         self.inner.set(inner).expect("Node can be run only once");
         self.wait_for_inner.add_permits(1);
