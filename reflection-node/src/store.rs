@@ -4,7 +4,7 @@ use std::hash::Hash as StdHash;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use p2panda_core::PublicKey;
-use p2panda_store::{LogStore, SqliteStore};
+use p2panda_store::LogStore;
 use p2panda_sync::log_sync::TopicLogMap;
 use serde::{Deserialize, Serialize};
 use sqlx;
@@ -13,6 +13,7 @@ use tracing::error;
 
 use crate::document::{Author, Document, DocumentId};
 use crate::operation::{LogType, ReflectionExtensions, validate_operation};
+use crate::operation_store::OperationStore;
 
 #[derive(Clone, Debug)]
 pub struct DocumentStore {
@@ -173,6 +174,7 @@ impl DocumentStore {
         operation_store: &OperationStore,
         document_id: &DocumentId,
     ) -> sqlx::Result<Vec<p2panda_core::Operation<ReflectionExtensions>>> {
+        let operation_store = operation_store.inner();
         let authors = self.authors(document_id).await?;
 
         let log_ids = [
@@ -244,5 +246,3 @@ impl TopicLogMap<DocumentId, LogId> for DocumentStore {
         )
     }
 }
-
-pub type OperationStore = SqliteStore<LogId, ReflectionExtensions>;
