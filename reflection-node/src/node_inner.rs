@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::ephemerial_operation::EphemerialOperation;
-use crate::operation::{ReflectionExtensions, validate_operation};
+use crate::operation::{LogType, ReflectionExtensions, validate_operation};
 use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
 use crate::store::DocumentStore;
@@ -79,6 +79,25 @@ impl NodeInner {
         // FIXME: If we can just clone the network why does shutdown consume self?
         self.network.clone().shutdown().await?;
         Ok(())
+    }
+
+    pub async fn create_document(self: Arc<Self>) -> Result<DocumentId, DocumentError> {
+        let operation = self
+            .operation_store
+            .create_operation(&self.private_key, LogType::Snapshot, None, None, false)
+            .await?;
+
+        let document_id: DocumentId = operation
+            .header
+            .extension()
+            .expect("document id from our own logs");
+        self.document_store.add_document(&document_id).await?;
+
+        // Add ourselves as an author to the document store.
+        self.document_store
+            .add_author(&document_id, &self.private_key.public_key())
+            .await?;
+        Ok(document_id)
     }
 
     pub async fn subscribe(

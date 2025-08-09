@@ -13,7 +13,7 @@ use tracing::info;
 
 use crate::document::{Document, DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::node_inner::NodeInner;
-use crate::operation::LogType;
+
 use crate::operation_store::OperationStore;
 use crate::store::DocumentStore;
 use crate::utils::CombinedMigrationSource;
@@ -140,40 +140,12 @@ impl Node {
             .await??)
     }
 
-    pub async fn create_document(&self) -> Result<DocumentId> {
+    pub async fn create_document(&self) -> Result<DocumentId, DocumentError> {
         let inner = self.inner().await;
-
         let inner_clone = inner.clone();
         inner
             .runtime
-            .spawn(async move {
-                let operation = inner_clone
-                    .operation_store
-                    .create_operation(
-                        &inner_clone.private_key,
-                        LogType::Snapshot,
-                        None,
-                        None,
-                        false,
-                    )
-                    .await?;
-
-                let document_id: DocumentId = operation
-                    .header
-                    .extension()
-                    .expect("document id from our own logs");
-                inner_clone
-                    .document_store
-                    .add_document(&document_id)
-                    .await?;
-
-                // Add ourselves as an author to the document store.
-                inner_clone
-                    .document_store
-                    .add_author(&document_id, &inner_clone.private_key.public_key())
-                    .await?;
-                Ok(document_id)
-            })
+            .spawn(async move { inner_clone.create_document().await })
             .await?
     }
 
