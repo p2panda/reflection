@@ -7,20 +7,13 @@ use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
 use crate::store::DocumentStore;
 use anyhow::Result;
-use p2panda_core::{
-    Body, Hash, Header, Operation, PrivateKey,
-    cbor::{decode_cbor, encode_cbor},
-};
+use p2panda_core::{Body, Hash, Header, PrivateKey, cbor::decode_cbor};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
-use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, ToNetwork};
+use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
 use p2panda_stream::IngestExt;
-use std::collections::HashMap;
-use tokio::runtime::Runtime;
-use tokio::sync::RwLock;
-use tokio::sync::mpsc;
-use tokio_stream::StreamExt;
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::{runtime::Runtime, sync::mpsc};
+use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tracing::{error, info, warn};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -36,7 +29,6 @@ pub struct NodeInner {
     pub(crate) document_store: DocumentStore,
     pub(crate) private_key: PrivateKey,
     pub(crate) network: p2panda_net::Network<DocumentId>,
-    pub(crate) document_tx: RwLock<HashMap<DocumentId, mpsc::Sender<ToNetwork>>>,
 }
 
 //const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
@@ -80,11 +72,11 @@ impl NodeInner {
             document_store,
             private_key,
             network,
-            document_tx: RwLock::new(HashMap::new()),
         })
     }
 
     pub async fn shutdown(&self) -> Result<()> {
+        // FIXME: If we can just clone the network why does shutdown consume self?
         self.network.clone().shutdown().await?;
         Ok(())
     }
@@ -116,11 +108,6 @@ impl NodeInner {
         // with them.
         let (document_tx, mut document_rx, _gossip_ready) =
             self.network.subscribe(document_id).await?;
-
-        {
-            let mut store = self.document_tx.write().await;
-            store.insert(document_id.clone(), document_tx.clone());
-        }
 
         let (persistent_tx, persistent_rx) =
             mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
@@ -230,59 +217,5 @@ impl NodeInner {
             node: self,
             abort_handles: vec![subscription_abort_handle, subscription2_abort_handle],
         })
-    }
-
-    pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
-        self.document_tx.write().await.remove(document_id);
-
-        Ok(())
-    }
-
-    /// Send operations to the gossip overlay for `document`.
-    ///
-    /// This will panic if the `document` wasn't subscribed to.
-    pub async fn send_operation(
-        &self,
-        document: &DocumentId,
-        operation: Operation<ReflectionExtensions>,
-    ) -> Result<()> {
-        let document_tx = {
-            self.document_tx
-                .read()
-                .await
-                .get(document)
-                .cloned()
-                .expect("Not subscribed to document with id {document_id}")
-        };
-
-        let bytes = encode_cbor(&MessageType::Persistent(PersistentOperation::new(
-            operation,
-        )))?;
-        document_tx.send(ToNetwork::Message { bytes }).await?;
-
-        Ok(())
-    }
-
-    /// Send ephemeral data to the gossip overlay for `document`.
-    ///
-    /// This will panic if the `document` wasn't subscribed to.
-    pub async fn send_ephemeral(
-        &self,
-        document: &DocumentId,
-        operation: EphemerialOperation,
-    ) -> Result<()> {
-        let document_tx = {
-            self.document_tx
-                .read()
-                .await
-                .get(document)
-                .cloned()
-                .expect("Not subscribed to document with id {document_id}")
-        };
-
-        let bytes = encode_cbor(&MessageType::Ephemeral(operation))?;
-        document_tx.send(ToNetwork::Message { bytes }).await?;
-
-        Ok(())
     }
 }
