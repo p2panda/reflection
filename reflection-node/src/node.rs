@@ -15,13 +15,13 @@ use tracing::{error, info, warn};
 
 use crate::document::{Document, DocumentId, SubscribableDocument};
 use crate::ephemerial_operation::EphemerialOperation;
-use crate::network::Network;
+use crate::node_inner::NodeInner;
 use crate::operation::{LogType, create_operation, validate_operation};
 use crate::store::{DocumentStore, OperationStore};
 use crate::utils::CombinedMigrationSource;
 
 pub struct Node {
-    inner: OnceLock<Arc<Network>>,
+    inner: OnceLock<Arc<NodeInner>>,
     ready_notify: Arc<Notify>,
     documents: Arc<RwLock<HashMap<DocumentId, Arc<dyn SubscribableDocument>>>>,
     semaphore_operation_store: Semaphore,
@@ -45,7 +45,7 @@ impl Node {
         }
     }
 
-    async fn inner(&self) -> &Arc<Network> {
+    async fn inner(&self) -> &Arc<NodeInner> {
         if let Some(inner) = self.inner.get() {
             inner
         } else {
@@ -107,7 +107,7 @@ impl Node {
         };
 
         let inner = Arc::new(
-            Network::new(
+            NodeInner::new(
                 runtime,
                 network_id,
                 private_key,

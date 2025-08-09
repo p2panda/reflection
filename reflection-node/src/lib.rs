@@ -1,7 +1,7 @@
 pub mod document;
 mod ephemerial_operation;
-mod network;
 mod node;
+mod node_inner;
 mod operation;
 mod persistent_operation;
 mod store;
