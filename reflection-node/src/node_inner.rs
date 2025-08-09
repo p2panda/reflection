@@ -22,7 +22,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-enum MessageType {
+pub(crate) enum MessageType {
     Persistent(PersistentOperation),
     Ephemeral(EphemerialOperation),
 }
