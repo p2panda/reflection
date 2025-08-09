@@ -14,8 +14,8 @@ use tracing::info;
 use crate::document::{Document, DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::node_inner::NodeInner;
 
+use crate::document_store::DocumentStore;
 use crate::operation_store::OperationStore;
-use crate::store::DocumentStore;
 use crate::utils::CombinedMigrationSource;
 
 pub struct Node {

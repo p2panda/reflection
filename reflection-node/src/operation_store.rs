@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, SystemTimeError};
 
 use crate::document::DocumentId;
-use crate::store::LogId;
+use crate::document_store::LogId;
 use p2panda_core::{Body, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::{
     LogStore, OperationStore as TraitOperationStore, SqliteStore, SqliteStoreError,
