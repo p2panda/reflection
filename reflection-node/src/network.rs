@@ -2,7 +2,7 @@ use crate::document::DocumentId;
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::operation::ReflectionExtensions;
 use crate::persistent_operation::PersistentOperation;
-use crate::store::OperationStore;
+use crate::store::{DocumentStore, OperationStore};
 use anyhow::Result;
 use p2panda_core::{
     Body, Hash, Header, Operation, PrivateKey,
@@ -13,6 +13,7 @@ use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration, SystemEvent, ToNetwork};
 use p2panda_stream::IngestExt;
 use std::collections::HashMap;
+use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
@@ -27,23 +28,28 @@ enum MessageType {
 
 #[derive(Debug)]
 pub struct Network {
-    operation_store: OperationStore,
-    network: p2panda_net::Network<DocumentId>,
-    document_tx: RwLock<HashMap<DocumentId, mpsc::Sender<ToNetwork>>>,
+    pub(crate) runtime: Runtime,
+    pub(crate) operation_store: OperationStore,
+    pub(crate) document_store: DocumentStore,
+    pub(crate) private_key: PrivateKey,
+    pub(crate) network: p2panda_net::Network<DocumentId>,
+    pub(crate) document_tx: RwLock<HashMap<DocumentId, mpsc::Sender<ToNetwork>>>,
 }
 
 //const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
 //const BOOTSTRAP_NODE_ID: &str = "d825a2f929f935efcd6889bed5c3f5510b40f014969a729033d3fb7e33b97dbe";
 
 impl Network {
-    pub async fn spawn(
+    pub async fn new(
+        runtime: Runtime,
         network_id: Hash,
         private_key: PrivateKey,
         sync_config: SyncConfiguration<DocumentId>,
         operation_store: OperationStore,
+        document_store: DocumentStore,
     ) -> Result<Self> {
         let network = NetworkBuilder::new(network_id.into())
-            .private_key(private_key)
+            .private_key(private_key.clone())
             .discovery(LocalDiscovery::new())
             // NOTE(glyph): Internet networking is disabled until we can fix the
             // more-than-two-peers gossip issue.
@@ -66,7 +72,10 @@ impl Network {
             .await?;
 
         Ok(Self {
+            runtime,
             operation_store,
+            document_store,
+            private_key,
             network,
             document_tx: RwLock::new(HashMap::new()),
         })

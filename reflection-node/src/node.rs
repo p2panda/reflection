@@ -9,7 +9,7 @@ use p2panda_net::{SyncConfiguration, SystemEvent};
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
-use tokio::runtime::{Builder, Runtime};
+use tokio::runtime::Builder;
 use tokio::sync::{Notify, RwLock, Semaphore};
 use tracing::{error, info, warn};
 
@@ -21,7 +21,7 @@ use crate::store::{DocumentStore, OperationStore};
 use crate::utils::CombinedMigrationSource;
 
 pub struct Node {
-    inner: OnceLock<Arc<NodeInner>>,
+    inner: OnceLock<Arc<Network>>,
     ready_notify: Arc<Notify>,
     documents: Arc<RwLock<HashMap<DocumentId, Arc<dyn SubscribableDocument>>>>,
     semaphore_operation_store: Semaphore,
@@ -31,15 +31,6 @@ impl Default for Node {
     fn default() -> Self {
         Node::new()
     }
-}
-
-#[derive(Debug)]
-struct NodeInner {
-    runtime: Runtime,
-    operation_store: OperationStore,
-    document_store: DocumentStore,
-    network: Network,
-    private_key: PrivateKey,
 }
 
 impl Node {
@@ -54,7 +45,7 @@ impl Node {
         }
     }
 
-    async fn inner(&self) -> &Arc<NodeInner> {
+    async fn inner(&self) -> &Arc<Network> {
         if let Some(inner) = self.inner.get() {
             inner
         } else {
@@ -115,26 +106,22 @@ impl Node {
             SyncConfiguration::<DocumentId>::new(sync)
         };
 
-        let network = Network::spawn(
-            network_id,
-            private_key.clone(),
-            sync_config,
-            operation_store.clone(),
-        )
-        .await?;
-        let inner = Arc::new(NodeInner {
-            runtime,
-            operation_store,
-            document_store,
-            network,
-            private_key,
-        });
+        let inner = Arc::new(
+            Network::new(
+                runtime,
+                network_id,
+                private_key,
+                sync_config,
+                operation_store,
+                document_store,
+            )
+            .await?,
+        );
 
         let documents = self.documents.clone();
 
         let inner_clone = inner.clone();
         inner
-            .network
             .subscribe_events(move |system_event| {
                 let documents = documents.clone();
                 let inner_clone = inner_clone.clone();
@@ -178,7 +165,7 @@ impl Node {
         let inner = self.inner().await;
         let _guard = inner.runtime.enter();
 
-        inner.network.shutdown().await?;
+        inner.shutdown().await?;
 
         Ok(())
     }
@@ -302,7 +289,6 @@ impl Node {
             .spawn(async move {
                 let inner_clone2 = inner_clone.clone();
                 inner_clone2
-                    .network
                     .subscribe(
                         document_id,
                         move |operation| {
@@ -374,7 +360,7 @@ impl Node {
                     .set_last_accessed_for_document(&document_id, Some(Utc::now()))
                     .await?;
 
-                let result = inner_clone.network.unsubscribe(&document_id).await;
+                let result = inner_clone.unsubscribe(&document_id).await;
                 result
             })
             .await??;
@@ -408,10 +394,7 @@ impl Node {
                 .await?;
 
                 // Broadcast operation on gossip overlay.
-                inner_clone
-                    .network
-                    .send_operation(&document_id, operation)
-                    .await
+                inner_clone.send_operation(&document_id, operation).await
             })
             .await??;
 
@@ -471,10 +454,7 @@ impl Node {
                 .await?;
 
                 // Broadcast operation on gossip overlay.
-                inner_clone
-                    .network
-                    .send_operation(&document_id, operation)
-                    .await
+                inner_clone.send_operation(&document_id, operation).await
             })
             .await??;
 
@@ -492,10 +472,7 @@ impl Node {
             .runtime
             .spawn(async move {
                 // Broadcast ephemeral data on gossip overlay.
-                inner_clone
-                    .network
-                    .send_ephemeral(&document_id, operation)
-                    .await
+                inner_clone.send_ephemeral(&document_id, operation).await
             })
             .await??;
 
