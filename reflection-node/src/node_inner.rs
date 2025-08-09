@@ -27,7 +27,7 @@ enum MessageType {
 }
 
 #[derive(Debug)]
-pub struct Network {
+pub struct NodeInner {
     pub(crate) runtime: Runtime,
     pub(crate) operation_store: OperationStore,
     pub(crate) document_store: DocumentStore,
@@ -39,7 +39,7 @@ pub struct Network {
 //const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
 //const BOOTSTRAP_NODE_ID: &str = "d825a2f929f935efcd6889bed5c3f5510b40f014969a729033d3fb7e33b97dbe";
 
-impl Network {
+impl NodeInner {
     pub async fn new(
         runtime: Runtime,
         network_id: Hash,
