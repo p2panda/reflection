@@ -3,6 +3,7 @@ mod ephemerial_operation;
 mod node;
 mod node_inner;
 mod operation;
+mod operation_store;
 mod persistent_operation;
 mod store;
 mod utils;

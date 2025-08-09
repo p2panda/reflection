@@ -1,14 +1,11 @@
 use std::hash::Hash as StdHash;
-use std::time::SystemTime;
 
 use anyhow::{Result, bail};
-use p2panda_core::{Body, Extension, Header, Operation, PrivateKey, PruneFlag};
-use p2panda_store::LogStore;
-use p2panda_store::OperationStore as TraitOperationStore;
+use p2panda_core::{Extension, Header, Operation, PruneFlag};
 use serde::{Deserialize, Serialize};
 
 use crate::document::DocumentId;
-use crate::store::{LogId, OperationStore};
+use crate::store::LogId;
 
 /// Custom extensions for p2panda header.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -109,90 +106,6 @@ impl Extension<LogId> for ReflectionExtensions {
             None
         }
     }
-}
-
-/// Creates, signs and stores new operation in the author's append-only log.
-///
-/// If no document is specified we create a new operation in a new log. The resulting hash of the
-/// header can be used to identify that new document.
-pub async fn create_operation(
-    store: &mut OperationStore,
-    private_key: &PrivateKey,
-    log_type: LogType,
-    document: Option<DocumentId>,
-    body: Option<&[u8]>,
-    prune_flag: bool,
-) -> Result<Operation<ReflectionExtensions>> {
-    let body = body.map(Body::new);
-    let public_key = private_key.public_key();
-
-    let latest_operation = match document {
-        Some(ref document) => {
-            let log_id = LogId::new(log_type, document);
-            store.latest_operation(&public_key, &log_id).await?
-        }
-        None => None,
-    };
-
-    let (seq_num, backlink) = match latest_operation {
-        Some((header, _)) => (header.seq_num + 1, Some(header.hash())),
-        None => (0, None),
-    };
-
-    let timestamp = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)?
-        .as_secs();
-
-    let extensions = ReflectionExtensions {
-        prune_flag: PruneFlag::new(prune_flag),
-        log_type,
-        document,
-    };
-
-    let mut header = Header {
-        version: 1,
-        public_key,
-        signature: None,
-        payload_size: body.as_ref().map_or(0, |body| body.size()),
-        payload_hash: body.as_ref().map(|body| body.hash()),
-        timestamp,
-        seq_num,
-        backlink,
-        previous: vec![],
-        extensions: Some(extensions),
-    };
-    header.sign(private_key);
-
-    let document: DocumentId = header.extension().expect("document id from our own logs");
-    let log_id = LogId::new(log_type, &document);
-
-    let operation = Operation {
-        hash: header.hash(),
-        header,
-        body,
-    };
-
-    store
-        .insert_operation(
-            operation.hash,
-            &operation.header,
-            operation.body.as_ref(),
-            operation.header.to_bytes().as_slice(),
-            &log_id,
-        )
-        .await?;
-
-    if prune_flag {
-        store
-            .delete_operations(
-                &operation.header.public_key,
-                &log_id,
-                operation.header.seq_num,
-            )
-            .await?;
-    }
-
-    Ok(operation)
 }
 
 /// Custom validation for our own operation headers.

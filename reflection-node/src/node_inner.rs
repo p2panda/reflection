@@ -1,8 +1,9 @@
 use crate::document::DocumentId;
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::operation::ReflectionExtensions;
+use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
-use crate::store::{DocumentStore, OperationStore};
+use crate::store::DocumentStore;
 use anyhow::Result;
 use p2panda_core::{
     Body, Hash, Header, Operation, PrivateKey,
@@ -153,7 +154,7 @@ impl NodeInner {
             // NOTE(adz): The persisting part should happen later, we want to check the payload on
             // application layer first. In general "ingest" does too much at once and is
             // inflexible. Related issue: https://github.com/p2panda/p2panda/issues/696
-            .ingest(self.operation_store.clone(), 128)
+            .ingest(self.operation_store.clone_inner(), 128)
             .filter_map(|result| match result {
                 Ok(operation) => Some(operation),
                 Err(err) => {

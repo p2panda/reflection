@@ -16,15 +16,15 @@ use tracing::{error, info, warn};
 use crate::document::{Document, DocumentId, SubscribableDocument};
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node_inner::NodeInner;
-use crate::operation::{LogType, create_operation, validate_operation};
-use crate::store::{DocumentStore, OperationStore};
+use crate::operation::{LogType, validate_operation};
+use crate::operation_store::OperationStore;
+use crate::store::DocumentStore;
 use crate::utils::CombinedMigrationSource;
 
 pub struct Node {
     inner: OnceLock<Arc<NodeInner>>,
     wait_for_inner: Arc<Semaphore>,
     documents: Arc<RwLock<HashMap<DocumentId, Arc<dyn SubscribableDocument>>>>,
-    semaphore_operation_store: Semaphore,
 }
 
 impl Default for Node {
@@ -39,9 +39,6 @@ impl Node {
             inner: OnceLock::new(),
             wait_for_inner: Arc::new(Semaphore::new(0)),
             documents: Arc::new(RwLock::new(HashMap::new())),
-            // FIXME: This makes sure we only create one operation at the time and not in parallel
-            // Since we would mess up the sequence of operations
-            semaphore_operation_store: Semaphore::new(1),
         }
     }
 
@@ -104,7 +101,7 @@ impl Node {
         let document_store = DocumentStore::new(pool);
 
         let sync_config = {
-            let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone());
+            let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone_inner());
             SyncConfiguration::<DocumentId>::new(sync)
         };
 
@@ -184,21 +181,21 @@ impl Node {
 
     pub async fn create_document(&self) -> Result<DocumentId> {
         let inner = self.inner().await;
-        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         inner
             .runtime
             .spawn(async move {
-                let operation = create_operation(
-                    &mut inner_clone.operation_store.clone(),
-                    &inner_clone.private_key,
-                    LogType::Snapshot,
-                    None,
-                    None,
-                    false,
-                )
-                .await?;
+                let operation = inner_clone
+                    .operation_store
+                    .create_operation(
+                        &inner_clone.private_key,
+                        LogType::Snapshot,
+                        None,
+                        None,
+                        false,
+                    )
+                    .await?;
 
                 let document_id: DocumentId = operation
                     .header
@@ -253,7 +250,6 @@ impl Node {
     ) -> Result<()> {
         let document = Arc::new(document);
         let inner = self.inner().await;
-        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         let stored_operations = inner
@@ -349,7 +345,6 @@ impl Node {
 
     pub async fn unsubscribe(&self, document_id: &DocumentId) -> Result<()> {
         let inner = self.inner().await;
-        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         let document_id = *document_id;
@@ -377,23 +372,22 @@ impl Node {
     /// document (Delta-Based CRDT).
     pub async fn delta(&self, document_id: DocumentId, bytes: Vec<u8>) -> Result<()> {
         let inner = self.inner().await;
-        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         inner
             .runtime
             .spawn(async move {
-                let mut operation_store = inner_clone.operation_store.clone();
                 // Append one operation to our "ephemeral" delta log.
-                let operation = create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Delta,
-                    Some(document_id),
-                    Some(&bytes),
-                    false,
-                )
-                .await?;
+                let operation = inner_clone
+                    .operation_store
+                    .create_operation(
+                        &inner_clone.private_key,
+                        LogType::Delta,
+                        Some(document_id),
+                        Some(&bytes),
+                        false,
+                    )
+                    .await?;
 
                 // Broadcast operation on gossip overlay.
                 inner_clone.send_operation(&document_id, operation).await
@@ -415,28 +409,26 @@ impl Node {
     /// operations.
     pub async fn snapshot(&self, document_id: DocumentId, snapshot_bytes: Vec<u8>) -> Result<()> {
         let inner = self.inner().await;
-        let _permit = self.semaphore_operation_store.acquire().await.unwrap();
 
         let inner_clone = inner.clone();
         inner
             .runtime
             .spawn(async move {
-                let mut operation_store = inner_clone.operation_store.clone();
-
                 // Append an operation to our "snapshot" log and set the prune flag to
                 // true. This will remove previous snapshots.
                 //
                 // Snapshots are not broadcasted on the gossip overlay as they would be
                 // too large. Peers will sync them up when they join the document.
-                create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Snapshot,
-                    Some(document_id),
-                    Some(&snapshot_bytes),
-                    true,
-                )
-                .await?;
+                inner_clone
+                    .operation_store
+                    .create_operation(
+                        &inner_clone.private_key,
+                        LogType::Snapshot,
+                        Some(document_id),
+                        Some(&snapshot_bytes),
+                        true,
+                    )
+                    .await?;
 
                 // Append an operation to our "ephemeral" delta log and set the prune
                 // flag to true.
@@ -445,15 +437,16 @@ impl Node {
                 // some sort of garbage collection whenever we snapshot. Snapshots
                 // already contain all history, there is no need to keep duplicate
                 // "delta" data around.
-                let operation = create_operation(
-                    &mut operation_store,
-                    &inner_clone.private_key,
-                    LogType::Delta,
-                    Some(document_id),
-                    None,
-                    true,
-                )
-                .await?;
+                let operation = inner_clone
+                    .operation_store
+                    .create_operation(
+                        &inner_clone.private_key,
+                        LogType::Delta,
+                        Some(document_id),
+                        None,
+                        true,
+                    )
+                    .await?;
 
                 // Broadcast operation on gossip overlay.
                 inner_clone.send_operation(&document_id, operation).await
