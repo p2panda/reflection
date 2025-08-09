@@ -14,12 +14,12 @@ use crate::{
     document::{Document, DocumentId},
     documents::Documents,
 };
-use reflection_node::Node;
+use reflection_node::node::{Node, NodeError};
 
 #[derive(Error, Debug)]
 pub enum StartupError {
     #[error(transparent)]
-    Node(#[from] anyhow::Error),
+    Node(#[from] NodeError),
 }
 
 mod imp {

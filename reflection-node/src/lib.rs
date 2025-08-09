@@ -2,7 +2,7 @@ mod author_tracker;
 pub mod document;
 mod document_store;
 mod ephemerial_operation;
-mod node;
+pub mod node;
 mod node_inner;
 mod operation;
 mod operation_store;
@@ -10,13 +10,12 @@ mod persistent_operation;
 mod utils;
 
 pub use document::SubscribableDocument;
-pub use node::Node;
 pub use p2panda_core;
 
 #[cfg(test)]
 mod tests {
-    use crate::Node;
     use crate::SubscribableDocument;
+    use crate::node::Node;
     use p2panda_core::Hash;
     use p2panda_core::PrivateKey;
     use p2panda_core::PublicKey;

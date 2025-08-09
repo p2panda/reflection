@@ -1,19 +1,28 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::author_tracker::{AuthorMessage, AuthorTracker};
 use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::document_store::DocumentStore;
 use crate::ephemerial_operation::EphemerialOperation;
+use crate::node::NodeError;
 use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
-use anyhow::Result;
+use crate::utils::CombinedMigrationSource;
+
 use p2panda_core::{Body, Hash, Header, PrivateKey, cbor::decode_cbor};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
 use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
+use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_stream::IngestExt;
-use tokio::{runtime::Runtime, sync::mpsc};
+use p2panda_sync::log_sync::LogSyncProtocol;
+use sqlx::{migrate::Migrator, sqlite};
+use tokio::{
+    runtime::{Builder, Runtime},
+    sync::mpsc,
+};
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tracing::{error, info, warn};
 
@@ -38,13 +47,54 @@ pub struct NodeInner {
 
 impl NodeInner {
     pub async fn new(
-        runtime: Runtime,
         network_id: Hash,
         private_key: PrivateKey,
-        sync_config: SyncConfiguration<DocumentId>,
-        operation_store: OperationStore,
-        document_store: DocumentStore,
-    ) -> Result<Self> {
+        db_location: Option<&Path>,
+    ) -> Result<Self, NodeError> {
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()?;
+
+        let _guard = runtime.enter();
+
+        let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
+            .shared_cache(true)
+            .create_if_missing(true);
+        let connection_options = if let Some(db_location) = db_location {
+            let db_file = db_location.join("database.sqlite");
+            info!("Database file location: {db_file:?}");
+            connection_options.filename(db_file)
+        } else {
+            connection_options.in_memory(true)
+        };
+
+        let pool = if db_location.is_some() {
+            sqlx::sqlite::SqlitePool::connect_with(connection_options).await?
+        } else {
+            // FIXME: we need to set max connection to 1 for in memory sqlite DB.
+            // Probably has to do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
+            let pool_options = sqlite::SqlitePoolOptions::new().max_connections(1);
+            pool_options.connect_with(connection_options).await?
+        };
+
+        // Run migration for p2panda OperationStore and for the our DocumentStore
+        Migrator::new(CombinedMigrationSource::new(vec![
+            operation_store_migrations(),
+            sqlx::migrate!(),
+        ]))
+        .await?
+        .run(&pool)
+        .await?;
+
+        let operation_store = OperationStore::new(pool.clone());
+        let document_store = DocumentStore::new(pool);
+
+        let sync_config = {
+            let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone_inner());
+            SyncConfiguration::<DocumentId>::new(sync)
+        };
+
         let network = NetworkBuilder::new(network_id.into())
             .private_key(private_key.clone())
             .discovery(LocalDiscovery::new())
@@ -77,7 +127,7 @@ impl NodeInner {
         })
     }
 
-    pub async fn shutdown(&self) -> Result<()> {
+    pub async fn shutdown(&self) -> Result<(), NodeError> {
         // FIXME: If we can just clone the network why does shutdown consume self?
         self.network.clone().shutdown().await?;
         Ok(())
