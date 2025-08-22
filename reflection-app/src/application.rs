@@ -75,19 +75,20 @@ mod imp {
 
     impl ApplicationImpl for ReflectionApplication {
         fn startup(&self) {
-            let service: Result<Service, Error> = glib::MainContext::new().block_on(async move {
-                let private_key = secret::get_or_create_identity().await?;
+            let service: Result<Service, Error> =
+                glib::MainContext::default().block_on(async move {
+                    let private_key = secret::get_or_create_identity().await?;
 
-                let mut data_path = glib::user_data_dir();
-                data_path.push("Reflection");
-                data_path.push(private_key.public_key().to_string());
-                fs::create_dir_all(&data_path)?;
-                let data_dir = gio::File::for_path(data_path);
+                    let mut data_path = glib::user_data_dir();
+                    data_path.push("Reflection");
+                    data_path.push(private_key.public_key().to_string());
+                    fs::create_dir_all(&data_path)?;
+                    let data_dir = gio::File::for_path(data_path);
 
-                let service = Service::new(&private_key, Some(&data_dir));
-                service.startup().await?;
-                Ok(service)
-            });
+                    let service = Service::new(&private_key, Some(&data_dir));
+                    service.startup().await?;
+                    Ok(service)
+                });
 
             match service {
                 Ok(service) => {
