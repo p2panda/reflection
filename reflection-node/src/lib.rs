@@ -19,21 +19,37 @@ mod tests {
     use p2panda_core::Hash;
     use p2panda_core::PrivateKey;
     use p2panda_core::PublicKey;
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
     use test_log::test;
-    use tokio::sync::mpsc;
+    use tokio::sync::{Mutex, mpsc};
 
-    #[test(tokio::test(flavor = "multi_thread", worker_threads = 1))]
-    async fn create_document() {
-        let node = Node::new();
-        let private_key = PrivateKey::new();
-        let network_id = Hash::new(b"reflection");
-        node.run(private_key, network_id, None).await.unwrap();
-        let document_id = node.create_document().await.unwrap();
-        let documents = node.documents().await.unwrap();
-        assert_eq!(documents.len(), 1);
-        assert_eq!(documents.first().unwrap().id, document_id);
+    #[test]
+    fn create_document() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
+            .unwrap();
+
+        let node = runtime.block_on(async move {
+            let private_key = PrivateKey::new();
+            let network_id = Hash::new(b"reflection");
+            let node = Node::new();
+            node.run(private_key, network_id, None).await.unwrap();
+
+            let document_id = node.create_document().await.unwrap();
+            let documents = node.documents().await.unwrap();
+
+            assert_eq!(documents.len(), 1);
+            assert_eq!(documents.first().unwrap().id, document_id);
+
+            node.shutdown().await.unwrap();
+            node
+        });
+
+        // Node can't be dropped inside an async context
+        drop(node);
     }
+
     #[derive(Clone)]
     struct TestDocument {
         tx: mpsc::UnboundedSender<Vec<u8>>,
@@ -50,7 +66,7 @@ mod tests {
         }
 
         async fn wait_for_bytes(&self) -> Vec<u8> {
-            self.rx.lock().unwrap().recv().await.unwrap()
+            self.rx.lock().await.recv().await.unwrap()
         }
     }
 
@@ -64,38 +80,61 @@ mod tests {
         fn ephemeral_bytes_received(&self, _author: PublicKey, _data: Vec<u8>) {}
     }
 
-    #[test(tokio::test(flavor = "multi_thread", worker_threads = 1))]
-    async fn subscribe_document() {
-        let node = Node::new();
-        let test_document = TestDocument::new();
-        let private_key = PrivateKey::new();
-        let network_id = Hash::new(b"reflection");
-        node.run(private_key, network_id, None).await.unwrap();
-        let document_id = node.create_document().await.unwrap();
-        let documents = node.documents().await.unwrap();
-        assert_eq!(documents.len(), 1);
-        assert_eq!(documents.first().unwrap().id, document_id);
-
-        node.subscribe(document_id, test_document).await.unwrap();
-
-        let node2 = Node::new();
-        let test_document2 = TestDocument::new();
-        let private_key = PrivateKey::new();
-        let network_id = Hash::new(b"reflection");
-        node2.run(private_key, network_id, None).await.unwrap();
-        node2
-            .subscribe(document_id, test_document2.clone())
-            .await
-            .unwrap();
-        let documents2 = node2.documents().await.unwrap();
-        assert_eq!(documents2.len(), 1);
-        assert_eq!(documents2.first().unwrap().id, document_id);
-
-        let test_snapshot = "test".as_bytes().to_vec();
-        node.snapshot(document_id, test_snapshot.clone())
-            .await
+    #[test]
+    fn subscribe_document() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .build()
             .unwrap();
 
-        assert_eq!(test_document2.wait_for_bytes().await, test_snapshot);
+        let nodes = runtime.block_on(async move {
+            let private_key = PrivateKey::new();
+            let network_id = Hash::new(b"reflection");
+            let node = Node::new();
+            node.run(private_key, network_id, None).await.unwrap();
+
+            let test_document = TestDocument::new();
+
+            let document_id = node.create_document().await.unwrap();
+            let documents = node.documents().await.unwrap();
+            assert_eq!(documents.len(), 1);
+            assert_eq!(documents.first().unwrap().id, document_id);
+
+            let subscription = node.subscribe(document_id, test_document).await.unwrap();
+
+            let document_id = subscription.id;
+
+            let private_key2 = PrivateKey::new();
+            let network_id2 = Hash::new(b"reflection");
+            let node2 = Node::new();
+            node2.run(private_key2, network_id2, None).await.unwrap();
+
+            let test_document2 = TestDocument::new();
+
+            let _subscription2 = node2
+                .subscribe(document_id, test_document2.clone())
+                .await
+                .unwrap();
+
+            let documents2 = node2.documents().await.unwrap();
+            assert_eq!(documents2.len(), 1);
+            assert_eq!(documents2.first().unwrap().id, document_id);
+
+            let test_snapshot = "test".as_bytes().to_vec();
+            subscription
+                .send_snapshot(test_snapshot.clone())
+                .await
+                .unwrap();
+
+            assert_eq!(test_document2.wait_for_bytes().await, test_snapshot);
+
+            node.shutdown().await.unwrap();
+            node2.shutdown().await.unwrap();
+
+            (node, node2)
+        });
+
+        // Node can't be dropped inside a tokio async context
+        drop(nodes);
     }
 }
