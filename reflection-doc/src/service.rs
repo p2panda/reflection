@@ -105,12 +105,10 @@ impl Service {
         Ok(())
     }
 
-    pub fn shutdown(&self) {
-        glib::MainContext::new().block_on(async move {
-            if let Err(error) = self.imp().node.shutdown().await {
-                error!("Failed to shutdown service: {}", error);
-            }
-        });
+    pub async fn shutdown(&self) {
+        if let Err(error) = self.imp().node.shutdown().await {
+            error!("Failed to shutdown service: {}", error);
+        }
     }
 
     pub(crate) fn node(&self) -> &Node {
