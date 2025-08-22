@@ -3,7 +3,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
-use gio::prelude::ApplicationExtManual;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
@@ -78,7 +77,8 @@ mod imp {
         service: OnceCell<Service>,
         #[property(get, set = Self::set_authors, construct_only)]
         authors: OnceCell<Authors>,
-        snapshot_task: Mutex<Option<glib::SourceId>>,
+        pub(super) tasks: Mutex<Vec<glib::JoinHandle<()>>>,
+        pub(super) snapshot_scheduled: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -152,7 +152,7 @@ mod imp {
             self.obj().notify_name();
 
             if let Some(subscription) = self.subscription() {
-                self.main_context().spawn(clone!(
+                let handle = self.main_context().spawn(clone!(
                     #[weak]
                     subscription,
                     async move {
@@ -161,6 +161,7 @@ mod imp {
                         }
                     }
                 ));
+                self.tasks.lock().unwrap().push(handle);
             }
         }
 
@@ -208,7 +209,7 @@ mod imp {
             };
 
             if let Some(subscription) = self.subscription() {
-                self.main_context().spawn(clone!(
+                let handle = self.main_context().spawn(clone!(
                     #[weak]
                     subscription,
                     async move {
@@ -217,6 +218,7 @@ mod imp {
                         }
                     }
                 ));
+                self.tasks.lock().unwrap().push(handle);
             }
         }
 
@@ -252,8 +254,7 @@ mod imp {
         }
 
         fn mark_for_snapshot(&self) {
-            let mut snapshot_task = self.snapshot_task.lock().unwrap();
-            if snapshot_task.is_none() {
+            if !self.snapshot_scheduled.get() {
                 let obj = self.obj();
                 let handle = self.main_context().spawn_with_priority(
                     glib::source::Priority::LOW,
@@ -267,12 +268,13 @@ mod imp {
                             )
                             .await;
                             obj.store_snapshot().await;
-                            obj.imp().snapshot_task.lock().unwrap().take();
+                            obj.imp().snapshot_scheduled.set(false);
                         }
                     ),
                 );
+                self.tasks.lock().unwrap().push(handle);
 
-                *snapshot_task = handle.into_source_id().ok();
+                self.snapshot_scheduled.set(true);
             }
         }
 
@@ -356,7 +358,7 @@ mod imp {
                     obj.imp().mark_for_snapshot();
 
                     if let Some(subscription) = obj.imp().subscription() {
-                        obj.imp().main_context().spawn(clone!(
+                        let handle = obj.imp().main_context().spawn(clone!(
                             #[weak]
                             subscription,
                             async move {
@@ -369,6 +371,7 @@ mod imp {
                                 }
                             }
                         ));
+                        obj.imp().tasks.lock().unwrap().push(handle);
                     }
 
                     true
@@ -437,6 +440,12 @@ mod imp {
             })
         }
         fn dispose(&self) {
+            if !self.tasks.lock().unwrap().is_empty() {
+                error!(
+                    "Document with ID {} was not unsubscribed before dispose.",
+                    self.obj().id()
+                );
+            }
         }
 
         fn constructed(&self) {
