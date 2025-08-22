@@ -1,5 +1,6 @@
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::Result;
 use gio::prelude::ApplicationExtManual;
@@ -8,7 +9,9 @@ use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use reflection_node::document::{DocumentId as DocumentIdNode, SubscribableDocument};
+use reflection_node::document::{
+    DocumentId as DocumentIdNode, SubscribableDocument, Subscription as DocumentSubscription,
+};
 use reflection_node::p2panda_core;
 use tracing::error;
 
@@ -46,7 +49,7 @@ enum EphemerialData {
 mod imp {
     use super::*;
     use std::cell::{Cell, OnceCell};
-    use std::sync::{Arc, Mutex, OnceLock};
+    use std::sync::{Arc, Mutex, OnceLock, RwLock};
     use std::time::Duration;
 
     /// Identifier of container where we handle the text CRDT in a Loro document.
@@ -64,13 +67,13 @@ mod imp {
         #[property(get, construct_only)]
         name: Mutex<Option<String>>,
         #[property(get, construct_only, set)]
-        last_accessed: Mutex<Option<glib::DateTime>>,
+        pub(super) last_accessed: Mutex<Option<glib::DateTime>>,
         #[property(name = "text", get = Self::text, type = String)]
         pub(super) crdt_doc: OnceCell<LoroDoc>,
         #[property(get, construct_only, set = Self::set_id)]
         id: OnceCell<DocumentId>,
-        #[property(get, set = Self::set_subscribed)]
-        subscribed: Cell<bool>,
+        #[property(name = "subscribed", get = Self::subscribed, type = bool)]
+        pub(super) subscription: RwLock<Option<Arc<DocumentSubscription>>>,
         #[property(get, construct_only)]
         service: OnceCell<Service>,
         #[property(get, set = Self::set_authors, construct_only)]
@@ -148,25 +151,17 @@ mod imp {
             *self.name.lock().unwrap() = name.clone();
             self.obj().notify_name();
 
-            let obj = self.obj();
-            self.main_context().spawn(clone!(
-                #[weak]
-                obj,
-                async move {
-                    let document_id = obj.id().0;
-                    if let Err(error) = obj
-                        .service()
-                        .node()
-                        .set_name_for_document(&document_id, name)
-                        .await
-                    {
-                        error!(
-                            "Failed to update name for document {}: {}",
-                            document_id, error
-                        );
+            if let Some(subscription) = self.subscription() {
+                self.main_context().spawn(clone!(
+                    #[weak]
+                    subscription,
+                    async move {
+                        if let Err(error) = subscription.set_name(name).await {
+                            error!("Failed to update name for document: {error}");
+                        }
                     }
-                }
-            ));
+                ));
+            }
         }
 
         fn set_id(&self, id: Option<DocumentId>) {
@@ -212,22 +207,17 @@ mod imp {
                 }
             };
 
-            let obj = self.obj();
-            self.main_context().spawn(clone!(
-                #[weak]
-                obj,
-                async move {
-                    let document_id = obj.id().0;
-                    if let Err(error) = obj
-                        .service()
-                        .node()
-                        .ephemeral(document_id, cursor_bytes)
-                        .await
-                    {
-                        error!("Failed to send cursor position: {}", error);
+            if let Some(subscription) = self.subscription() {
+                self.main_context().spawn(clone!(
+                    #[weak]
+                    subscription,
+                    async move {
+                        if let Err(error) = subscription.send_ephemeral(cursor_bytes).await {
+                            error!("Failed to send cursor position: {}", error);
+                        }
                     }
-                }
-            ));
+                ));
+            }
         }
 
         /// Apply changes to the CRDT from a message received from another peer
@@ -239,59 +229,8 @@ mod imp {
             }
         }
 
-        pub fn set_subscribed(&self, subscribed: bool) {
-            if self.obj().subscribed() == subscribed {
-                return;
-            }
-
-            self.subscribed.set(subscribed);
-
-            if subscribed {
-                *self.last_accessed.lock().unwrap() = None;
-
-                let obj = self.obj();
-                self.main_context().spawn(clone!(
-                    #[weak]
-                    obj,
-                    async move {
-                        let document_id = obj.id().0;
-                        let handle = DocumentHandle(obj.downgrade());
-                        if let Err(error) =
-                            obj.service().node().subscribe(document_id, handle).await
-                        {
-                            error!("Failed to subscribe to document: {}", error);
-                            obj.imp().set_subscribed(false);
-                        }
-                    }
-                ));
-            } else {
-                *self.last_accessed.lock().unwrap() = glib::DateTime::now_utc().ok();
-
-                if let Some(task) = self.snapshot_task.lock().unwrap().take() {
-                    task.remove();
-                }
-
-                let obj = self.obj();
-                // Keep the application alive till we completed the unsubscription task
-                let guard = gio::Application::default().and_then(|app| Some(app.hold()));
-                // Keep a strong reference to the document to ensure the document lives long enough
-                self.main_context().spawn_local(clone!(
-                    #[strong]
-                    obj,
-                    async move {
-                        // Store the latest snapshot before unsubscribing
-                        obj.store_snapshot().await;
-
-                        let document_id = obj.id().0;
-                        if let Err(error) = obj.service().node().unsubscribe(&document_id).await {
-                            error!("Failed to unsubscribe document {}: {}", document_id, error);
-                        }
-                        drop(guard);
-                    }
-                ));
-            }
-            self.obj().notify_last_accessed();
-            self.obj().notify_subscribed();
+        fn subscribed(&self) -> bool {
+            self.subscription().is_some()
         }
 
         fn emit_text_inserted(&self, pos: i32, text: String) {
@@ -415,16 +354,22 @@ mod imp {
                 move |delta_bytes| {
                     let delta_bytes = delta_bytes.to_vec();
                     obj.imp().mark_for_snapshot();
-                    // Move a strong reference to the Document into the spawn,
-                    // to ensure changes are always propagated to the network
-                    obj.main_context().spawn(async move {
-                        // Broadcast a "text delta" to all peers
-                        if let Err(error) =
-                            obj.service().node().delta(obj.id().0, delta_bytes).await
-                        {
-                            error!("Failed to send delta of document to the network: {}", error);
-                        }
-                    });
+
+                    if let Some(subscription) = obj.imp().subscription() {
+                        obj.imp().main_context().spawn(clone!(
+                            #[weak]
+                            subscription,
+                            async move {
+                                // Broadcast a "text delta" to all peers
+                                if let Err(error) = subscription.send_delta(delta_bytes).await {
+                                    error!(
+                                        "Failed to send delta of document to the network: {}",
+                                        error
+                                    );
+                                }
+                            }
+                        ));
+                    }
 
                     true
                 }
@@ -467,6 +412,10 @@ mod imp {
                 }
             }
         }
+
+        pub(super) fn subscription(&self) -> Option<Arc<DocumentSubscription>> {
+            self.subscription.read().unwrap().clone()
+        }
     }
 
     #[glib::derived_properties]
@@ -488,7 +437,6 @@ mod imp {
             })
         }
         fn dispose(&self) {
-            self.set_subscribed(false);
         }
 
         fn constructed(&self) {
@@ -573,26 +521,94 @@ impl Document {
         self.imp().set_insert_cursor(position as usize);
     }
 
+    pub async fn subscribe(&self) {
+        if self.subscribed() {
+            return;
+        }
+
+        let document_id = self.id().0;
+        let handle = DocumentHandle(self.downgrade());
+        match self.service().node().subscribe(document_id, handle).await {
+            Ok(subscription) => {
+                self.imp()
+                    .subscription
+                    .write()
+                    .unwrap()
+                    .replace(Arc::new(subscription));
+            }
+            Err(error) => {
+                error!("Failed to subscribe to document: {}", error);
+            }
+        }
+
+        *self.imp().last_accessed.lock().unwrap() = None;
+
+        self.notify_last_accessed();
+        self.notify_subscribed();
+    }
+
+    pub async fn unsubscribe(&self) {
+        let subscription = self.imp().subscription.write().unwrap().take();
+
+        if let Some(subscription) = subscription {
+            let snapshot_bytes = self
+                .imp()
+                .crdt_doc
+                .get()
+                .expect("crdt_doc to be set")
+                .export(ExportMode::Snapshot)
+                .expect("encoded crdt snapshot");
+
+            if let Err(error) = subscription.send_snapshot(snapshot_bytes).await {
+                error!(
+                    "Failed to send snapshot of document to the network: {}",
+                    error
+                );
+            }
+
+            let tasks = {
+                let mut tasks = self.imp().tasks.lock().unwrap();
+                std::mem::take(&mut *tasks)
+            };
+
+            for task in tasks {
+                if let Err(error) = task.await {
+                    error!("Failed to complete task while unsubscribing: {error}");
+                }
+            }
+
+            if let Err(error) = Arc::into_inner(subscription)
+                .expect("Expected to have exactly one strong reference to Arc<Subscription>")
+                .unsubscribe()
+                .await
+            {
+                error!("Failed to unsubscribe document: {}", error);
+            }
+        }
+
+        *self.imp().last_accessed.lock().unwrap() = glib::DateTime::now_utc().ok();
+
+        self.notify_last_accessed();
+        self.notify_subscribed();
+    }
+
     /// Persist the snapshot.
     pub(crate) async fn store_snapshot(&self) {
-        // FIXME: only store a new snapshot if it changed since the previous snapshot
-        let snapshot_bytes = self
-            .imp()
-            .crdt_doc
-            .get()
-            .expect("crdt_doc to be set")
-            .export(ExportMode::Snapshot)
-            .expect("encoded crdt snapshot");
-        if let Err(error) = self
-            .service()
-            .node()
-            .snapshot(self.id().0, snapshot_bytes)
-            .await
-        {
-            error!(
-                "Failed to send snapshot of document to the network: {}",
-                error
-            );
+        if let Some(subscription) = self.imp().subscription() {
+            // FIXME: only store a new snapshot if it changed since the previous snapshot
+            let snapshot_bytes = self
+                .imp()
+                .crdt_doc
+                .get()
+                .expect("crdt_doc to be set")
+                .export(ExportMode::Snapshot)
+                .expect("encoded crdt snapshot");
+            if let Err(error) = subscription.send_snapshot(snapshot_bytes).await {
+                error!(
+                    "Failed to send snapshot of document to the network: {}",
+                    error
+                );
+            }
         }
     }
 }
