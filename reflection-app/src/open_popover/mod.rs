@@ -186,7 +186,7 @@ mod imp {
                             let document = service
                                 .documents()
                                 .by_id(document_id)
-                                .unwrap_or_else(|| Document::new(&service, Some(document_id)));
+                                .unwrap_or_else(|| Document::new(&service, document_id));
 
                             this.obj()
                                 .emit_by_name::<()>("document-activated", &[&document]);

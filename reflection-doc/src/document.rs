@@ -69,7 +69,7 @@ mod imp {
         pub(super) last_accessed: Mutex<Option<glib::DateTime>>,
         #[property(name = "text", get = Self::text, type = String)]
         pub(super) crdt_doc: OnceCell<LoroDoc>,
-        #[property(get, construct_only, set = Self::set_id)]
+        #[property(get, construct_only)]
         id: OnceCell<DocumentId>,
         #[property(name = "subscribed", get = Self::subscribed, type = bool)]
         pub(super) subscription: RwLock<Option<Arc<DocumentSubscription>>>,
@@ -162,12 +162,6 @@ mod imp {
                     }
                 ));
                 self.tasks.lock().unwrap().push(handle);
-            }
-        }
-
-        fn set_id(&self, id: Option<DocumentId>) {
-            if let Some(id) = id {
-                self.id.set(id).expect("Document id can only be set once");
             }
         }
 
@@ -451,18 +445,6 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            if self.id.get().is_none() {
-                let document_id = glib::MainContext::new().block_on(async move {
-                    self.obj()
-                        .service()
-                        .node()
-                        .create_document()
-                        .await
-                        .expect("Create document")
-                });
-                self.set_id(Some(DocumentId(document_id)));
-            }
-
             self.setup_loro_document();
 
             self.authors.get_or_init(|| {
@@ -482,16 +464,46 @@ glib::wrapper! {
     pub struct Document(ObjectSubclass<imp::Document>);
 }
 impl Document {
-    pub fn new(service: &Service, id: Option<&DocumentId>) -> Self {
+    pub fn new(service: &Service, id: &DocumentId) -> Self {
         glib::Object::builder()
             .property("service", service)
             .property("id", id)
             .build()
     }
 
+    pub async fn create(service: &Service) -> Self {
+        let id = service
+            .node()
+            .create_document()
+            .await
+            .expect("Create document");
+
+        glib::Object::builder()
+            .property("service", service)
+            .property("id", DocumentId(id))
+            .build()
+    }
+
+    pub async fn create_with_main_context(
+        service: &Service,
+        main_context: &glib::MainContext,
+    ) -> Self {
+        let id = service
+            .node()
+            .create_document()
+            .await
+            .expect("Create document");
+
+        glib::Object::builder()
+            .property("service", service)
+            .property("id", DocumentId(id))
+            .property("main-context", main_context)
+            .build()
+    }
+
     pub fn with_main_context(
         service: &Service,
-        id: Option<&DocumentId>,
+        id: &DocumentId,
         main_context: &glib::MainContext,
     ) -> Self {
         glib::Object::builder()
