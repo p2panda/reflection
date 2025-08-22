@@ -1,4 +1,4 @@
-use gio::prelude::FileExt;
+use gio::prelude::{FileExt, ListModelExtManual};
 use glib::Properties;
 use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
@@ -106,6 +106,10 @@ impl Service {
     }
 
     pub async fn shutdown(&self) {
+        for document in self.documents().iter::<Document>() {
+            document.unwrap().unsubscribe().await;
+        }
+
         if let Err(error) = self.imp().node.shutdown().await {
             error!("Failed to shutdown service: {}", error);
         }
