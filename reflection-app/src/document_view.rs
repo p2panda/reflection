@@ -232,10 +232,6 @@ mod imp {
             let document = Document::new(self.service.get().unwrap(), None);
             self.set_document(document);
         }
-
-        fn dispose(&self) {
-            self.obj().document().set_subscribed(false);
-        }
     }
 
     impl DocumentView {
@@ -276,11 +272,24 @@ mod imp {
             self.connection_button_label
                 .set_label(&format!("{}", authors.n_items()));
 
-            document.set_subscribed(true);
+            glib::spawn_future_local(clone!(
+                #[weak]
+                document,
+                async move {
+                    document.subscribe().await;
+                }
+            ));
+
             let old_document = self.document.replace(Some(document));
 
             if let Some(old_document) = old_document {
-                old_document.set_subscribed(false);
+                glib::spawn_future_local(clone!(
+                    #[weak]
+                    old_document,
+                    async move {
+                        old_document.unsubscribe().await;
+                    }
+                ));
             }
 
             self.obj().notify("document");
