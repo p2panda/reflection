@@ -59,6 +59,8 @@ mod imp {
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
+        #[property(get = Self::main_context, set, nullable)]
+        main_context: OnceLock<glib::MainContext>,
         #[property(get, construct_only)]
         name: Mutex<Option<String>>,
         #[property(get, construct_only, set)]
@@ -109,6 +111,13 @@ mod imp {
     }
 
     impl Document {
+        fn main_context(&self) -> glib::MainContext {
+            self.main_context
+                .get()
+                .unwrap_or(&glib::MainContext::ref_thread_default())
+                .clone()
+        }
+
         fn set_authors(&self, authors: Option<Authors>) {
             if let Some(authors) = authors {
                 self.authors.set(authors).unwrap();
@@ -140,7 +149,7 @@ mod imp {
             self.obj().notify_name();
 
             let obj = self.obj();
-            glib::spawn_future(clone!(
+            self.main_context().spawn(clone!(
                 #[weak]
                 obj,
                 async move {
@@ -204,7 +213,7 @@ mod imp {
             };
 
             let obj = self.obj();
-            glib::spawn_future(clone!(
+            self.main_context().spawn(clone!(
                 #[weak]
                 obj,
                 async move {
@@ -241,7 +250,7 @@ mod imp {
                 *self.last_accessed.lock().unwrap() = None;
 
                 let obj = self.obj();
-                glib::spawn_future(clone!(
+                self.main_context().spawn(clone!(
                     #[weak]
                     obj,
                     async move {
@@ -266,7 +275,7 @@ mod imp {
                 // Keep the application alive till we completed the unsubscription task
                 let guard = gio::Application::default().and_then(|app| Some(app.hold()));
                 // Keep a strong reference to the document to ensure the document lives long enough
-                glib::spawn_future_local(clone!(
+                self.main_context().spawn_local(clone!(
                     #[strong]
                     obj,
                     async move {
@@ -307,8 +316,7 @@ mod imp {
             let mut snapshot_task = self.snapshot_task.lock().unwrap();
             if snapshot_task.is_none() {
                 let obj = self.obj();
-                let ctx = glib::MainContext::ref_thread_default();
-                let handle = ctx.spawn_with_priority(
+                let handle = self.main_context().spawn_with_priority(
                     glib::source::Priority::LOW,
                     clone!(
                         #[weak]
@@ -409,7 +417,7 @@ mod imp {
                     obj.imp().mark_for_snapshot();
                     // Move a strong reference to the Document into the spawn,
                     // to ensure changes are always propagated to the network
-                    glib::spawn_future(async move {
+                    obj.main_context().spawn(async move {
                         // Broadcast a "text delta" to all peers
                         if let Err(error) =
                             obj.service().node().delta(obj.id().0, delta_bytes).await
@@ -524,6 +532,18 @@ impl Document {
             .build()
     }
 
+    pub fn with_main_context(
+        service: &Service,
+        id: Option<&DocumentId>,
+        main_context: &glib::MainContext,
+    ) -> Self {
+        glib::Object::builder()
+            .property("service", service)
+            .property("id", id)
+            .property("main-context", main_context)
+            .build()
+    }
+
     pub(crate) fn with_state(
         service: &Service,
         id: Option<&DocumentId>,
@@ -585,8 +605,7 @@ struct DocumentHandle(glib::WeakRef<Document>);
 impl SubscribableDocument for DocumentHandle {
     fn bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
-            let context = glib::MainContext::ref_thread_default();
-            context.invoke(move || {
+            document.main_context().invoke(move || {
                 document.imp().on_remote_message(data);
                 document.authors().ensure_author(PublicKey(author));
             });
@@ -595,8 +614,7 @@ impl SubscribableDocument for DocumentHandle {
 
     fn authors_joined(&self, authors: Vec<p2panda_core::PublicKey>) {
         if let Some(document) = self.0.upgrade() {
-            let context = glib::MainContext::ref_thread_default();
-            context.invoke(move || {
+            document.main_context().invoke(move || {
                 for author in authors.into_iter() {
                     document.authors().add_or_update(PublicKey(author), true);
                 }
@@ -606,8 +624,7 @@ impl SubscribableDocument for DocumentHandle {
 
     fn author_set_online(&self, author: p2panda_core::PublicKey, is_online: bool) {
         if let Some(document) = self.0.upgrade() {
-            let context = glib::MainContext::ref_thread_default();
-            context.invoke(move || {
+            document.main_context().invoke(move || {
                 document
                     .authors()
                     .add_or_update(PublicKey(author), is_online);
@@ -617,8 +634,7 @@ impl SubscribableDocument for DocumentHandle {
 
     fn ephemeral_bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
-            let context = glib::MainContext::ref_thread_default();
-            context.invoke(move || {
+            document.main_context().invoke(move || {
                 if let Ok(data) = decode_cbor(&data[..]) {
                     if let Some(author) = document.authors().author(PublicKey(author)) {
                         document.imp().handle_ephemeral_data(author, data);
