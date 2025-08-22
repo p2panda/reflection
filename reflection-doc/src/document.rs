@@ -73,8 +73,8 @@ mod imp {
         id: OnceCell<DocumentId>,
         #[property(name = "subscribed", get = Self::subscribed, type = bool)]
         pub(super) subscription: RwLock<Option<Arc<DocumentSubscription>>>,
-        #[property(get, construct_only)]
-        service: OnceCell<Service>,
+        #[property(get = Self::service, set = Self::set_service, construct_only, type = Service)]
+        service: glib::WeakRef<Service>,
         #[property(get, set = Self::set_authors, construct_only)]
         authors: OnceCell<Authors>,
         pub(super) tasks: Mutex<Vec<glib::JoinHandle<()>>>,
@@ -119,6 +119,14 @@ mod imp {
                 .get()
                 .unwrap_or(&glib::MainContext::ref_thread_default())
                 .clone()
+        }
+
+        fn service(&self) -> Service {
+            self.service.upgrade().unwrap()
+        }
+
+        fn set_service(&self, service: &Service) {
+            self.service.set(Some(service));
         }
 
         fn set_authors(&self, authors: Option<Authors>) {
