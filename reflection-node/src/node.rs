@@ -125,9 +125,12 @@ impl Node {
 
     pub async fn shutdown(&self) -> Result<()> {
         let inner = self.inner().await;
-        let _guard = inner.runtime.enter();
 
-        inner.shutdown().await?;
+        let inner_clone = inner.clone();
+        inner
+            .runtime
+            .spawn(async move { inner_clone.shutdown().await })
+            .await??;
 
         Ok(())
     }

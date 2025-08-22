@@ -104,9 +104,11 @@ mod imp {
         }
 
         fn shutdown(&self) {
-            if let Some(service) = self.obj().service() {
-                service.shutdown();
-            }
+            glib::MainContext::default().block_on(async move {
+                if let Some(service) = self.obj().service() {
+                    service.shutdown().await;
+                }
+            });
             self.parent_shutdown();
         }
 
