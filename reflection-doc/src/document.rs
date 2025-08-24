@@ -70,6 +70,11 @@ mod imp {
         pub(super) last_accessed: Mutex<Option<glib::DateTime>>,
         #[property(name = "text", get = Self::text, type = String)]
         pub(super) crdt_doc: OnceCell<LoroDoc>,
+        pub(super) undo_manager: Mutex<Option<loro::UndoManager>>,
+        #[property(get)]
+        pub(super) can_undo: Cell<bool>,
+        #[property(get)]
+        pub(super) can_redo: Cell<bool>,
         #[property(get, construct_only)]
         id: OnceCell<DocumentId>,
         #[property(name = "subscribed", get = Self::subscribed, type = bool)]
@@ -80,6 +85,11 @@ mod imp {
         authors: OnceCell<Authors>,
         pub(super) tasks: Mutex<Vec<glib::JoinHandle<()>>>,
         pub(super) snapshot_scheduled: Cell<bool>,
+
+        insert_cursor: RwLock<Option<loro::cursor::Cursor>>,
+        selection_bound: RwLock<Option<loro::cursor::Cursor>>,
+        final_insert_cursor: RwLock<Option<loro::cursor::Cursor>>,
+        final_selection_bound: RwLock<Option<loro::cursor::Cursor>>,
     }
 
     #[glib::object_subclass]
@@ -194,16 +204,27 @@ mod imp {
             Ok(())
         }
 
-        pub fn set_insert_cursor(&self, position: usize) {
+        pub fn set_insert_cursor(&self, position: usize, send: bool) {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
             let text = doc.get_text(&*TEXT_CONTAINER_ID);
+            let cursor = text.get_cursor(position, Default::default());
 
-            let cursor = EphemerialData::Cursor {
-                cursor: text.get_cursor(position, Default::default()),
+            if self.undo_manager.try_lock().is_err() {
+                return;
+            }
+
+            *self.insert_cursor.write().unwrap() = cursor.clone();
+
+            if !send {
+                return;
+            }
+
+            let cursor_data = EphemerialData::Cursor {
+                cursor,
                 timestamp: std::time::SystemTime::now(),
             };
 
-            let cursor_bytes = match encode_cbor(&cursor) {
+            let cursor_bytes = match encode_cbor(&cursor_data) {
                 Ok(data) => data,
                 Err(error) => {
                     error!("Failed to serialize cursor: {}", error);
@@ -223,6 +244,53 @@ mod imp {
                 ));
                 self.tasks.lock().unwrap().push(handle);
             }
+        }
+
+        pub fn set_selection_bound(&self, position: Option<usize>) {
+            if self.undo_manager.try_lock().is_err() {
+                return;
+            }
+            let cursor = if let Some(position) = position {
+                let doc = self.crdt_doc.get().expect("crdt_doc to be set");
+                let text = doc.get_text(&*TEXT_CONTAINER_ID);
+                text.get_cursor(position, Default::default())
+            } else {
+                None
+            };
+
+            *self.selection_bound.write().unwrap() = cursor;
+        }
+
+        pub(super) fn cursors_pos(&self) -> (usize, Option<usize>) {
+            let doc = self.crdt_doc.get().expect("crdt_doc to be set");
+
+            let insert_cursor = self.final_insert_cursor.read().unwrap();
+            let insert_cursor_pos = if let Some(insert_cursor) = insert_cursor.as_ref() {
+                match doc.get_cursor_pos(insert_cursor) {
+                    Ok(loro::cursor::PosQueryResult { current, .. }) => Some(current.pos),
+                    Err(error) => {
+                        error!("Failed to get current insert cursor position: {error}");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            let selection_bound = self.final_selection_bound.read().unwrap();
+            let selection_bound_pos = if let Some(selection_bound) = selection_bound.as_ref() {
+                match doc.get_cursor_pos(selection_bound) {
+                    Ok(loro::cursor::PosQueryResult { current, .. }) => Some(current.pos),
+                    Err(error) => {
+                        error!("Failed to get current selection bound position: {error}");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            (insert_cursor_pos.unwrap_or_default(), selection_bound_pos)
         }
 
         /// Apply changes to the CRDT from a message received from another peer
@@ -344,6 +412,7 @@ mod imp {
                                 }
                             }
                         }
+
                         obj.notify_text();
                     }
                 )),
@@ -380,6 +449,78 @@ mod imp {
                 }
             )))
             .detach();
+
+            let mut undo_manager = loro::UndoManager::new(&doc);
+            // FIXME: Would be nice to also use `loro::UndoManager::group_start()/group_end()`
+            undo_manager.set_merge_interval(1000);
+
+            undo_manager.set_on_push(Some(Box::new(clone!(
+                #[weak]
+                obj,
+                #[upgrade_or_default]
+                move |stack_type, _, _| {
+                    // The `loro::UndoManager` holds internal locks, so we can't update the `Document.can_undo/can_redo` property inline
+                    obj.main_context().spawn(clone!(
+                        #[weak]
+                        obj,
+                        async move {
+                            let guard = obj.imp().undo_manager.lock().unwrap();
+                            let undo_manager = guard.as_ref().expect("UndoManager exists always");
+
+                            match stack_type {
+                                loro::UndoOrRedo::Undo => {
+                                    let can_undo = undo_manager.can_undo();
+                                    drop(guard);
+
+                                    if obj.can_undo() != can_undo {
+                                        obj.imp().can_undo.set(can_undo);
+                                        obj.notify_can_undo();
+                                    }
+                                }
+                                loro::UndoOrRedo::Redo => {
+                                    let can_undo = undo_manager.can_undo();
+                                    drop(guard);
+
+                                    if obj.can_undo() != can_undo {
+                                        obj.imp().can_undo.set(can_undo);
+                                        obj.notify_can_undo();
+                                    }
+                                }
+                            }
+                        }
+                    ));
+
+                    let mut meta = loro::UndoItemMeta::new();
+                    let insert_cursor = obj.imp().insert_cursor.read().unwrap();
+                    let selection_bound = obj.imp().selection_bound.read().unwrap();
+
+                    if let Some(insert_cursor) = insert_cursor.as_ref() {
+                        meta.add_cursor(insert_cursor);
+                        // Only add selection bound if we have an insert cursor
+                        if let Some(selection_bound) = selection_bound.as_ref() {
+                            meta.add_cursor(selection_bound);
+                        }
+                    }
+
+                    meta
+                }
+            ))));
+
+            undo_manager.set_on_pop(Some(Box::new(clone!(
+                #[weak]
+                obj,
+                move |_, _, mut meta| {
+                    *obj.imp().final_insert_cursor.write().unwrap() =
+                        meta.cursors.pop().map(|cursor| cursor.cursor);
+
+                    *obj.imp().final_selection_bound.write().unwrap() =
+                        meta.cursors.pop().map(|cursor| cursor.cursor);
+                }
+            ))));
+
+            self.can_undo.set(undo_manager.can_undo());
+            self.can_redo.set(undo_manager.can_redo());
+            *self.undo_manager.lock().unwrap() = Some(undo_manager);
 
             self.crdt_doc.set(doc).unwrap();
         }
@@ -546,8 +687,63 @@ impl Document {
             .delete_text(start_pos as usize, (end_pos - start_pos) as usize)
     }
 
-    pub fn set_insert_cursor(&self, position: i32) {
-        self.imp().set_insert_cursor(position as usize);
+    pub fn undo(&self) -> (i32, Option<i32>) {
+        let mut guard = self.imp().undo_manager.lock().unwrap();
+        let undo_manager = guard.as_mut().expect("UndoManager exists always");
+        if let Err(error) = undo_manager.undo() {
+            error!("Failed to undo changes: {error}");
+        }
+
+        let can_undo = undo_manager.can_undo();
+        let can_redo = undo_manager.can_redo();
+        drop(guard);
+
+        if self.can_undo() != can_undo {
+            self.imp().can_undo.set(can_undo);
+            self.notify_can_undo();
+        }
+
+        if self.can_redo() != can_redo {
+            self.imp().can_redo.set(can_redo);
+            self.notify_can_redo();
+        }
+
+        let cursors_pos = self.imp().cursors_pos();
+        (cursors_pos.0 as i32, cursors_pos.1.map(|pos| pos as i32))
+    }
+
+    pub fn redo(&self) -> (i32, Option<i32>) {
+        let mut guard = self.imp().undo_manager.lock().unwrap();
+        let undo_manager = guard.as_mut().expect("UndoManager exists always");
+        if let Err(error) = undo_manager.redo() {
+            error!("Failed to redo changes: {error}");
+        }
+
+        let can_undo = undo_manager.can_undo();
+        let can_redo = undo_manager.can_redo();
+        drop(guard);
+
+        if self.can_undo() != can_undo {
+            self.imp().can_undo.set(can_undo);
+            self.notify_can_undo();
+        }
+
+        if self.can_redo() != can_redo {
+            self.imp().can_redo.set(can_redo);
+            self.notify_can_redo();
+        }
+
+        let cursors_pos = self.imp().cursors_pos();
+        (cursors_pos.0 as i32, cursors_pos.1.map(|pos| pos as i32))
+    }
+
+    pub fn set_insert_cursor(&self, position: i32, send: bool) {
+        self.imp().set_insert_cursor(position as usize, send);
+    }
+
+    pub fn set_selection_bound(&self, position: Option<i32>) {
+        self.imp()
+            .set_selection_bound(position.map(|pos| pos as usize));
     }
 
     pub async fn subscribe(&self) {
