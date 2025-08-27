@@ -42,10 +42,24 @@ mod imp {
         pub document_handlers: OnceCell<glib::SignalGroup>,
         #[property(get, set = Self::set_document)]
         pub document: RefCell<Option<Document>>,
+        #[property(name = "custom-can-undo", get = Self::custom_can_undo, type = bool)]
+        #[property(name = "custom-can-redo", get = Self::custom_can_redo, type = bool)]
         pub(super) remote_cursors: RefCell<HashMap<Author, gtk::TextMark>>,
     }
 
     impl ReflectionTextBuffer {
+        fn custom_can_undo(&self) -> bool {
+            self.obj()
+                .document()
+                .map_or(false, |document| document.can_undo())
+        }
+
+        fn custom_can_redo(&self) -> bool {
+            self.obj()
+                .document()
+                .map_or(false, |document| document.can_redo())
+        }
+
         fn set_document(&self, document: Option<&Document>) {
             if let Some(document) = document.as_ref() {
                 self.obj().set_inhibit_text_change(true);
@@ -187,7 +201,46 @@ mod imp {
                 ),
             );
 
+            document_handlers.connect_notify_local(
+                Some("can-undo"),
+                clone!(
+                    #[weak]
+                    buffer,
+                    move |_, _| {
+                        buffer.notify_custom_can_undo();
+                    }
+                ),
+            );
+
+            document_handlers.connect_notify_local(
+                Some("can-redo"),
+                clone!(
+                    #[weak]
+                    buffer,
+                    move |_, _| {
+                        buffer.notify_custom_can_redo();
+                    }
+                ),
+            );
+
             self.document_handlers.set(document_handlers).unwrap();
+
+            // Undo/Redo is handled by the CRDT document
+            self.obj().set_enable_undo(false);
+
+            self.obj()
+                .connect_notify_local(Some("cursor-position"), |obj, _| {
+                    // FIXME: the document could calculate the position based on the text inserted/deleted by us
+                    if let Some(document) = obj.document() {
+                        if let Some((start, end)) = obj.selection_bounds() {
+                            document.set_insert_cursor(start.offset(), false);
+                            document.set_selection_bound(Some(end.offset()));
+                        } else {
+                            document.set_insert_cursor(obj.cursor_position(), false);
+                            document.set_selection_bound(None);
+                        }
+                    }
+                });
         }
     }
 
@@ -250,7 +303,7 @@ mod imp {
                 match name.as_str() {
                     "insert" => {
                         if let Some(document) = self.obj().document() {
-                            document.set_insert_cursor(location.offset());
+                            document.set_insert_cursor(location.offset(), true);
                         }
                     }
                     "selection_bound" => {}
@@ -289,6 +342,36 @@ impl ReflectionTextBuffer {
 
     pub fn remote_cursors(&self) -> HashMap<Author, gtk::TextMark> {
         self.imp().remote_cursors.borrow().to_owned()
+    }
+
+    pub fn custom_undo(&self) {
+        if let Some(document) = self.document() {
+            let (insert_cursor, selection_bound) = document.undo();
+
+            let insert_cursor_iter = self.iter_at_offset(insert_cursor);
+            let selection_bound_iter = if let Some(selection_bound) = selection_bound {
+                self.iter_at_offset(selection_bound)
+            } else {
+                insert_cursor_iter
+            };
+
+            self.select_range(&insert_cursor_iter, &selection_bound_iter);
+        }
+    }
+
+    pub fn custom_redo(&self) {
+        if let Some(document) = self.document() {
+            let (insert_cursor, selection_bound) = document.redo();
+
+            let insert_cursor_iter = self.iter_at_offset(insert_cursor);
+            let selection_bound_iter = if let Some(selection_bound) = selection_bound {
+                self.iter_at_offset(selection_bound)
+            } else {
+                insert_cursor_iter
+            };
+
+            self.select_range(&insert_cursor_iter, &selection_bound_iter);
+        }
     }
 }
 
