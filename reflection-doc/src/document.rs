@@ -48,13 +48,14 @@ enum EphemerialData {
 mod imp {
     use super::*;
     use std::cell::{Cell, OnceCell};
-    use std::sync::{Arc, Mutex, OnceLock, RwLock};
+    use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
     use std::time::Duration;
 
     /// Identifier of container where we handle the text CRDT in a Loro document.
     ///
     /// Loro documents can contain multiple different CRDT types in one document.
-    const TEXT_CONTAINER_ID: &str = "document";
+    static TEXT_CONTAINER_ID: LazyLock<loro::ContainerID> =
+        LazyLock::new(|| loro::ContainerID::new_root("document", loro::ContainerType::Text));
     const DOCUMENT_NAME_LENGTH: usize = 32;
     const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -139,7 +140,7 @@ mod imp {
             self.crdt_doc
                 .get()
                 .expect("crdt_doc to be set")
-                .get_text(TEXT_CONTAINER_ID)
+                .get_text(&*TEXT_CONTAINER_ID)
                 .to_string()
         }
 
@@ -148,7 +149,7 @@ mod imp {
                 .crdt_doc
                 .get()
                 .expect("crdt_doc to be set")
-                .get_text(TEXT_CONTAINER_ID);
+                .get_text(&*TEXT_CONTAINER_ID);
 
             let name = extract_name(crdt_text);
 
@@ -175,7 +176,7 @@ mod imp {
 
         pub fn insert_text(&self, index: usize, chunk: &str) -> Result<()> {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
-            let text = doc.get_text(TEXT_CONTAINER_ID);
+            let text = doc.get_text(&*TEXT_CONTAINER_ID);
 
             text.insert(index, chunk)?;
             doc.commit();
@@ -185,7 +186,7 @@ mod imp {
 
         pub fn delete_text(&self, index: usize, len: usize) -> Result<()> {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
-            let text = doc.get_text(TEXT_CONTAINER_ID);
+            let text = doc.get_text(&*TEXT_CONTAINER_ID);
 
             text.delete(index, len)?;
             doc.commit();
@@ -195,7 +196,7 @@ mod imp {
 
         pub fn set_insert_cursor(&self, position: usize) {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
-            let text = doc.get_text(TEXT_CONTAINER_ID);
+            let text = doc.get_text(&*TEXT_CONTAINER_ID);
 
             let cursor = EphemerialData::Cursor {
                 cursor: text.get_cursor(position, Default::default()),
@@ -300,9 +301,8 @@ mod imp {
             })
             .expect("set peer id for new document");
 
-            let text = doc.get_text(TEXT_CONTAINER_ID);
             doc.subscribe(
-                &text.id(),
+                &*TEXT_CONTAINER_ID,
                 Arc::new(clone!(
                     #[weak]
                     obj,

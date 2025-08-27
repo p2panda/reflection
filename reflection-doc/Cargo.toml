@@ -13,7 +13,7 @@ anyhow = "1.0.94"
 async-channel = "2.3.1"
 glib = "0.20"
 gio = "0.20"
-loro = "1.5"
+loro = { tag = "loro-crdt@1.5.13", git = "https://github.com/loro-dev/loro.git" }
 thiserror = "2.0.11"
 tracing = "0.1"
 test-log = { version = "0.2.17", default-features = false, features = ["trace", "color"] }
