@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gtk::{gdk, glib, graphene};
+use gtk::{gdk, glib, glib::clone, graphene};
 use gtk::{prelude::*, subclass::prelude::*};
 use sourceview::subclass::prelude::ViewImpl;
 
@@ -25,17 +25,87 @@ use crate::textbuffer::ReflectionTextBuffer;
 mod imp {
     use super::*;
 
+    use std::cell::RefCell;
+
     #[derive(Debug, Default)]
-    pub struct TextView {}
+    pub struct TextView {
+        buffer_notify_handler:
+            RefCell<Option<(glib::WeakRef<ReflectionTextBuffer>, glib::SignalHandlerId)>>,
+    }
 
     #[glib::object_subclass]
     impl ObjectSubclass for TextView {
         const NAME: &'static str = "ReflectionTextView";
         type Type = super::TextView;
         type ParentType = sourceview::View;
+
+        fn class_init(klass: &mut Self::Class) {
+            // HACK: Install the `text.undo` action again so we can have custom undo and
+            // we need to ignore the `Buffer::can_undo` property
+            klass.install_action("text.undo", None, |view, _, _| {
+                let Ok(buffer): Result<ReflectionTextBuffer, _> = view.buffer().downcast() else {
+                    return;
+                };
+                buffer.custom_undo();
+                view.scroll_mark_onscreen(&buffer.get_insert());
+            });
+
+            // HACK: Install the `text.redo` action again so we can have custom redo and
+            // we need to ignore the `Buffer::can_redo` property
+            klass.install_action("text.redo", None, |view, _, _| {
+                let Ok(buffer): Result<ReflectionTextBuffer, _> = view.buffer().downcast() else {
+                    return;
+                };
+
+                buffer.custom_redo();
+                view.scroll_mark_onscreen(&buffer.get_insert());
+            });
+        }
     }
 
-    impl ObjectImpl for TextView {}
+    impl ObjectImpl for TextView {
+        fn constructed(&self) {
+            self.parent_constructed();
+
+            // HACK: The enabled state of the actions `text.undo` and `text.redo` are controlled
+            // via `Buffer.can_undo` and `Buffer.can_redo` properties. but we don't have any way to control the properties
+            self.obj()
+                .connect_notify_local(Some("buffer"), move |view, _| {
+                    let Ok(buffer): Result<ReflectionTextBuffer, _> = view.buffer().downcast()
+                    else {
+                        return;
+                    };
+
+                    let handler_id = buffer.connect_notify_local(
+                        // HACK: gtk::TextView does update the action enabled state on every notify,
+                        // probably a mistake in GTK.
+                        None,
+                        clone!(
+                            #[weak]
+                            view,
+                            #[weak]
+                            buffer,
+                            move |_, _| {
+                                view.action_set_enabled("text.undo", buffer.custom_can_undo());
+                                view.action_set_enabled("text.redo", buffer.custom_can_redo());
+                            }
+                        ),
+                    );
+                    let old_handler = view
+                        .imp()
+                        .buffer_notify_handler
+                        .replace(Some((buffer.downgrade(), handler_id)));
+                    if let Some((buffer_weak, old_handler_id)) = old_handler {
+                        if let Some(buffer) = buffer_weak.upgrade() {
+                            buffer.disconnect(old_handler_id);
+                        }
+                    }
+
+                    view.action_set_enabled("text.undo", buffer.custom_can_undo());
+                    view.action_set_enabled("text.redo", buffer.custom_can_redo());
+                });
+        }
+    }
     impl WidgetImpl for TextView {}
 
     impl TextViewImpl for TextView {
