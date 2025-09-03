@@ -120,26 +120,81 @@ mod imp {
                 .downcast()
                 .expect("ReflectionTextView needs to have a ReflectionTextBuffer");
 
-            for (author, mark) in buffer.remote_cursors().iter() {
-                let color =
+            for (author, (mark, selection_mark)) in buffer.remote_cursors().iter() {
+                let mut color =
                     gdk::RGBA::parse(author.hex_color()).expect("Author color to be in hex format");
+
                 let iter = buffer.iter_at_mark(mark);
-                let location = self.obj().iter_location(&iter);
-                let aspect_ratio = self.obj().settings().gtk_cursor_aspect_ratio() as f32;
-                let cursor_width = location.height() as f32 * aspect_ratio + 1f32;
+                let selection_iter = buffer.iter_at_mark(selection_mark);
 
-                // FIXME: Handle angled cursors (e.g. for italic)
-                // See draw_insertation_cursor() in gtk/gtkrenderlayout.c for angle calculation
-                // GTK uses cairo to draw the cursor, we could use `gtk_snapshot_append_stroke()`
-                // or rotate the appended color.
+                if iter == selection_iter {
+                    let location = self.obj().iter_location(&iter);
+                    let aspect_ratio = self.obj().settings().gtk_cursor_aspect_ratio() as f32;
+                    let cursor_width = location.height() as f32 * aspect_ratio + 1f32;
 
-                let bounds = graphene::Rect::new(
-                    location.x() as f32,
-                    location.y() as f32,
-                    cursor_width,
-                    location.height() as f32,
-                );
-                snapshot.append_color(&color, &bounds);
+                    // FIXME: Handle angled cursors (e.g. for italic)
+                    // See draw_insertation_cursor() in gtk/gtkrenderlayout.c for angle calculation
+                    // GTK uses cairo to draw the cursor, we could use `gtk_snapshot_append_stroke()`
+                    // or rotate the appended color.
+
+                    let bounds = graphene::Rect::new(
+                        location.x() as f32,
+                        location.y() as f32,
+                        cursor_width,
+                        location.height() as f32,
+                    );
+                    snapshot.append_color(&color, &bounds);
+                } else {
+                    color.set_alpha(0.5);
+
+                    let start_iter = iter.min(selection_iter);
+                    let end_iter = iter.max(selection_iter);
+                    let start_location = self.obj().iter_location(&start_iter);
+                    let end_location = self.obj().iter_location(&end_iter);
+
+                    if start_location.y() == end_location.y() {
+                        let bounds = graphene::Rect::new(
+                            start_location.x() as f32,
+                            start_location.y() as f32,
+                            (end_location.x() - start_location.x()) as f32,
+                            start_location.height() as f32,
+                        );
+
+                        snapshot.append_color(&color, &bounds);
+                    } else {
+                        let visible_rect = self.obj().visible_rect();
+
+                        // First line that may be partially selected
+                        let bounds = graphene::Rect::new(
+                            start_location.x() as f32,
+                            start_location.y() as f32,
+                            (visible_rect.width() - self.obj().right_margin() - start_location.x())
+                                as f32,
+                            start_location.height() as f32,
+                        );
+                        snapshot.append_color(&color, &bounds);
+
+                        // Last line that might be partially selected
+                        let bounds = graphene::Rect::new(
+                            self.obj().left_margin() as f32,
+                            end_location.y() as f32,
+                            end_location.x() as f32,
+                            end_location.height() as f32,
+                        );
+                        snapshot.append_color(&color, &bounds);
+
+                        // Lines between the first and last selected line
+                        let bounds = graphene::Rect::new(
+                            self.obj().left_margin() as f32,
+                            (start_location.y() + start_location.height()) as f32,
+                            (visible_rect.width()
+                                - self.obj().right_margin()
+                                - self.obj().left_margin()) as f32,
+                            (end_location.y() - start_location.y() - end_location.height()) as f32,
+                        );
+                        snapshot.append_color(&color, &bounds);
+                    }
+                }
             }
         }
     }
