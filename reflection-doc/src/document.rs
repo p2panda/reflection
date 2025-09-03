@@ -40,7 +40,8 @@ impl fmt::Display for DocumentId {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 enum EphemerialData {
     Cursor {
-        cursor: Option<loro::cursor::Cursor>,
+        insert_cursor: Option<loro::cursor::Cursor>,
+        selection_bound: Option<loro::cursor::Cursor>,
         timestamp: std::time::SystemTime,
     },
 }
@@ -207,20 +208,21 @@ mod imp {
         pub fn set_insert_cursor(&self, position: usize, send: bool) {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
             let text = doc.get_text(&*TEXT_CONTAINER_ID);
-            let cursor = text.get_cursor(position, Default::default());
+            let insert_cursor = text.get_cursor(position, Default::default());
 
             if self.undo_manager.try_lock().is_err() {
                 return;
             }
 
-            *self.insert_cursor.write().unwrap() = cursor.clone();
+            *self.insert_cursor.write().unwrap() = insert_cursor.clone();
 
             if !send {
                 return;
             }
 
             let cursor_data = EphemerialData::Cursor {
-                cursor,
+                insert_cursor,
+                selection_bound: self.selection_bound.read().unwrap().clone(),
                 timestamp: std::time::SystemTime::now(),
             };
 
@@ -527,33 +529,52 @@ mod imp {
 
         pub(super) fn handle_ephemeral_data(&self, author: Author, data: EphemerialData) {
             match data {
-                EphemerialData::Cursor { cursor, timestamp } => {
-                    // FIXME: check if the timestamp is newer then the previous ephemerial data we got
+                EphemerialData::Cursor {
+                    insert_cursor,
+                    selection_bound,
+                    timestamp,
+                } => {
                     let doc = self.crdt_doc.get().expect("crdt_doc to be set");
 
                     if !author.is_new_cursor_position(timestamp) {
                         return;
                     }
 
-                    if let Some(cursor) = cursor {
-                        let abs_pos = match doc.get_cursor_pos(&cursor) {
+                    if let Some(insert_cursor) = insert_cursor {
+                        let abs_insert_cursor = match doc.get_cursor_pos(&insert_cursor) {
                             Ok(pos) => pos.current,
                             Err(error) => {
                                 error!(
-                                    "Failed to get current cursor position of remote user {}: {error}",
+                                    "Failed to get current insert cursor position of remote user {}: {error}",
                                     author.name()
                                 );
                                 return;
                             }
                         };
 
+                        let abs_selection_bound = if let Some(selection_bound) = selection_bound {
+                            match doc.get_cursor_pos(&selection_bound) {
+                                Ok(pos) => pos.current,
+                                Err(error) => {
+                                    error!(
+                                        "Failed to get current selection bound position of remote user {}: {error}",
+                                        author.name()
+                                    );
+                                    abs_insert_cursor.clone()
+                                }
+                            }
+                        } else {
+                            abs_insert_cursor.clone()
+                        };
+
                         self.obj().emit_by_name::<()>("remote-insert-cursor", &[
                             &author,
-                            &(abs_pos.pos as i32),
+                            &(abs_insert_cursor.pos as i32),
+                            &(abs_selection_bound.pos as i32),
                         ]);
                     } else {
                         self.obj()
-                            .emit_by_name::<()>("remote-insert-cursor", &[&author, &-1i32]);
+                            .emit_by_name::<()>("remote-insert-cursor", &[&author, &-1i32, &-1i32]);
                     }
                 }
             }
@@ -577,7 +598,11 @@ mod imp {
                         .param_types([glib::types::Type::I32, glib::types::Type::I32])
                         .build(),
                     Signal::builder("remote-insert-cursor")
-                        .param_types([Author::static_type(), glib::types::Type::I32])
+                        .param_types([
+                            Author::static_type(),
+                            glib::types::Type::I32,
+                            glib::types::Type::I32,
+                        ])
                         .build(),
                 ]
             })

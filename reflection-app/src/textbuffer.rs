@@ -44,7 +44,7 @@ mod imp {
         pub document: RefCell<Option<Document>>,
         #[property(name = "custom-can-undo", get = Self::custom_can_undo, type = bool)]
         #[property(name = "custom-can-redo", get = Self::custom_can_redo, type = bool)]
-        pub(super) remote_cursors: RefCell<HashMap<Author, gtk::TextMark>>,
+        pub(super) remote_cursors: RefCell<HashMap<Author, (gtk::TextMark, gtk::TextMark)>>,
     }
 
     impl ReflectionTextBuffer {
@@ -166,20 +166,28 @@ mod imp {
                     move |values| {
                         let author: Author = values.get(1).unwrap().get().unwrap();
                         let pos: i32 = values.get(2).unwrap().get().unwrap();
+                        let selection_bound_pos: i32 = values.get(3).unwrap().get().unwrap();
                         let mut remote_cursors = buffer.imp().remote_cursors.borrow_mut();
                         let author_name = author.name();
 
                         if pos < 0 {
-                            if let Some(mark) = remote_cursors.remove(&author) {
+                            if let Some((mark, selection_bound_mark)) =
+                                remote_cursors.remove(&author)
+                            {
                                 buffer.delete_mark(&mark);
+                                buffer.delete_mark(&selection_bound_mark);
                                 debug!("Cursor mark for author {author_name} was removed");
                             }
                             return None;
                         }
 
-                        let mark = remote_cursors
-                            .entry(author)
-                            .or_insert_with(|| gtk::TextMark::new(None, false));
+                        let (mark, selection_bound_mark) =
+                            remote_cursors.entry(author).or_insert_with(|| {
+                                (
+                                    gtk::TextMark::new(None, false),
+                                    gtk::TextMark::new(None, false),
+                                )
+                            });
                         let iter = buffer.iter_at_offset(pos);
 
                         // New markers are deleted so we need to add them when we create them
@@ -189,10 +197,19 @@ mod imp {
                             buffer.move_mark(mark, &iter);
                         }
 
+                        let iter = buffer.iter_at_offset(selection_bound_pos);
+                        if selection_bound_mark.is_deleted() {
+                            buffer.add_mark(selection_bound_mark, &iter);
+                        } else {
+                            buffer.move_mark(selection_bound_mark, &iter);
+                        }
+
                         // WORKAROUND: We need to invalidate the display cache,
                         // no idea if there is a better way to do this
                         mark.set_visible(true);
                         mark.set_visible(false);
+                        selection_bound_mark.set_visible(true);
+                        selection_bound_mark.set_visible(false);
 
                         debug!("Cursor mark for author {author_name} was added at {pos}");
 
@@ -232,11 +249,11 @@ mod imp {
                 .connect_notify_local(Some("cursor-position"), |obj, _| {
                     // FIXME: the document could calculate the position based on the text inserted/deleted by us
                     if let Some(document) = obj.document() {
-                        if let Some((start, end)) = obj.selection_bounds() {
-                            document.set_insert_cursor(start.offset(), false);
-                            document.set_selection_bound(Some(end.offset()));
+                        document.set_insert_cursor(obj.cursor_position(), false);
+                        if obj.has_selection() {
+                            let selection_bound_iter = obj.iter_at_mark(&obj.selection_bound());
+                            document.set_selection_bound(Some(selection_bound_iter.offset()));
                         } else {
-                            document.set_insert_cursor(obj.cursor_position(), false);
                             document.set_selection_bound(None);
                         }
                     }
@@ -306,7 +323,17 @@ mod imp {
                             document.set_insert_cursor(location.offset(), true);
                         }
                     }
-                    "selection_bound" => {}
+                    "selection_bound" => {
+                        if let Some(document) = self.obj().document() {
+                            if self.obj().has_selection() {
+                                document.set_selection_bound(Some(location.offset()));
+                            } else {
+                                document.set_selection_bound(None);
+                            }
+
+                            document.set_insert_cursor(self.obj().cursor_position(), true);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -340,7 +367,7 @@ impl ReflectionTextBuffer {
         self.text(&self.start_iter(), &self.end_iter(), true).into()
     }
 
-    pub fn remote_cursors(&self) -> HashMap<Author, gtk::TextMark> {
+    pub fn remote_cursors(&self) -> HashMap<Author, (gtk::TextMark, gtk::TextMark)> {
         self.imp().remote_cursors.borrow().to_owned()
     }
 
