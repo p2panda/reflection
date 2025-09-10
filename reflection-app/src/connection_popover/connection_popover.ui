@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="Adw" version="1.0"/>
+  <template class="ReflectionConnectionPopover" parent="GtkPopover">
+    <property name="child">
+      <object class="GtkScrolledWindow">
+        <property name="propagate-natural-width">true</property>
+        <property name="propagate-natural-height">true</property>
+        <property name="max-content-height">300</property>
+        <property name="child">
+          <object class="ReflectionAuthorList" id="author_list" />
+        </property>
+        <style>
+          <class name="connection-popover"/>
+        </style>
+      </object>
+    </property>
+  </template>
+</interface>
