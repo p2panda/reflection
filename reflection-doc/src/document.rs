@@ -214,14 +214,16 @@ mod imp {
                 return;
             }
 
-            *self.insert_cursor.write().unwrap() = insert_cursor.clone();
+            *self.insert_cursor.write().unwrap() = insert_cursor;
 
-            if !send {
-                return;
+            if send {
+                self.brodcast_ephemeral();
             }
+        }
 
+        pub fn brodcast_ephemeral(&self) {
             let cursor_data = EphemerialData::Cursor {
-                insert_cursor,
+                insert_cursor: self.insert_cursor.read().unwrap().clone(),
                 selection_bound: self.selection_bound.read().unwrap().clone(),
                 timestamp: std::time::SystemTime::now(),
             };
@@ -567,11 +569,14 @@ mod imp {
                             abs_insert_cursor.clone()
                         };
 
-                        self.obj().emit_by_name::<()>("remote-insert-cursor", &[
-                            &author,
-                            &(abs_insert_cursor.pos as i32),
-                            &(abs_selection_bound.pos as i32),
-                        ]);
+                        self.obj().emit_by_name::<()>(
+                            "remote-insert-cursor",
+                            &[
+                                &author,
+                                &(abs_insert_cursor.pos as i32),
+                                &(abs_selection_bound.pos as i32),
+                            ],
+                        );
                     } else {
                         self.obj()
                             .emit_by_name::<()>("remote-insert-cursor", &[&author, &-1i32, &-1i32]);
@@ -882,6 +887,8 @@ impl SubscribableDocument for DocumentHandle {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 document.authors().add_or_update(PublicKey(author), true);
+                // When a new author joins we need to send ephemeral messages again
+                document.imp().brodcast_ephemeral();
             });
         }
     }
