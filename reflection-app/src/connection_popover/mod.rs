@@ -32,10 +32,12 @@ use self::author_list::AuthorList;
 mod imp {
     use super::*;
 
-    #[derive(Debug, Default, glib::Properties)]
+    #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::ConnectionPopover)]
+    #[template(resource = "/org/p2panda/reflection/connection_popover/connection_popover.ui")]
     pub struct ConnectionPopover {
-        author_list: AuthorList,
+        #[template_child]
+        author_list: TemplateChild<AuthorList>,
         #[property(get = Self::authors, set = Self::set_authors)]
         authors: PhantomData<Option<Authors>>,
     }
@@ -45,22 +47,18 @@ mod imp {
         const NAME: &'static str = "ReflectionConnectionPopover";
         type Type = super::ConnectionPopover;
         type ParentType = gtk::Popover;
+
+        fn class_init(klass: &mut Self::Class) {
+            AuthorList::static_type();
+            klass.bind_template();
+        }
+        fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
+            obj.init_template();
+        }
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for ConnectionPopover {
-        fn constructed(&self) {
-            let scrollview = gtk::ScrolledWindow::builder()
-                .child(&self.author_list)
-                .hscrollbar_policy(gtk::PolicyType::Never)
-                .propagate_natural_height(true)
-                .propagate_natural_width(true)
-                .max_content_height(300)
-                .build();
-            self.obj().set_child(Some(&scrollview));
-            self.obj().add_css_class("connection-popover");
-        }
-    }
+    impl ObjectImpl for ConnectionPopover {}
 
     impl ConnectionPopover {
         fn set_authors(&self, authors: Option<Authors>) {
