@@ -7,6 +7,7 @@ mod node_inner;
 mod operation;
 mod operation_store;
 mod persistent_operation;
+mod subscription_inner;
 mod utils;
 
 pub use document::SubscribableDocument;
@@ -103,8 +104,6 @@ mod tests {
             assert_eq!(documents.first().unwrap().id, document_id);
 
             let subscription = node.subscribe(document_id, test_document).await.unwrap();
-
-            let document_id = subscription.id;
 
             let private_key2 = PrivateKey::new();
             let network_id2 = Hash::new(b"reflection");

@@ -3,15 +3,11 @@ use std::hash::Hash as StdHash;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::author_tracker::AuthorMessage;
-use crate::ephemerial_operation::EphemerialOperation;
-use crate::node_inner::MessageType;
 use crate::node_inner::NodeInner;
-use crate::operation::LogType;
 use crate::operation_store::CreationError;
-use crate::persistent_operation::PersistentOperation;
+use crate::subscription_inner::SubscriptionInner;
+
 use chrono::{DateTime, Utc};
-use p2panda_core::cbor::encode_cbor;
 use p2panda_core::{Hash, HashError, PublicKey};
 use p2panda_net::{ToNetwork, TopicId};
 use p2panda_sync::TopicQuery;
@@ -23,11 +19,8 @@ use sqlx::{
     sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef},
 };
 use thiserror::Error;
-use tokio::{
-    sync::mpsc,
-    task::{AbortHandle, JoinError},
-};
-use tracing::{error, info};
+use tokio::{sync::mpsc, task::JoinError};
+use tracing::error;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct DocumentId(Hash);
@@ -158,153 +151,66 @@ pub trait SubscribableDocument: Sync + Send {
 }
 
 pub struct Subscription {
-    pub(crate) tx: mpsc::Sender<ToNetwork>,
-    pub(crate) id: DocumentId,
-    pub(crate) node: Arc<NodeInner>,
-    pub(crate) abort_handles: Vec<AbortHandle>,
+    pub(crate) inner: Arc<SubscriptionInner>,
 }
 
 impl Subscription {
+    pub(crate) async fn new(
+        node: Arc<NodeInner>,
+        id: DocumentId,
+        document: Arc<impl SubscribableDocument + 'static>,
+    ) -> Self {
+        let inner = SubscriptionInner::new(node, id, document).await;
+        Self { inner }
+    }
+
     pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), DocumentError> {
-        let node = self.node.clone();
-        let document_id = self.id;
-        let operation = self
+        let inner = self.inner.clone();
+        self.inner
             .node
             .runtime
-            .spawn(async move {
-                // Append one operation to our "ephemeral" delta log.
-                node.operation_store
-                    .create_operation(
-                        &node.private_key,
-                        LogType::Delta,
-                        Some(document_id),
-                        Some(&data),
-                        false,
-                    )
-                    .await
-            })
-            .await??;
-
-        info!("Delta operation sent for document with id {}", self.id);
-
-        let bytes = encode_cbor(&MessageType::Persistent(PersistentOperation::new(
-            operation,
-        )))?;
-
-        // Broadcast operation on gossip overlay.
-        self.tx.send(ToNetwork::Message { bytes }).await?;
-
-        Ok(())
+            .spawn(async move { inner.send_delta(data).await })
+            .await?
     }
 
     pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), DocumentError> {
-        let node = self.node.clone();
-        let document_id = self.id;
-
-        let operation = self
+        let inner = self.inner.clone();
+        self.inner
             .node
             .runtime
-            .spawn(async move {
-                // Append an operation to our "snapshot" log and set the prune flag to
-                // true. This will remove previous snapshots.
-                //
-                // Snapshots are not broadcasted on the gossip overlay as they would be
-                // too large. Peers will sync them up when they join the document.
-                node.operation_store
-                    .create_operation(
-                        &node.private_key,
-                        LogType::Snapshot,
-                        Some(document_id),
-                        Some(&data),
-                        true,
-                    )
-                    .await?;
-
-                // Append an operation to our "ephemeral" delta log and set the prune
-                // flag to true.
-                //
-                // This signals removing all previous "delta" operations now. This is
-                // some sort of garbage collection whenever we snapshot. Snapshots
-                // already contain all history, there is no need to keep duplicate
-                // "delta" data around.
-                node.operation_store
-                    .create_operation(
-                        &node.private_key,
-                        LogType::Delta,
-                        Some(document_id),
-                        None,
-                        true,
-                    )
-                    .await
-            })
-            .await??;
-
-        info!("Snapshot saved for document with id {}", self.id);
-
-        let bytes = encode_cbor(&MessageType::Persistent(PersistentOperation::new(
-            operation,
-        )))?;
-
-        // Broadcast operation on gossip overlay.
-        self.tx.send(ToNetwork::Message { bytes }).await?;
-
-        Ok(())
+            .spawn(async move { inner.send_snapshot(data).await })
+            .await?
     }
 
     pub async fn send_ephemeral(&self, data: Vec<u8>) -> Result<(), DocumentError> {
-        let operation = EphemerialOperation::new(data, &self.node.private_key);
-
-        let bytes = encode_cbor(&MessageType::Ephemeral(operation))?;
-        self.tx.send(ToNetwork::Message { bytes }).await?;
-
-        Ok(())
+        let inner = self.inner.clone();
+        self.inner
+            .node
+            .runtime
+            .spawn(async move { inner.send_ephemeral(data).await })
+            .await?
     }
 
     pub async fn unsubscribe(self) -> Result<(), DocumentError> {
-        let node = self.node.clone();
-        let document_id = self.id;
-        self.node
+        let Subscription { inner } = self;
+
+        inner
+            .node
+            .clone()
             .runtime
-            .spawn(async move {
-                node.document_store
-                    .set_last_accessed_for_document(&document_id, Some(Utc::now()))
-                    .await
-            })
-            .await??;
-
-        // Abort all tokio tasks created during subscription
-        for handle in self.abort_handles {
-            handle.abort();
-        }
-
-        // Send good bye message to the network
-        if let Err(error) = AuthorMessage::Bye
-            .send(&self.tx, &self.node.private_key)
-            .await
-        {
-            error!("Failed to sent bye message to the network: {error}");
-        }
-
-        info!("Unsubscribed from document {document_id}");
-
-        Ok(())
+            .spawn(async move { inner.unsubscribe().await })
+            .await?
     }
 
     /// Set the name for a given document
     ///
     /// This information will be written to the database
     pub async fn set_name(&self, name: Option<String>) -> Result<(), DocumentError> {
-        let node = self.node.clone();
-        let document_id = self.id;
-        self.node
+        let inner = self.inner.clone();
+        self.inner
+            .node
             .runtime
-            .spawn(async move {
-                node.document_store
-                    .set_name_for_document(&document_id, name)
-                    .await
-            })
-            .await??;
-
-        Ok(())
+            .spawn(async move { inner.set_name(name).await })
+            .await?
     }
 }
