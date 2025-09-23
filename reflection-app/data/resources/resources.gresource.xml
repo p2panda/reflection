@@ -9,6 +9,8 @@
     <file preprocess="xml-stripblanks">icons/scalable/status/key-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/status/network-computer-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/network-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/status/no-network-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/status/no-wifi-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/offline-symbolic.svg</file>
   </gresource>
 </gresources>

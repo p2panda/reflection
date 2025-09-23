@@ -45,6 +45,13 @@
   padding: 6px;
 }
 
+.connection-popover image.circular {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    min-width: 34px;
+    min-height: 34px;
+    border-radius: 9999px;
+}
+
 .avatar {
   min-width: 46px;
   min-height: 46px;

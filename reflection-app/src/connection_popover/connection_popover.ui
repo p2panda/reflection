@@ -93,7 +93,7 @@
                         <property name="spacing">6</property>
                         <property name="halign">center</property>
                         <child>
-                          <object class="GtkImage">
+                          <object class="GtkImage" id="network_toggle_image">
                             <property name="icon-name">network-symbolic</property>
                           </object>
                         </child>
@@ -112,15 +112,14 @@
               </object>
             </child>
             <child>
-              <object class="GtkRevealer">
-                <property name="reveal-child">True</property>
+              <object class="GtkRevealer" id="no_network_revealer">
                 <property name="child">
                   <object class="GtkBox">
                     <property name="margin-top">12</property>
                     <property name="spacing">12</property>
                     <child>
                       <object class="GtkImage">
-                        <property name="icon-name">no-network-symbolic</property>
+                        <property name="icon-name">no-wifi-symbolic</property>
                         <property name="valign">center</property>
                         <style>
                           <class name="circular"/>
