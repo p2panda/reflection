@@ -25,7 +25,31 @@
 }
 
 .connection-popover > contents {
-  padding: 9px 0px;
+  padding: 16px;
+}
+
+.connection-popover row .header {
+	margin: 0px;
+}
+
+.connection-popover row {
+	padding: 0px;
+}
+
+.connection-popover list {
+  background-color: transparent;
+  margin: 0px;
+}
+
+.connection-mode-toggle .toggle {
+  padding: 6px;
+}
+
+.connection-popover image.circular {
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    min-width: 34px;
+    min-height: 34px;
+    border-radius: 9999px;
 }
 
 .avatar {
@@ -33,11 +57,6 @@
   min-height: 46px;
   border-radius: 32px;
   font-size: 32px;
-}
-
-.connection-popover list {
-  background-color: transparent;
-  margin: 3px 3px;
 }
 
 .this-device-pill {
