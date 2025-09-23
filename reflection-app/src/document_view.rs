@@ -258,9 +258,10 @@ mod imp {
                 .downcast::<ReflectionTextBuffer>()
                 .unwrap()
                 .set_document(&document);
-            let authors = document.authors();
             self.connection_button
-                .set_popover(Some(&ConnectionPopover::new(&authors)));
+                .set_popover(Some(&ConnectionPopover::new(&document)));
+            let authors = document.authors();
+
             // TODO: we need to do the same as fractal to allow gettext string substitution
             //self.connection_button.set_tooltip_text(gettext!("{} People Connected", authors.n_items()));
             authors.connect_items_changed(clone!(
