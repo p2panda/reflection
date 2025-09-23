@@ -21,10 +21,10 @@
 use std::cell::RefCell;
 
 use adw::subclass::prelude::*;
-use gtk::glib;
 use gtk::prelude::*;
+use gtk::{gio, glib, glib::clone};
 
-use reflection_doc::document::Document;
+use reflection_doc::{document::Document, service::ConnectionMode};
 
 mod author_list;
 use self::author_list::AuthorList;
@@ -38,8 +38,15 @@ mod imp {
     pub struct ConnectionPopover {
         #[template_child]
         author_list: TemplateChild<AuthorList>,
+        #[template_child]
+        connection_mode_switch: TemplateChild<adw::ToggleGroup>,
+        #[template_child]
+        no_network_revealer: TemplateChild<gtk::Revealer>,
+        #[template_child]
+        network_toggle_image: TemplateChild<gtk::Image>,
         #[property(get, set = Self::set_document, type = Document)]
         document: RefCell<Option<Document>>,
+        connection_mode_binding: RefCell<Option<glib::Binding>>,
     }
 
     #[glib::object_subclass]
@@ -58,13 +65,88 @@ mod imp {
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for ConnectionPopover {}
+    impl ObjectImpl for ConnectionPopover {
+        fn constructed(&self) {
+            self.parent_constructed();
+
+            let monitor = gio::NetworkMonitor::default();
+            monitor.connect_network_available_notify(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |_| {
+                    this.update_no_network_revealer();
+                }
+            ));
+
+            self.connection_mode_switch
+                .connect_active_name_notify(clone!(
+                    #[weak(rename_to = this)]
+                    self,
+                    move |_| {
+                        this.update_no_network_revealer();
+                    }
+                ));
+
+            self.update_no_network_revealer();
+        }
+    }
 
     impl ConnectionPopover {
         fn set_document(&self, document: Document) {
             self.author_list.set_model(Some(document.authors()));
 
+            if let Some(binding) = self.connection_mode_binding.take() {
+                binding.unbind();
+            }
+
+            let binding = document
+                .service()
+                .bind_property(
+                    "connection-mode",
+                    &self.connection_mode_switch.get(),
+                    "active-name",
+                )
+                .sync_create()
+                .bidirectional()
+                .transform_to(|_, mode| {
+                    let active_name = match mode {
+                        ConnectionMode::None => "offline",
+                        ConnectionMode::Bluetooth => "bluetooth",
+                        ConnectionMode::Network => "network",
+                    };
+                    Some(active_name)
+                })
+                .transform_from(|_, active_name| {
+                    let mode = match active_name {
+                        "offline" => ConnectionMode::None,
+                        "bluetooth" => ConnectionMode::Bluetooth,
+                        "network" => ConnectionMode::Network,
+                        _ => return None,
+                    };
+                    Some(mode)
+                })
+                .build();
+
+            self.connection_mode_binding.replace(Some(binding));
             self.document.replace(Some(document));
+        }
+
+        fn update_no_network_revealer(&self) {
+            let monitor = gio::NetworkMonitor::default();
+            let wants_network = self
+                .connection_mode_switch
+                .active_name()
+                .map_or(false, |name| name.as_str() == "network");
+            let is_offline = !monitor.is_network_available() && wants_network;
+
+            self.no_network_revealer.set_reveal_child(is_offline);
+            if monitor.is_network_available() {
+                self.network_toggle_image
+                    .set_icon_name(Some("network-symbolic"));
+            } else {
+                self.network_toggle_image
+                    .set_icon_name(Some("no-network-symbolic"));
+            }
         }
     }
 
