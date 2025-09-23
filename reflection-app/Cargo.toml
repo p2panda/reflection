@@ -27,4 +27,4 @@ oo7 = { version = "0.4", default-features = false, features = [
 [dependencies.adw]
 package = "libadwaita"
 version = "0.7"
-features = ["v1_6"]
+features = ["v1_7"]
