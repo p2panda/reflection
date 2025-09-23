@@ -24,7 +24,7 @@ use adw::subclass::prelude::*;
 use gtk::glib;
 use gtk::prelude::*;
 
-use reflection_doc::document::Document;
+use reflection_doc::{document::Document, service::ConnectionMode};
 
 mod author_list;
 use self::author_list::AuthorList;
@@ -38,8 +38,11 @@ mod imp {
     pub struct ConnectionPopover {
         #[template_child]
         author_list: TemplateChild<AuthorList>,
+        #[template_child]
+        connection_mode_switch: TemplateChild<adw::ToggleGroup>,
         #[property(get, set = Self::set_document, type = Document)]
         document: RefCell<Option<Document>>,
+        connection_mode_binding: RefCell<Option<glib::Binding>>,
     }
 
     #[glib::object_subclass]
@@ -64,6 +67,39 @@ mod imp {
         fn set_document(&self, document: Document) {
             self.author_list.set_model(Some(document.authors()));
 
+            if let Some(binding) = self.connection_mode_binding.take() {
+                binding.unbind();
+            }
+
+            let binding = document
+                .service()
+                .bind_property(
+                    "connection-mode",
+                    &self.connection_mode_switch.get(),
+                    "active-name",
+                )
+                .sync_create()
+                .bidirectional()
+                .transform_to(|_, mode| {
+                    let active_name = match mode {
+                        ConnectionMode::None => "offline",
+                        ConnectionMode::Bluetooth => "bluetooth",
+                        ConnectionMode::Network => "network",
+                    };
+                    Some(active_name)
+                })
+                .transform_from(|_, active_name| {
+                    let mode = match active_name {
+                        "offline" => ConnectionMode::None,
+                        "bluetooth" => ConnectionMode::Bluetooth,
+                        "network" => ConnectionMode::Network,
+                        _ => return None,
+                    };
+                    Some(mode)
+                })
+                .build();
+
+            self.connection_mode_binding.replace(Some(binding));
             self.document.replace(Some(document));
         }
     }
