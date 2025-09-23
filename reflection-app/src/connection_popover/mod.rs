@@ -18,13 +18,13 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::marker::PhantomData;
+use std::cell::RefCell;
 
 use adw::subclass::prelude::*;
 use gtk::glib;
 use gtk::prelude::*;
 
-use reflection_doc::authors::Authors;
+use reflection_doc::document::Document;
 
 mod author_list;
 use self::author_list::AuthorList;
@@ -38,8 +38,8 @@ mod imp {
     pub struct ConnectionPopover {
         #[template_child]
         author_list: TemplateChild<AuthorList>,
-        #[property(get = Self::authors, set = Self::set_authors)]
-        authors: PhantomData<Option<Authors>>,
+        #[property(get, set = Self::set_document, type = Document)]
+        document: RefCell<Option<Document>>,
     }
 
     #[glib::object_subclass]
@@ -61,12 +61,10 @@ mod imp {
     impl ObjectImpl for ConnectionPopover {}
 
     impl ConnectionPopover {
-        fn set_authors(&self, authors: Option<Authors>) {
-            self.author_list.set_model(authors);
-        }
+        fn set_document(&self, document: Document) {
+            self.author_list.set_model(Some(document.authors()));
 
-        fn authors(&self) -> Option<Authors> {
-            self.author_list.model()
+            self.document.replace(Some(document));
         }
     }
 
@@ -80,7 +78,9 @@ glib::wrapper! {
 }
 
 impl ConnectionPopover {
-    pub fn new<P: IsA<Authors>>(authors: &P) -> Self {
-        glib::Object::builder().property("authors", authors).build()
+    pub fn new<P: IsA<Document>>(document: &P) -> Self {
+        glib::Object::builder()
+            .property("document", document)
+            .build()
     }
 }
