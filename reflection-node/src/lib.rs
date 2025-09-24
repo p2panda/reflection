@@ -33,8 +33,7 @@ mod tests {
         let node = runtime.block_on(async move {
             let private_key = PrivateKey::new();
             let network_id = Hash::new(b"reflection");
-            let node = Node::new();
-            node.run(private_key, network_id, None).await.unwrap();
+            let node = Node::new(private_key, network_id, None).await.unwrap();
 
             let document_id = node.create_document().await.unwrap();
             let documents = node.documents().await.unwrap();
@@ -90,8 +89,7 @@ mod tests {
         let nodes = runtime.block_on(async move {
             let private_key = PrivateKey::new();
             let network_id = Hash::new(b"reflection");
-            let node = Node::new();
-            node.run(private_key, network_id, None).await.unwrap();
+            let node = Node::new(private_key, network_id, None).await.unwrap();
 
             let test_document = TestDocument::new();
 
@@ -106,8 +104,7 @@ mod tests {
 
             let private_key2 = PrivateKey::new();
             let network_id2 = Hash::new(b"reflection");
-            let node2 = Node::new();
-            node2.run(private_key2, network_id2, None).await.unwrap();
+            let node2 = Node::new(private_key2, network_id2, None).await.unwrap();
 
             let test_document2 = TestDocument::new();
 

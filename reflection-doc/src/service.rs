@@ -28,7 +28,7 @@ mod imp {
     #[derive(Default, Properties)]
     #[properties(wrapper_type = super::Service)]
     pub struct Service {
-        pub node: Node,
+        pub node: OnceLock<Node>,
         #[property(get, set, construct_only, type = PrivateKey)]
         pub private_key: OnceLock<PrivateKey>,
         #[property(get, set, construct_only, nullable, type = Option<gio::File>)]
@@ -64,12 +64,14 @@ impl Service {
         let public_key = private_key.public_key();
         let network_id = Hash::new(b"reflection");
         let path = self.data_dir().and_then(|data_dir| data_dir.path());
+        let node = Node::new(private_key, network_id, path.as_deref()).await?;
+
         self.imp()
             .node
-            .run(private_key, network_id, path.as_deref())
-            .await?;
+            .set(node)
+            .expect("Service to startup only once");
 
-        if let Ok(documents) = self.imp().node.documents().await {
+        if let Ok(documents) = self.node().documents().await {
             for document in documents {
                 let last_accessed = document.last_accessed.and_then(|last_accessed| {
                     glib::DateTime::from_unix_utc(last_accessed.timestamp()).ok()
@@ -110,12 +112,12 @@ impl Service {
             document.unwrap().unsubscribe().await;
         }
 
-        if let Err(error) = self.imp().node.shutdown().await {
+        if let Err(error) = self.node().shutdown().await {
             error!("Failed to shutdown service: {}", error);
         }
     }
 
     pub(crate) fn node(&self) -> &Node {
-        &self.imp().node
+        &self.imp().node.get().expect("Service to run")
     }
 }
