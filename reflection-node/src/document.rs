@@ -166,17 +166,16 @@ pub struct Subscription {
 
 impl Subscription {
     pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), DocumentError> {
-        let inner = self.node.clone();
+        let node = self.node.clone();
         let document_id = self.id;
         let operation = self
             .node
             .runtime
             .spawn(async move {
                 // Append one operation to our "ephemeral" delta log.
-                inner
-                    .operation_store
+                node.operation_store
                     .create_operation(
-                        &inner.private_key,
+                        &node.private_key,
                         LogType::Delta,
                         Some(document_id),
                         Some(&data),
@@ -199,7 +198,7 @@ impl Subscription {
     }
 
     pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), DocumentError> {
-        let inner = self.node.clone();
+        let node = self.node.clone();
         let document_id = self.id;
 
         let operation = self
@@ -211,10 +210,9 @@ impl Subscription {
                 //
                 // Snapshots are not broadcasted on the gossip overlay as they would be
                 // too large. Peers will sync them up when they join the document.
-                inner
-                    .operation_store
+                node.operation_store
                     .create_operation(
-                        &inner.private_key,
+                        &node.private_key,
                         LogType::Snapshot,
                         Some(document_id),
                         Some(&data),
@@ -229,10 +227,9 @@ impl Subscription {
                 // some sort of garbage collection whenever we snapshot. Snapshots
                 // already contain all history, there is no need to keep duplicate
                 // "delta" data around.
-                inner
-                    .operation_store
+                node.operation_store
                     .create_operation(
-                        &inner.private_key,
+                        &node.private_key,
                         LogType::Delta,
                         Some(document_id),
                         None,
@@ -264,13 +261,12 @@ impl Subscription {
     }
 
     pub async fn unsubscribe(self) -> Result<(), DocumentError> {
-        let inner = self.node.clone();
+        let node = self.node.clone();
         let document_id = self.id;
         self.node
             .runtime
             .spawn(async move {
-                inner
-                    .document_store
+                node.document_store
                     .set_last_accessed_for_document(&document_id, Some(Utc::now()))
                     .await
             })
@@ -298,13 +294,12 @@ impl Subscription {
     ///
     /// This information will be written to the database
     pub async fn set_name(&self, name: Option<String>) -> Result<(), DocumentError> {
-        let inner = self.node.clone();
+        let node = self.node.clone();
         let document_id = self.id;
         self.node
             .runtime
             .spawn(async move {
-                inner
-                    .document_store
+                node.document_store
                     .set_name_for_document(&document_id, name)
                     .await
             })
