@@ -19,8 +19,11 @@ use sqlx::{
     sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef},
 };
 use thiserror::Error;
-use tokio::{sync::mpsc, task::JoinError};
-use tracing::error;
+use tokio::{
+    sync::mpsc,
+    task::{AbortHandle, JoinError},
+};
+use tracing::{error, info};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
 pub struct DocumentId(Hash);
@@ -152,6 +155,13 @@ pub trait SubscribableDocument: Sync + Send {
 
 pub struct Subscription {
     pub(crate) inner: Arc<SubscriptionInner>,
+    network_monitor_task: AbortHandle,
+}
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        self.network_monitor_task.abort();
+    }
 }
 
 impl Subscription {
@@ -160,8 +170,23 @@ impl Subscription {
         id: DocumentId,
         document: Arc<impl SubscribableDocument + 'static>,
     ) -> Self {
-        let inner = SubscriptionInner::new(node, id, document).await;
-        Self { inner }
+        let inner = SubscriptionInner::new(node, id);
+
+        let inner_clone = inner.clone();
+        let network_monitor_task = inner
+            .node
+            .runtime
+            .spawn(async move {
+                inner_clone.spawn_network_monitor(document).await;
+            })
+            .abort_handle();
+
+        info!("Subscribed to document {}", id);
+
+        Subscription {
+            inner,
+            network_monitor_task,
+        }
     }
 
     pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), DocumentError> {
@@ -192,14 +217,20 @@ impl Subscription {
     }
 
     pub async fn unsubscribe(self) -> Result<(), DocumentError> {
-        let Subscription { inner } = self;
+        let document_id = self.inner.id;
 
+        self.network_monitor_task.abort();
+        let inner = self.inner.clone();
         inner
             .node
             .clone()
             .runtime
             .spawn(async move { inner.unsubscribe().await })
-            .await?
+            .await??;
+
+        info!("Unsubscribed from document {}", document_id);
+
+        Ok(())
     }
 
     /// Set the name for a given document

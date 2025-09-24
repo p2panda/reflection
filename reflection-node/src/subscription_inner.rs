@@ -7,7 +7,7 @@ use p2panda_core::{
     Body, Header,
     cbor::{decode_cbor, encode_cbor},
 };
-use p2panda_net::{FromNetwork, ToNetwork};
+use p2panda_net::{FromNetwork, Network, ToNetwork};
 use p2panda_stream::IngestExt;
 use tokio::{
     sync::{RwLock, mpsc},
@@ -40,19 +40,69 @@ impl Drop for SubscriptionInner {
 }
 
 impl SubscriptionInner {
-    pub async fn new(
-        node: Arc<NodeInner>,
-        id: DocumentId,
-        document: Arc<impl SubscribableDocument + 'static>,
-    ) -> Arc<Self> {
-        let (tx, abort_handles) = setup_network(&node, id, &document).await;
-
+    pub fn new(node: Arc<NodeInner>, id: DocumentId) -> Arc<Self> {
         Arc::new(SubscriptionInner {
-            tx: RwLock::new(tx),
+            tx: RwLock::new(None),
             node,
             id,
-            abort_handles: RwLock::new(abort_handles),
+            abort_handles: RwLock::new(Vec::new()),
         })
+    }
+
+    pub async fn spawn_network_monitor(&self, document: Arc<impl SubscribableDocument + 'static>) {
+        // We need to hold a read lock to the network, so that the network won't be dropped
+        // or shutdown.
+        let mut notify = Some(self.node.network_notifier.notified());
+        let mut network_guard = Some(self.node.network.read().await);
+
+        let (tx, abort_handles) = if let Some(network) = network_guard.as_ref().unwrap().deref() {
+            setup_network(
+                &self.node,
+                network,
+                self.id,
+                &document,
+            )
+            .await
+        } else {
+            (None, Vec::new())
+        };
+
+        *self.tx.write().await = tx;
+        *self.abort_handles.write().await = abort_handles;
+
+        loop {
+            if let Some(notify) = notify {
+                notify.await;
+            }
+
+            let mut abort_handles_guard = self.abort_handles.write().await;
+            let mut tx_guard = self.tx.write().await;
+
+            let old_tx = take(tx_guard.deref_mut());
+            let old_abort_handles = take(abort_handles_guard.deref_mut());
+
+            teardown_network(&self.node, &self.id, old_tx, old_abort_handles).await;
+            // Release network lock and get a new one, so that the network can be change between them
+            network_guard.take();
+            notify = Some(self.node.network_notifier.notified());
+            network_guard = Some(self.node.network.read().await);
+
+            let (tx, abort_handles) = if let Some(network) = network_guard.as_ref().unwrap().deref()
+            {
+                setup_network(
+                    &self.node,
+                    network,
+                    self.id,
+                    &document,
+                )
+                .await
+            } else {
+                (None, Vec::new())
+            };
+
+            *tx_guard = tx;
+            *abort_handles_guard = abort_handles;
+        }
     }
 
     pub async fn unsubscribe(&self) -> Result<(), DocumentError> {
@@ -174,15 +224,11 @@ impl SubscriptionInner {
 
 async fn setup_network(
     node: &Arc<NodeInner>,
+    network: &Network<DocumentId>,
     document_id: DocumentId,
     document: &Arc<impl SubscribableDocument + 'static>,
 ) -> (Option<mpsc::Sender<ToNetwork>>, Vec<AbortHandle>) {
     let mut abort_handles = Vec::with_capacity(3);
-
-    let network_guard = node.network.read().await;
-    let Some(network) = network_guard.deref() else {
-        return (None, abort_handles);
-    };
 
     let (document_tx, mut document_rx, gossip_ready) = match network.subscribe(document_id).await {
         Ok(result) => result,
