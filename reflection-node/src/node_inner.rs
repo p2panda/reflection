@@ -1,3 +1,4 @@
+use std::ops::DerefMut;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -5,7 +6,7 @@ use crate::author_tracker::{AuthorMessage, AuthorTracker};
 use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
 use crate::document_store::DocumentStore;
 use crate::ephemerial_operation::EphemerialOperation;
-use crate::node::NodeError;
+use crate::node::{ConnectionMode, NodeError};
 use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
@@ -14,14 +15,14 @@ use crate::utils::CombinedMigrationSource;
 use p2panda_core::{Body, Hash, Header, PrivateKey, cbor::decode_cbor};
 use p2panda_discovery::mdns::LocalDiscovery;
 use p2panda_net::config::GossipConfig;
-use p2panda_net::{FromNetwork, NetworkBuilder, SyncConfiguration};
+use p2panda_net::{FromNetwork, Network, NetworkBuilder, SyncConfiguration};
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_stream::IngestExt;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
 use tokio::{
     runtime::{Builder, Runtime},
-    sync::mpsc,
+    sync::{Notify, RwLock, mpsc},
 };
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tracing::{error, info, warn};
@@ -39,7 +40,9 @@ pub struct NodeInner {
     pub(crate) operation_store: OperationStore,
     pub(crate) document_store: DocumentStore,
     pub(crate) private_key: PrivateKey,
-    pub(crate) network: p2panda_net::Network<DocumentId>,
+    pub(crate) network_id: Hash,
+    pub(crate) network: RwLock<Option<Network<DocumentId>>>,
+    pub(crate) network_notifier: Notify,
 }
 
 //const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
@@ -50,6 +53,7 @@ impl NodeInner {
         network_id: Hash,
         private_key: PrivateKey,
         db_location: Option<&Path>,
+        connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
         let runtime = Builder::new_multi_thread()
             .worker_threads(1)
@@ -90,49 +94,68 @@ impl NodeInner {
         let operation_store = OperationStore::new(pool.clone());
         let document_store = DocumentStore::new(pool);
 
-        let sync_config = {
-            let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone_inner());
-            SyncConfiguration::<DocumentId>::new(sync)
+        let network = match connection_mode {
+            ConnectionMode::None => None,
+            ConnectionMode::Bluetooth => {
+                unimplemented!("Bluetooth is currently not implemented")
+            }
+            ConnectionMode::Network => {
+                setup_network(&private_key, &network_id, &document_store, &operation_store).await
+            }
         };
-
-        // FIXME: We want the node to work even when setting up the network fails
-        let network = NetworkBuilder::new(network_id.into())
-            .private_key(private_key.clone())
-            .discovery(LocalDiscovery::new())
-            // NOTE(glyph): Internet networking is disabled until we can fix the
-            // more-than-two-peers gossip issue.
-            //
-            //.relay(RELAY_URL.parse().expect("valid relay URL"), false, 0)
-            //.direct_address(
-            //    BOOTSTRAP_NODE_ID.parse().expect("valid node ID"),
-            //    vec![],
-            //    None,
-            //)
-            .gossip(GossipConfig {
-                // FIXME: This is a temporary workaround to account for larger delta patches (for
-                // example when the user Copy & Pastes a big chunk of text).
-                //
-                // Related issue: https://github.com/p2panda/reflection/issues/24
-                max_message_size: 512_000,
-            })
-            .sync(sync_config)
-            .build()
-            .await
-            .expect("Network to startup");
 
         Ok(Self {
             runtime,
             operation_store,
             document_store,
             private_key,
-            network,
+            network_id,
+            network: RwLock::new(network),
+            network_notifier: Notify::new(),
         })
     }
 
+    pub async fn set_connection_mode(&self, connection_mode: ConnectionMode) {
+        // Subscriptions will tear down the network subscription and drop the read lock,
+        // so that we can acquire the write lock and then shutdown the network.
+        self.network_notifier.notify_waiters();
+
+        let mut network_guard = self.network.write().await;
+
+        let network = match connection_mode {
+            ConnectionMode::None => None,
+            ConnectionMode::Bluetooth => {
+                unimplemented!("Bluetooth is currently not implemented")
+            }
+            ConnectionMode::Network => {
+                setup_network(
+                    &self.private_key,
+                    &self.network_id,
+                    &self.document_store,
+                    &self.operation_store,
+                )
+                .await
+            }
+        };
+
+        let old_network = std::mem::replace(network_guard.deref_mut(), network);
+
+        if let Some(old_network) = old_network {
+            // FIXME: For some reason we shutdown before the bye message is actually send
+            // This doesn't happen when shutting down the entire node, maybe because tokio is more busy here?
+            if let Err(error) = old_network.shutdown().await {
+                warn!("Failed to shutdown network: {error}");
+            }
+        }
+    }
+
     pub async fn shutdown(&self) {
-        // FIXME: If we can just clone the network why does shutdown consume self?
-        if let Err(error) = self.network.clone().shutdown().await {
-            warn!("Failed to shutdown network: {error}");
+        // Wake up all subscriptions that may still exist
+        self.network_notifier.notify_waiters();
+        if let Some(network) = self.network.write().await.take() {
+            if let Err(error) = network.shutdown().await {
+                warn!("Failed to shutdown network: {error}");
+            }
         }
     }
 
@@ -180,11 +203,18 @@ impl NodeInner {
 
         // Join a gossip overlay with peers who are interested in the same document and start sync
         // with them.
-        let (document_tx, mut document_rx, gossip_ready) = self
-            .network
-            .subscribe(document_id)
-            .await
-            .expect("Network subscription creation to succeed");
+        let (document_tx, mut document_rx, gossip_ready) = {
+            // FIXME: Handle subscriptions without network
+            let network_guard = self.network.read().await;
+            let network = network_guard
+                .as_ref()
+                .expect("Subscription can only be created with connection mode network");
+
+            network
+                .subscribe(document_id)
+                .await
+                .expect("Network subscription creation to succeed")
+        };
 
         let (persistent_tx, persistent_rx) =
             mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
@@ -319,5 +349,47 @@ impl NodeInner {
                 subscription2_abort_handle,
             ],
         })
+    }
+}
+
+async fn setup_network(
+    private_key: &PrivateKey,
+    network_id: &Hash,
+    document_store: &DocumentStore,
+    operation_store: &OperationStore,
+) -> Option<Network<DocumentId>> {
+    let sync_config = {
+        let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone_inner());
+        SyncConfiguration::<DocumentId>::new(sync)
+    };
+
+    let network = NetworkBuilder::new(network_id.into())
+        .private_key(private_key.clone())
+        .discovery(LocalDiscovery::new())
+        // NOTE(glyph): Internet networking is disabled until we can fix the
+        // more-than-two-peers gossip issue.
+        //
+        //.relay(RELAY_URL.parse().expect("valid relay URL"), false, 0)
+        //.direct_address(
+        //    BOOTSTRAP_NODE_ID.parse().expect("valid node ID"),
+        //    vec![],
+        //    None,
+        //)
+        .gossip(GossipConfig {
+            // FIXME: This is a temporary workaround to account for larger delta patches (for
+            // example when the user Copy & Pastes a big chunk of text).
+            //
+            // Related issue: https://github.com/p2panda/reflection/issues/24
+            max_message_size: 512_000,
+        })
+        .sync(sync_config)
+        .build()
+        .await;
+
+    if let Err(error) = network {
+        warn!("Failed to startup network: {error}");
+        None
+    } else {
+        network.ok()
     }
 }
