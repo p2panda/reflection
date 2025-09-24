@@ -1,4 +1,4 @@
-use gio::prelude::{FileExt, ListModelExtManual};
+use gio::prelude::{FileExt, ListModelExtManual, NetworkMonitorExt};
 use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
 use glib::{Properties, clone};
@@ -82,16 +82,45 @@ mod imp {
             let Some(node) = self.node.get() else {
                 return;
             };
-
+            let network_available = {
+                let monitor = gio::NetworkMonitor::default();
+                monitor.is_network_available()
+            };
             let connection_mode = (*self.connection_mode.lock().unwrap()).into();
-            node.set_connection_mode(connection_mode)
+            let wants_network = connection_mode == node::ConnectionMode::Network;
+            let real_connection_mode = if !network_available && wants_network {
+                node::ConnectionMode::None
+            } else {
+                connection_mode
+            };
+
+            node.set_connection_mode(real_connection_mode)
                 .await
                 .unwrap();
         }
     }
 
     #[glib::derived_properties]
-    impl ObjectImpl for Service {}
+    impl ObjectImpl for Service {
+        fn constructed(&self) {
+            self.parent_constructed();
+
+            let monitor = gio::NetworkMonitor::default();
+            monitor.connect_network_available_notify(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |_| {
+                    glib::spawn_future(clone!(
+                        #[weak]
+                        this,
+                        async move {
+                            this.update_node_connection_mode().await;
+                        }
+                    ));
+                }
+            ));
+        }
+    }
 
     #[glib::object_subclass]
     impl ObjectSubclass for Service {
@@ -121,7 +150,9 @@ impl Service {
             private_key,
             network_id,
             path.as_deref(),
-            self.connection_mode().into(),
+            // gio::NetworkManager is slow to initialize the `network-available` property,
+            // so it might be incorrect therefore always start with no connection.
+            node::ConnectionMode::None,
         )
         .await?;
 
@@ -129,6 +160,8 @@ impl Service {
             .node
             .set(node)
             .expect("Service to startup only once");
+
+        self.imp().update_node_connection_mode().await;
 
         if let Ok(documents) = self.node().documents().await {
             for document in documents {
