@@ -14,7 +14,10 @@ use crate::{
     document::{Document, DocumentId},
     documents::Documents,
 };
-use reflection_node::node::{Node, NodeError};
+use reflection_node::{
+    node,
+    node::{Node, NodeError},
+};
 
 #[derive(Error, Debug)]
 pub enum StartupError {
@@ -64,7 +67,13 @@ impl Service {
         let public_key = private_key.public_key();
         let network_id = Hash::new(b"reflection");
         let path = self.data_dir().and_then(|data_dir| data_dir.path());
-        let node = Node::new(private_key, network_id, path.as_deref()).await?;
+        let node = Node::new(
+            private_key,
+            network_id,
+            path.as_deref(),
+            node::ConnectionMode::Network,
+        )
+        .await?;
 
         self.imp()
             .node

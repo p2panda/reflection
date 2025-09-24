@@ -19,6 +19,14 @@ pub enum NodeError {
     DatebaseMigration(#[from] sqlx::migrate::MigrateError),
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
+pub enum ConnectionMode {
+    #[default]
+    None,
+    Bluetooth,
+    Network,
+}
+
 #[derive(Debug)]
 pub struct Node {
     inner: Arc<NodeInner>,
@@ -29,10 +37,28 @@ impl Node {
         private_key: PrivateKey,
         network_id: Hash,
         db_location: Option<&Path>,
+        connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
         Ok(Self {
-            inner: Arc::new(NodeInner::new(network_id, private_key, db_location).await?),
+            inner: Arc::new(
+                NodeInner::new(network_id, private_key, db_location, connection_mode).await?,
+            ),
         })
+    }
+
+    pub async fn set_connection_mode(
+        &self,
+        connection_mode: ConnectionMode,
+    ) -> Result<(), NodeError> {
+        let inner_clone = self.inner.clone();
+        self.inner
+            .runtime
+            .spawn(async move {
+                inner_clone.set_connection_mode(connection_mode).await;
+            })
+            .await?;
+
+        Ok(())
     }
 
     pub async fn shutdown(&self) -> Result<(), NodeError> {
