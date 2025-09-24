@@ -1,9 +1,9 @@
 use gio::prelude::{FileExt, ListModelExtManual};
-use glib::Properties;
 use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
+use glib::{Properties, clone};
 use reflection_node::p2panda_core::Hash;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use thiserror::Error;
 use tracing::error;
 
@@ -25,6 +25,26 @@ pub enum StartupError {
     Node(#[from] NodeError),
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, glib::Enum, Default)]
+#[repr(u32)]
+#[enum_type(name = "ReflectionConnectionMode")]
+pub enum ConnectionMode {
+    None,
+    Bluetooth,
+    #[default]
+    Network,
+}
+
+impl From<ConnectionMode> for node::ConnectionMode {
+    fn from(value: ConnectionMode) -> Self {
+        match value {
+            ConnectionMode::None => node::ConnectionMode::None,
+            ConnectionMode::Bluetooth => node::ConnectionMode::Bluetooth,
+            ConnectionMode::Network => node::ConnectionMode::Network,
+        }
+    }
+}
+
 mod imp {
     use super::*;
 
@@ -38,6 +58,36 @@ mod imp {
         pub data_dir: OnceLock<Option<gio::File>>,
         #[property(get)]
         documents: Documents,
+        #[property(get = Self::connection_mode, set = Self::set_connection_mode, builder(ConnectionMode::default()))]
+        pub connection_mode: Mutex<ConnectionMode>,
+    }
+
+    impl Service {
+        fn set_connection_mode(&self, connection_mode: ConnectionMode) {
+            *self.connection_mode.lock().unwrap() = connection_mode;
+            glib::spawn_future(clone!(
+                #[weak(rename_to = this)]
+                self,
+                async move {
+                    this.update_node_connection_mode().await;
+                }
+            ));
+        }
+
+        fn connection_mode(&self) -> ConnectionMode {
+            *self.connection_mode.lock().unwrap()
+        }
+
+        pub(super) async fn update_node_connection_mode(&self) {
+            let Some(node) = self.node.get() else {
+                return;
+            };
+
+            let connection_mode = (*self.connection_mode.lock().unwrap()).into();
+            node.set_connection_mode(connection_mode)
+                .await
+                .unwrap();
+        }
     }
 
     #[glib::derived_properties]
@@ -71,7 +121,7 @@ impl Service {
             private_key,
             network_id,
             path.as_deref(),
-            node::ConnectionMode::Network,
+            self.connection_mode().into(),
         )
         .await?;
 
