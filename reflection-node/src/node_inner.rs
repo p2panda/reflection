@@ -95,6 +95,7 @@ impl NodeInner {
             SyncConfiguration::<DocumentId>::new(sync)
         };
 
+        // FIXME: We want the node to work even when setting up the network fails
         let network = NetworkBuilder::new(network_id.into())
             .private_key(private_key.clone())
             .discovery(LocalDiscovery::new())
@@ -116,7 +117,8 @@ impl NodeInner {
             })
             .sync(sync_config)
             .build()
-            .await?;
+            .await
+            .expect("Network to startup");
 
         Ok(Self {
             runtime,
@@ -127,10 +129,11 @@ impl NodeInner {
         })
     }
 
-    pub async fn shutdown(&self) -> Result<(), NodeError> {
+    pub async fn shutdown(&self) {
         // FIXME: If we can just clone the network why does shutdown consume self?
-        self.network.clone().shutdown().await?;
-        Ok(())
+        if let Err(error) = self.network.clone().shutdown().await {
+            warn!("Failed to shutdown network: {error}");
+        }
     }
 
     pub async fn create_document(self: Arc<Self>) -> Result<DocumentId, DocumentError> {
@@ -177,8 +180,11 @@ impl NodeInner {
 
         // Join a gossip overlay with peers who are interested in the same document and start sync
         // with them.
-        let (document_tx, mut document_rx, gossip_ready) =
-            self.network.subscribe(document_id).await?;
+        let (document_tx, mut document_rx, gossip_ready) = self
+            .network
+            .subscribe(document_id)
+            .await
+            .expect("Network subscription creation to succeed");
 
         let (persistent_tx, persistent_rx) =
             mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
