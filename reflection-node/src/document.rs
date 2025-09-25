@@ -148,11 +148,6 @@ pub enum DocumentError {
     Send(#[from] mpsc::error::SendError<ToNetwork>),
     #[error(transparent)]
     Runtime(#[from] JoinError),
-    #[error(transparent)]
-    GossipSetup(#[from] tokio::sync::oneshot::error::RecvError),
-    // FIXME: remove anyhow but p2panda uses anyhow
-    #[error(transparent)]
-    Anyhow(#[from] anyhow::Error),
 }
 
 pub trait SubscribableDocument: Sync + Send {

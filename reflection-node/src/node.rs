@@ -18,9 +18,6 @@ pub enum NodeError {
     Datebase(#[from] sqlx::Error),
     #[error(transparent)]
     DatebaseMigration(#[from] sqlx::migrate::MigrateError),
-    // FIXME: remove anyhow but p2panda uses anyhow
-    #[error(transparent)]
-    Anyhow(#[from] anyhow::Error),
 }
 
 pub struct Node {
@@ -75,8 +72,10 @@ impl Node {
         let inner_clone = inner.clone();
         inner
             .runtime
-            .spawn(async move { inner_clone.shutdown().await })
-            .await??;
+            .spawn(async move {
+                inner_clone.shutdown().await;
+            })
+            .await?;
 
         Ok(())
     }
