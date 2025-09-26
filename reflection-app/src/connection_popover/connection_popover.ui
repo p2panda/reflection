@@ -2,172 +2,202 @@
 <interface>
   <requires lib="gtk" version="4.0"/>
   <requires lib="Adw" version="1.0"/>
-  <template class="ReflectionConnectionPopover" parent="GtkPopover">
+  <template class="ReflectionConnectionPopover" parent="AdwBin">
     <property name="child">
-      <object class="AdwClamp">
-        <property name="maximum-size">300</property>
-        <property name="child">
+      <object class="GtkMenuButton" id="connection_button">
+        <style>
+          <class name="flat"/>
+        </style>
+        <child>
           <object class="GtkBox">
-            <property name="orientation">vertical</property>
             <child>
-              <object class="GtkBox">
-                <property name="hexpand">True</property>
-                <property name="margin-bottom">6</property>
-                <child>
-                  <object class="GtkLabel">
-                    <property name="hexpand">True</property>
-                    <property name="halign">start</property>
-                    <property name="label" translatable="yes">Connection Mode</property>
-                  </object>
-                </child>
-                <style>
-                  <class name="heading"/>
-                </style>
+              <object class="GtkImage">
+                <property name="margin-end">6</property>
+                <property name="icon-name">system-users-symbolic</property>
               </object>
             </child>
             <child>
-              <object class="AdwToggleGroup" id="connection_mode_switch">
-                <property name="homogeneous">True</property>
-                <child>
-                  <object class="AdwToggle">
-                    <property name="tooltip" translatable="yes">Disable communication with the outside world</property>
-                    <property name="name">offline</property>
-                    <property name="child">
-                      <object class="GtkBox">
-                        <property name="orientation">vertical</property>
-                        <property name="spacing">6</property>
-                        <property name="halign">center</property>
-                        <property name="margin-top">3</property>
-                        <child>
-                          <object class="GtkImage">
-                            <property name="icon-name">offline-symbolic</property>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel">
-                            <property name="label" translatable="yes">Offline</property>
-                          </object>
-                        </child>
-                      </object>
-                    </property>
-                  </object>
-                </child>
-                <!-- We don't support bluetooth yet
-                <child>
-                  <object class="AdwToggle">
-                    <property name="tooltip" translatable="yes">Communicate via bluetooth</property>
-                    <property name="name">bluetooth</property>
-                    <property name="child">
-                      <object class="GtkBox">
-                        <property name="orientation">vertical</property>
-                        <property name="spacing">6</property>
-                        <property name="halign">center</property>
-                        <property name="margin-top">3</property>
-                        <child>
-                          <object class="GtkImage">
-                            <property name="icon-name">bluetooth-symbolic</property>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel">
-                            <property name="label" translatable="yes">Bluetooth</property>
-                          </object>
-                        </child>
-                      </object>
-                    </property>
-                  </object>
-                </child>
-                -->
-                <child>
-                  <object class="AdwToggle">
-                    <property name="tooltip" translatable="yes">Communicate via network</property>
-                    <property name="name">network</property>
-                    <property name="child">
-                      <object class="GtkBox">
-                        <property name="orientation">vertical</property>
-                        <property name="spacing">6</property>
-                        <property name="halign">center</property>
-                        <property name="margin-top">3</property>
-                        <child>
-                          <object class="GtkImage" id="network_toggle_image">
-                            <property name="icon-name">network-symbolic</property>
-                          </object>
-                        </child>
-                        <child>
-                          <object class="GtkLabel">
-                            <property name="label" translatable="yes">Network</property>
-                          </object>
-                        </child>
-                      </object>
-                    </property>
-                  </object>
-                </child>
+              <object class="GtkLabel" id="connection_button_label">
+                <property name="label">34</property>
+                <property name="vexpand">False</property>
                 <style>
-                  <class name="connection-mode-toggle"/>
+                  <class name="user-counter"/>
                 </style>
               </object>
             </child>
-            <child>
-              <object class="GtkRevealer" id="no_network_revealer">
+          </object>
+        </child>
+        <property name="popover">
+          <object class="GtkPopover">
+            <property name="child">
+              <object class="AdwClamp">
+                <property name="maximum-size">300</property>
                 <property name="child">
                   <object class="GtkBox">
-                    <property name="margin-top">12</property>
-                    <property name="spacing">12</property>
+                    <property name="orientation">vertical</property>
                     <child>
-                      <object class="GtkImage">
-                        <property name="icon-name">no-wifi-symbolic</property>
-                        <property name="valign">center</property>
+                      <object class="GtkBox">
+                        <property name="hexpand">True</property>
+                        <property name="margin-bottom">6</property>
+                        <child>
+                          <object class="GtkLabel">
+                            <property name="hexpand">True</property>
+                            <property name="halign">start</property>
+                            <property name="label" translatable="yes">Connection Mode</property>
+                          </object>
+                        </child>
                         <style>
-                          <class name="circular"/>
+                          <class name="heading"/>
                         </style>
                       </object>
                     </child>
                     <child>
-                      <object class="GtkBox">
-                        <property name="orientation">vertical</property>
-                        <property name="valign">center</property>
+                      <object class="AdwToggleGroup" id="connection_mode_switch">
+                        <property name="homogeneous">True</property>
                         <child>
-                          <object class="GtkLabel">
-                            <property name="label" translatable="yes">No Network Connection</property>
-                            <property name="halign">start</property>
-                            <style>
-                              <class name="caption-heading"/>
-                            </style>
+                          <object class="AdwToggle">
+                            <property name="tooltip" translatable="yes">Disable communication with the outside world</property>
+                            <property name="name">offline</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <property name="halign">center</property>
+                                <property name="margin-top">3</property>
+                                <child>
+                                  <object class="GtkImage">
+                                    <property name="icon-name">offline-symbolic</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Offline</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
                           </object>
                         </child>
+                        <!-- We don't support bluetooth yet
                         <child>
-                          <object class="GtkLabel">
-                            <property name="label" translatable="yes">Check if the WiFi, mobile data, or other connection is working</property>
-                            <property name="wrap">True</property>
-                            <property name="halign">start</property>
-                            <style>
-                              <class name="caption"/>
-                            </style>
+                          <object class="AdwToggle">
+                            <property name="tooltip" translatable="yes">Communicate via bluetooth</property>
+                            <property name="name">bluetooth</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <property name="halign">center</property>
+                                <property name="margin-top">3</property>
+                                <child>
+                                  <object class="GtkImage">
+                                    <property name="icon-name">bluetooth-symbolic</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Bluetooth</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
                           </object>
                         </child>
+                        -->
+                        <child>
+                          <object class="AdwToggle">
+                            <property name="tooltip" translatable="yes">Communicate via network</property>
+                            <property name="name">network</property>
+                            <property name="child">
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="spacing">6</property>
+                                <property name="halign">center</property>
+                                <property name="margin-top">3</property>
+                                <child>
+                                  <object class="GtkImage" id="network_toggle_image">
+                                    <property name="icon-name">network-symbolic</property>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Network</property>
+                                  </object>
+                                </child>
+                              </object>
+                            </property>
+                          </object>
+                        </child>
+                        <style>
+                          <class name="connection-mode-toggle"/>
+                        </style>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkRevealer" id="no_network_revealer">
+                        <property name="child">
+                          <object class="GtkBox">
+                            <property name="margin-top">12</property>
+                            <property name="spacing">12</property>
+                            <child>
+                              <object class="GtkImage">
+                                <property name="icon-name">no-wifi-symbolic</property>
+                                <property name="valign">center</property>
+                                <style>
+                                  <class name="circular"/>
+                                </style>
+                              </object>
+                            </child>
+                            <child>
+                              <object class="GtkBox">
+                                <property name="orientation">vertical</property>
+                                <property name="valign">center</property>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">No Network Connection</property>
+                                    <property name="halign">start</property>
+                                    <style>
+                                      <class name="caption-heading"/>
+                                    </style>
+                                  </object>
+                                </child>
+                                <child>
+                                  <object class="GtkLabel">
+                                    <property name="label" translatable="yes">Check if the WiFi, mobile data, or other connection is working</property>
+                                    <property name="wrap">True</property>
+                                    <property name="halign">start</property>
+                                    <style>
+                                      <class name="caption"/>
+                                    </style>
+                                  </object>
+                                </child>
+                              </object>
+                            </child>
+                          </object>
+                        </property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkScrolledWindow">
+                        <property name="propagate-natural-width">true</property>
+                        <property name="propagate-natural-height">true</property>
+                        <property name="max-content-height">300</property>
+                        <property name="margin-top">18</property>
+                        <property name="child">
+                          <object class="ReflectionAuthorList" id="author_list" />
+                        </property>
                       </object>
                     </child>
                   </object>
                 </property>
               </object>
-            </child>
-            <child>
-              <object class="GtkScrolledWindow">
-                <property name="propagate-natural-width">true</property>
-                <property name="propagate-natural-height">true</property>
-                <property name="max-content-height">300</property>
-                <property name="margin-top">18</property>
-                <property name="child">
-                  <object class="ReflectionAuthorList" id="author_list" />
-                </property>
-              </object>
-            </child>
+            </property>
+            <style>
+              <class name="connection-popover"/>
+            </style>
           </object>
         </property>
       </object>
     </property>
-    <style>
-      <class name="connection-popover"/>
-    </style>
   </template>
 </interface>

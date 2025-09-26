@@ -37,6 +37,8 @@ mod imp {
     #[template(resource = "/org/p2panda/reflection/connection_popover/connection_popover.ui")]
     pub struct ConnectionPopover {
         #[template_child]
+        connection_button_label: TemplateChild<gtk::Label>,
+        #[template_child]
         author_list: TemplateChild<AuthorList>,
         #[template_child]
         connection_mode_switch: TemplateChild<adw::ToggleGroup>,
@@ -44,16 +46,19 @@ mod imp {
         no_network_revealer: TemplateChild<gtk::Revealer>,
         #[template_child]
         network_toggle_image: TemplateChild<gtk::Image>,
-        #[property(get, set = Self::set_document, type = Document)]
+        #[property(get, set = Self::set_document)]
         document: RefCell<Option<Document>>,
+        #[property(get, set)]
+        popover: RefCell<Option<Document>>,
         connection_mode_binding: RefCell<Option<glib::Binding>>,
+        authors_changed_handler: RefCell<Option<glib::SignalHandlerId>>,
     }
 
     #[glib::object_subclass]
     impl ObjectSubclass for ConnectionPopover {
         const NAME: &'static str = "ReflectionConnectionPopover";
         type Type = super::ConnectionPopover;
-        type ParentType = gtk::Popover;
+        type ParentType = adw::Bin;
 
         fn class_init(klass: &mut Self::Class) {
             AuthorList::static_type();
@@ -92,12 +97,39 @@ mod imp {
     }
 
     impl ConnectionPopover {
-        fn set_document(&self, document: Document) {
+        fn set_document(&self, document: Option<Document>) {
+            if let Some(old_document) = self.document.take() {
+                if let Some(binding) = self.connection_mode_binding.take() {
+                    binding.unbind();
+                }
+
+                if let Some(handler) = self.authors_changed_handler.take() {
+                    old_document.disconnect(handler);
+                }
+            }
+
+            let Some(document) = document else {
+                self.document.replace(document);
+                return;
+            };
+
+            let authors = document.authors();
+
             self.author_list.set_model(Some(document.authors()));
 
-            if let Some(binding) = self.connection_mode_binding.take() {
-                binding.unbind();
-            }
+            // TODO: we need to do the same as fractal to allow gettext string substitution
+            //self.connection_button.set_tooltip_text(gettext!("{} People Connected", authors.n_items()));
+            let handler = authors.connect_items_changed(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |authors, _, _, _| {
+                    this.connection_button_label
+                        .set_label(&format!("{}", authors.n_items()));
+                }
+            ));
+
+            self.connection_button_label
+                .set_label(&format!("{}", authors.n_items()));
 
             let binding = document
                 .service()
@@ -127,6 +159,7 @@ mod imp {
                 })
                 .build();
 
+            self.authors_changed_handler.replace(Some(handler));
             self.connection_mode_binding.replace(Some(binding));
             self.document.replace(Some(document));
         }
@@ -151,13 +184,13 @@ mod imp {
     }
 
     impl WidgetImpl for ConnectionPopover {}
-    impl PopoverImpl for ConnectionPopover {}
+    impl BinImpl for ConnectionPopover {}
 }
 
 glib::wrapper! {
     pub struct ConnectionPopover(ObjectSubclass<imp::ConnectionPopover>)
-        @extends gtk::Widget, gtk::Popover,
-        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::ShortcutManager, gtk::Native;
+        @extends gtk::Widget, adw::Bin,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl ConnectionPopover {

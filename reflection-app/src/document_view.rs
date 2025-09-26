@@ -55,10 +55,6 @@ mod imp {
         pub share_code_label: TemplateChild<gtk::Label>,
         #[template_child]
         pub copy_code_button: TemplateChild<gtk::Button>,
-        #[template_child]
-        pub connection_button: TemplateChild<gtk::MenuButton>,
-        #[template_child]
-        pub connection_button_label: TemplateChild<gtk::Label>,
         pub css_provider: gtk::CssProvider,
         pub font_size: Cell<f64>,
         #[property(get, set = Self::set_font_scale, default = 0.0)]
@@ -82,6 +78,7 @@ mod imp {
             MultilineEntry::static_type();
             OpenPopover::static_type();
             TextView::static_type();
+            ConnectionPopover::static_type();
 
             klass.bind_template();
 
@@ -264,22 +261,6 @@ mod imp {
                 .downcast::<ReflectionTextBuffer>()
                 .unwrap()
                 .set_document(&document);
-            self.connection_button
-                .set_popover(Some(&ConnectionPopover::new(&document)));
-            let authors = document.authors();
-
-            // TODO: we need to do the same as fractal to allow gettext string substitution
-            //self.connection_button.set_tooltip_text(gettext!("{} People Connected", authors.n_items()));
-            authors.connect_items_changed(clone!(
-                #[weak(rename_to = this)]
-                self,
-                move |authors, _, _, _| {
-                    this.connection_button_label
-                        .set_label(&format!("{}", authors.n_items()));
-                }
-            ));
-            self.connection_button_label
-                .set_label(&format!("{}", authors.n_items()));
 
             let old_document = self.document.replace(Some(document));
 
