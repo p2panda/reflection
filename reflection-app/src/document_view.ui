@@ -86,29 +86,8 @@
               </object>
             </child>
             <child type="end">
-              <object class="GtkMenuButton" id="connection_button">
-                <style>
-                  <class name="flat"/>
-                </style>
-                <child>
-                  <object class="GtkBox">
-                    <child>
-                      <object class="GtkImage">
-                        <property name="margin-end">6</property>
-                        <property name="icon-name">system-users-symbolic</property>
-                      </object>
-                    </child>
-                    <child>
-                      <object class="GtkLabel" id="connection_button_label">
-                        <property name="label">34</property>
-                        <property name="vexpand">False</property>
-                        <style>
-                          <class name="user-counter"/>
-                        </style>
-                      </object>
-                    </child>
-                  </object>
-                </child>
+              <object class="ReflectionConnectionPopover">
+                <property name="document" bind-source="ReflectionDocumentView" bind-property="document" bind-flags="sync-create"/>
               </object>
             </child>
           </object>
