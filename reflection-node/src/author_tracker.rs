@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -67,6 +68,14 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
         // Send good bye message to the network
         if let Some(tx) = tx_guard.as_ref() {
             send_message(&self.node.private_key, tx, AuthorMessage::Bye).await;
+        }
+
+        // Set all authors that the tracker has seen to offline, authors the tracker hasn't seen are already offline
+        let old_authors =
+            std::mem::replace(self.last_ping.lock().await.deref_mut(), HashMap::new());
+        for author in old_authors.into_keys() {
+            self.document.author_left(author);
+            self.set_last_seen(author).await;
         }
 
         *tx_guard = tx;
