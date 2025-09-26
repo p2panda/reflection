@@ -174,7 +174,13 @@ impl Service {
                     .iter()
                     .map(|author| {
                         if author.public_key == public_key {
-                            Author::for_this_device(&PublicKey(author.public_key))
+                            let last_seen = author.last_seen.and_then(|last_seen| {
+                                glib::DateTime::from_unix_utc(last_seen.timestamp()).ok()
+                            });
+                            Author::for_this_device(
+                                &PublicKey(author.public_key),
+                                last_seen.as_ref(),
+                            )
                         } else {
                             let last_seen = author.last_seen.and_then(|last_seen| {
                                 glib::DateTime::from_unix_utc(last_seen.timestamp()).ok()
