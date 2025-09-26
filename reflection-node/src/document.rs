@@ -153,31 +153,27 @@ pub trait SubscribableDocument: Sync + Send {
     fn ephemeral_bytes_received(&self, author: PublicKey, data: Vec<u8>);
 }
 
-pub struct Subscription {
-    pub(crate) inner: Arc<SubscriptionInner>,
+pub struct Subscription<T> {
+    pub(crate) inner: Arc<SubscriptionInner<T>>,
     network_monitor_task: AbortHandle,
 }
 
-impl Drop for Subscription {
+impl<T> Drop for Subscription<T> {
     fn drop(&mut self) {
         self.network_monitor_task.abort();
     }
 }
 
-impl Subscription {
-    pub(crate) async fn new(
-        node: Arc<NodeInner>,
-        id: DocumentId,
-        document: Arc<impl SubscribableDocument + 'static>,
-    ) -> Self {
-        let inner = SubscriptionInner::new(node, id);
+impl<T: SubscribableDocument + 'static> Subscription<T> {
+    pub(crate) async fn new(node: Arc<NodeInner>, id: DocumentId, document: Arc<T>) -> Self {
+        let inner = SubscriptionInner::new(node, id, document);
 
         let inner_clone = inner.clone();
         let network_monitor_task = inner
             .node
             .runtime
             .spawn(async move {
-                inner_clone.spawn_network_monitor(document).await;
+                inner_clone.spawn_network_monitor().await;
             })
             .abort_handle();
 
