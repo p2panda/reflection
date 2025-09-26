@@ -78,6 +78,14 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
             self.set_last_seen(author).await;
         }
 
+        let this_author = self.node.private_key.public_key();
+        if tx.is_some() {
+            self.document.author_joined(this_author);
+        } else {
+            self.document.author_left(this_author);
+            self.set_last_seen(this_author).await;
+        }
+
         *tx_guard = tx;
     }
 
@@ -104,6 +112,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
     async fn join(&self, author: PublicKey) {
         self.last_ping.lock().await.insert(author, Instant::now());
         self.document.author_joined(author);
+        self.set_last_seen(author).await;
 
         // Send a ping to the network to ensure that the new author knows we exist
         // Normally we send a ping every `OFFLINE_TIMEOUT / 2`
@@ -117,6 +126,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
         if old.is_none() {
             self.document.author_joined(author);
         }
+        self.set_last_seen(author).await;
     }
 
     async fn left(&self, author: PublicKey) {
