@@ -24,14 +24,15 @@ use crate::node_inner::NodeInner;
 use crate::operation::{LogType, ReflectionExtensions};
 use crate::persistent_operation::PersistentOperation;
 
-pub struct SubscriptionInner {
+pub struct SubscriptionInner<T> {
     tx: RwLock<Option<mpsc::Sender<ToNetwork>>>,
     pub(crate) node: Arc<NodeInner>,
     pub(crate) id: DocumentId,
+    pub(crate) document: Arc<T>,
     abort_handles: RwLock<Vec<AbortHandle>>,
 }
 
-impl Drop for SubscriptionInner {
+impl<T> Drop for SubscriptionInner<T> {
     fn drop(&mut self) {
         for handle in self.abort_handles.get_mut() {
             handle.abort();
@@ -39,17 +40,18 @@ impl Drop for SubscriptionInner {
     }
 }
 
-impl SubscriptionInner {
-    pub fn new(node: Arc<NodeInner>, id: DocumentId) -> Arc<Self> {
+impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
+    pub fn new(node: Arc<NodeInner>, id: DocumentId, document: Arc<T>) -> Arc<Self> {
         Arc::new(SubscriptionInner {
             tx: RwLock::new(None),
             node,
             id,
             abort_handles: RwLock::new(Vec::new()),
+            document,
         })
     }
 
-    pub async fn spawn_network_monitor(&self, document: Arc<impl SubscribableDocument + 'static>) {
+    pub async fn spawn_network_monitor(&self) {
         // We need to hold a read lock to the network, so that the network won't be dropped
         // or shutdown.
         let mut notify = Some(self.node.network_notifier.notified());
@@ -60,7 +62,7 @@ impl SubscriptionInner {
                 &self.node,
                 network,
                 self.id,
-                &document,
+                &self.document,
             )
             .await
         } else {
@@ -93,7 +95,7 @@ impl SubscriptionInner {
                     &self.node,
                     network,
                     self.id,
-                    &document,
+                    &self.document,
                 )
                 .await
             } else {

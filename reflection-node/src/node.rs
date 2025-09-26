@@ -94,7 +94,7 @@ impl Node {
         &self,
         document_id: DocumentId,
         document_handle: T,
-    ) -> Result<Subscription, DocumentError> {
+    ) -> Result<Subscription<T>, DocumentError> {
         let document_handle = Arc::new(document_handle);
         let inner_clone = self.inner.clone();
         self.inner

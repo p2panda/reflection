@@ -175,11 +175,11 @@ impl NodeInner {
         Ok(document_id)
     }
 
-    pub async fn subscribe(
+    pub async fn subscribe<T: SubscribableDocument + 'static>(
         self: Arc<Self>,
         document_id: DocumentId,
-        document: Arc<impl SubscribableDocument + 'static>,
-    ) -> Result<Subscription, DocumentError> {
+        document: Arc<T>,
+    ) -> Result<Subscription<T>, DocumentError> {
         self.document_store.add_document(&document_id).await?;
         // Add ourselves as an author to the document store.
         self.document_store
