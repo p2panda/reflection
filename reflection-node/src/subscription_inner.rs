@@ -29,6 +29,7 @@ pub struct SubscriptionInner<T> {
     pub(crate) node: Arc<NodeInner>,
     pub(crate) id: DocumentId,
     pub(crate) document: Arc<T>,
+    author_tracker: Arc<AuthorTracker<T>>,
     abort_handles: RwLock<Vec<AbortHandle>>,
 }
 
@@ -42,12 +43,14 @@ impl<T> Drop for SubscriptionInner<T> {
 
 impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
     pub fn new(node: Arc<NodeInner>, id: DocumentId, document: Arc<T>) -> Arc<Self> {
+        let author_tracker = AuthorTracker::new(node.clone(), document.clone());
         Arc::new(SubscriptionInner {
             tx: RwLock::new(None),
             node,
             id,
             abort_handles: RwLock::new(Vec::new()),
             document,
+            author_tracker,
         })
     }
 
@@ -63,6 +66,7 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
                 network,
                 self.id,
                 &self.document,
+                &self.author_tracker,
             )
             .await
         } else {
@@ -83,7 +87,7 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
             let old_tx = take(tx_guard.deref_mut());
             let old_abort_handles = take(abort_handles_guard.deref_mut());
 
-            teardown_network(&self.node, &self.id, old_tx, old_abort_handles).await;
+            teardown_network(&self.id, &self.author_tracker, old_tx, old_abort_handles).await;
             // Release network lock and get a new one, so that the network can be change between them
             network_guard.take();
             notify = Some(self.node.network_notifier.notified());
@@ -96,6 +100,7 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
                     network,
                     self.id,
                     &self.document,
+                    &self.author_tracker,
                 )
                 .await
             } else {
@@ -119,7 +124,7 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
             .set_last_accessed_for_document(&self.id, Some(Utc::now()))
             .await?;
 
-        teardown_network(&self.node, &self.id, tx, abort_handles).await;
+        teardown_network(&self.id, &self.author_tracker, tx, abort_handles).await;
 
         Ok(())
     }
@@ -224,11 +229,12 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
     }
 }
 
-async fn setup_network(
+async fn setup_network<T: SubscribableDocument + 'static>(
     node: &Arc<NodeInner>,
     network: &Network<DocumentId>,
     document_id: DocumentId,
-    document: &Arc<impl SubscribableDocument + 'static>,
+    document: &Arc<T>,
+    author_tracker: &Arc<AuthorTracker<T>>,
 ) -> (Option<mpsc::Sender<ToNetwork>>, Vec<AbortHandle>) {
     let mut abort_handles = Vec::with_capacity(3);
 
@@ -246,7 +252,9 @@ async fn setup_network(
     let (persistent_tx, persistent_rx) =
         mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
 
-    let author_tracker = AuthorTracker::new(node.clone(), document.clone(), document_tx.clone());
+    author_tracker
+        .set_document_tx(Some(document_tx.clone()))
+        .await;
 
     let author_tracker_clone = author_tracker.clone();
     let document_clone = document.clone();
@@ -351,14 +359,14 @@ async fn setup_network(
     .abort_handle();
 
     abort_handles.push(abort_handle);
-
+    let author_tracker_clone = author_tracker.clone();
     let abort_handle = spawn(async move {
         // Only start track authors once we have joined the gossip overlay
         if let Err(error) = gossip_ready.await {
             error!("Failed to join the gossip overlay: {error}");
         }
 
-        author_tracker.spawn().await;
+        author_tracker_clone.spawn().await;
     })
     .abort_handle();
 
@@ -369,9 +377,9 @@ async fn setup_network(
     (Some(document_tx), abort_handles)
 }
 
-async fn teardown_network(
-    node: &Arc<NodeInner>,
+async fn teardown_network<T: SubscribableDocument + 'static>(
     document_id: &DocumentId,
+    author_tracker: &Arc<AuthorTracker<T>>,
     tx: Option<mpsc::Sender<ToNetwork>>,
     abort_handles: Vec<AbortHandle>,
 ) {
@@ -379,12 +387,9 @@ async fn teardown_network(
         handle.abort();
     }
 
-    // Send good bye message to the network
-    if let Some(tx) = tx {
-        if let Err(error) = AuthorMessage::Bye.send(&tx, &node.private_key).await {
-            error!("Failed to sent bye message to the network: {error}");
-        }
+    author_tracker.set_document_tx(None).await;
 
+    if tx.is_some() {
         info!(
             "Network subscription torn down for document {}",
             document_id

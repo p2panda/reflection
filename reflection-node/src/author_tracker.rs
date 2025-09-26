@@ -2,18 +2,18 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use crate::document::{DocumentError, SubscribableDocument};
+use crate::document::SubscribableDocument;
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node_inner::MessageType;
 use crate::node_inner::NodeInner;
 use chrono::Utc;
-use p2panda_core::PublicKey;
-use p2panda_core::{
-    PrivateKey,
-    cbor::{DecodeError, decode_cbor, encode_cbor},
-};
+use p2panda_core::cbor::{DecodeError, decode_cbor, encode_cbor};
+use p2panda_core::{PrivateKey, PublicKey};
 use p2panda_net::ToNetwork;
-use tokio::{sync::Mutex, sync::mpsc};
+use tokio::{
+    sync::mpsc,
+    sync::{Mutex, RwLock},
+};
 use tracing::error;
 
 const OFFLINE_TIMEOUT: Duration = Duration::from_secs(60);
@@ -25,20 +25,13 @@ pub enum AuthorMessage {
     Bye,
 }
 
-impl AuthorMessage {
-    pub async fn send(
-        &self,
-        tx: &mpsc::Sender<ToNetwork>,
-        private_key: &PrivateKey,
-    ) -> Result<(), DocumentError> {
-        // FIXME: We need to add the current time to the message,
-        // because iroh doesn't broadcast twice the same message message.
-        let author_message = encode_cbor(&(self, SystemTime::now()))?;
-        let operation = EphemerialOperation::new(author_message, private_key);
-        let bytes = encode_cbor(&MessageType::AuthorEphemeral(operation))?;
-        tx.send(ToNetwork::Message { bytes }).await?;
-
-        Ok(())
+impl std::fmt::Display for AuthorMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            AuthorMessage::Hello => write!(f, "Hello message"),
+            AuthorMessage::Ping => write!(f, "Ping message"),
+            AuthorMessage::Bye => write!(f, "Bye message"),
+        }
     }
 }
 
@@ -56,17 +49,27 @@ pub struct AuthorTracker<T> {
     last_ping: Mutex<HashMap<PublicKey, Instant>>,
     document: Arc<T>,
     node: Arc<NodeInner>,
-    tx: mpsc::Sender<ToNetwork>,
+    tx: RwLock<Option<mpsc::Sender<ToNetwork>>>,
 }
 
 impl<T: SubscribableDocument> AuthorTracker<T> {
-    pub fn new(node: Arc<NodeInner>, document: Arc<T>, tx: mpsc::Sender<ToNetwork>) -> Arc<Self> {
+    pub fn new(node: Arc<NodeInner>, document: Arc<T>) -> Arc<Self> {
         Arc::new(Self {
             last_ping: Mutex::new(HashMap::new()),
             document,
             node,
-            tx,
+            tx: RwLock::new(None),
         })
+    }
+
+    pub async fn set_document_tx(&self, tx: Option<mpsc::Sender<ToNetwork>>) {
+        let mut tx_guard = self.tx.write().await;
+        // Send good bye message to the network
+        if let Some(tx) = tx_guard.as_ref() {
+            send_message(&self.node.private_key, tx, AuthorMessage::Bye).await;
+        }
+
+        *tx_guard = tx;
     }
 
     pub async fn received(&self, message: AuthorMessage, author: PublicKey) {
@@ -83,18 +86,19 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
         }
     }
 
+    async fn send(&self, message: AuthorMessage) {
+        if let Some(tx) = self.tx.read().await.as_ref() {
+            send_message(&self.node.private_key, tx, message).await;
+        }
+    }
+
     async fn join(&self, author: PublicKey) {
         self.last_ping.lock().await.insert(author, Instant::now());
         self.document.author_joined(author);
 
         // Send a ping to the network to ensure that the new author knows we exist
         // Normally we send a ping every `OFFLINE_TIMEOUT / 2`
-        if let Err(error) = AuthorMessage::Ping
-            .send(&self.tx, &self.node.private_key)
-            .await
-        {
-            error!("Failed to sent ping message to the network: {error}");
-        }
+        self.send(AuthorMessage::Ping).await;
     }
 
     async fn ping(&self, author: PublicKey) {
@@ -114,12 +118,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
 
     pub async fn spawn(&self) {
         // Send a hello to the network so other authors know we joined the document
-        if let Err(error) = AuthorMessage::Hello
-            .send(&self.tx, &self.node.private_key)
-            .await
-        {
-            error!("Failed to sent hello message to the network: {error}");
-        }
+        self.send(AuthorMessage::Hello).await;
 
         let mut interval = tokio::time::interval(OFFLINE_TIMEOUT / 2);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -130,13 +129,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
             interval.tick().await;
 
             // Send a ping to the network so that we won't be marked as offline
-            if let Err(error) = AuthorMessage::Ping
-                .send(&self.tx, &self.node.private_key)
-                .await
-            {
-                error!("Failed to sent ping message to the network: {error}");
-            }
-
+            self.send(AuthorMessage::Ping).await;
             let mut expired = Vec::new();
             self.last_ping.lock().await.retain(|author, instant| {
                 if instant.elapsed() > OFFLINE_TIMEOUT {
@@ -163,5 +156,32 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
         {
             error!("Failed to set last seen for author {author}: {error}");
         }
+    }
+}
+
+async fn send_message(
+    private_key: &PrivateKey,
+    tx: &mpsc::Sender<ToNetwork>,
+    message: AuthorMessage,
+) {
+    // FIXME: We need to add the current time to the message,
+    // because iroh doesn't broadcast twice the same message message.
+    let author_message = match encode_cbor(&(&message, SystemTime::now())) {
+        Ok(result) => result,
+        Err(error) => {
+            error!("Failed to encode {message} as CBOR: {error}");
+            return;
+        }
+    };
+    let operation = EphemerialOperation::new(author_message, private_key);
+    let bytes = match encode_cbor(&MessageType::AuthorEphemeral(operation)) {
+        Ok(result) => result,
+        Err(error) => {
+            error!("Failed to encode {message} as CBOR: {error}");
+            return;
+        }
+    };
+    if let Err(error) = tx.send(ToNetwork::Message { bytes }).await {
+        error!("Failed to sent {message} to the network: {error}");
     }
 }
