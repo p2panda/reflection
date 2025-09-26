@@ -161,11 +161,10 @@ impl Author {
             .build()
     }
 
-    pub fn for_this_device(public_key: &PublicKey) -> Self {
-        let obj = Self::new(public_key);
+    pub fn for_this_device(public_key: &PublicKey, last_seen: Option<&glib::DateTime>) -> Self {
+        let obj = Self::with_state(public_key, last_seen);
 
         obj.imp().is_this_device.set(true);
-        obj.imp().is_online.set(true);
         obj
     }
 
