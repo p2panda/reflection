@@ -79,7 +79,7 @@ mod imp {
         #[property(get, construct_only)]
         id: OnceCell<DocumentId>,
         #[property(name = "subscribed", get = Self::subscribed, type = bool)]
-        pub(super) subscription: RwLock<Option<Arc<DocumentSubscription>>>,
+        pub(super) subscription: RwLock<Option<Arc<DocumentSubscription<DocumentHandle>>>>,
         #[property(get = Self::service, set = Self::set_service, construct_only, type = Service)]
         service: glib::WeakRef<Service>,
         #[property(get, set = Self::set_authors, construct_only)]
@@ -585,7 +585,7 @@ mod imp {
             }
         }
 
-        pub(super) fn subscription(&self) -> Option<Arc<DocumentSubscription>> {
+        pub(super) fn subscription(&self) -> Option<Arc<DocumentSubscription<DocumentHandle>>> {
             self.subscription.read().unwrap().clone()
         }
     }
