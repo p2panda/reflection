@@ -73,7 +73,8 @@ impl Authors {
         let mut list = self.imp().list.lock().unwrap();
         let pos = list.len() as u32;
 
-        let author = Author::for_this_device(&author_key);
+        let author =
+            Author::for_this_device(&author_key, glib::DateTime::now_local().ok().as_ref());
         list.push(author);
         drop(list);
         self.items_changed(pos, 0, 1);
