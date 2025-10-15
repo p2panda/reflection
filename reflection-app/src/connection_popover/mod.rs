@@ -27,7 +27,10 @@ use gtk::{gio, glib, glib::clone};
 use reflection_doc::{document::Document, service::ConnectionMode};
 
 mod author_list;
+mod avatar_stack;
+
 use self::author_list::AuthorList;
+use self::avatar_stack::AvatarStack;
 
 mod imp {
     use super::*;
@@ -37,7 +40,7 @@ mod imp {
     #[template(resource = "/org/p2panda/reflection/connection_popover/connection_popover.ui")]
     pub struct ConnectionPopover {
         #[template_child]
-        connection_button_label: TemplateChild<gtk::Label>,
+        button_icon_stack: TemplateChild<gtk::Stack>,
         #[template_child]
         author_list: TemplateChild<AuthorList>,
         #[template_child]
@@ -62,6 +65,7 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             AuthorList::static_type();
+            AvatarStack::static_type();
             klass.bind_template();
         }
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -98,14 +102,8 @@ mod imp {
 
     impl ConnectionPopover {
         fn set_document(&self, document: Option<Document>) {
-            if let Some(old_document) = self.document.take() {
-                if let Some(binding) = self.connection_mode_binding.take() {
-                    binding.unbind();
-                }
-
-                if let Some(handler) = self.authors_changed_handler.take() {
-                    old_document.disconnect(handler);
-                }
+            if let Some(binding) = self.connection_mode_binding.take() {
+                binding.unbind();
             }
 
             let Some(document) = document else {
@@ -113,23 +111,7 @@ mod imp {
                 return;
             };
 
-            let authors = document.authors();
-
             self.author_list.set_model(Some(document.authors()));
-
-            // TODO: we need to do the same as fractal to allow gettext string substitution
-            //self.connection_button.set_tooltip_text(gettext!("{} People Connected", authors.n_items()));
-            let handler = authors.connect_items_changed(clone!(
-                #[weak(rename_to = this)]
-                self,
-                move |authors, _, _, _| {
-                    this.connection_button_label
-                        .set_label(&format!("{}", authors.n_items()));
-                }
-            ));
-
-            self.connection_button_label
-                .set_label(&format!("{}", authors.n_items()));
 
             let binding = document
                 .service()
@@ -159,7 +141,6 @@ mod imp {
                 })
                 .build();
 
-            self.authors_changed_handler.replace(Some(handler));
             self.connection_mode_binding.replace(Some(binding));
             self.document.replace(Some(document));
         }
@@ -179,6 +160,18 @@ mod imp {
             } else {
                 self.network_toggle_image
                     .set_icon_name(Some("no-network-symbolic"));
+            }
+
+            if let Some(mode) = self.connection_mode_switch.active_name() {
+                let page_name = match mode.as_str() {
+                    "offline" => Some("offline"),
+                    "network" if !monitor.is_network_available() => Some("no-network"),
+                    "network" => Some("network"),
+                    _ => None,
+                };
+                if let Some(page_name) = page_name {
+                    self.button_icon_stack.set_visible_child_name(page_name);
+                }
             }
         }
     }

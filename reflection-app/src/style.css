@@ -53,10 +53,23 @@
 }
 
 .avatar {
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 9999px;
+}
+
+.connection-popover .avatar {
   min-width: 46px;
   min-height: 46px;
   border-radius: 32px;
   font-size: 32px;
+}
+
+.authors-overflow {
+  border-radius: 9px;
+	font-size: 9px;
+	padding: 3px 6px;
+	background-color: green;
 }
 
 .this-device-pill {
@@ -67,6 +80,7 @@
 	font-weight: 700;
 	font-size: 9px;
 }
+
 .open-popover contents {
   padding: 0px;
   min-width: 300px;
