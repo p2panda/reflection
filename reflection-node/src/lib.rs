@@ -38,7 +38,8 @@ mod tests {
                 .await
                 .unwrap();
 
-            let document_id: [u8; 32] = node.create_document().await.unwrap();
+            let document_id: [u8; 32] = [0; 32];
+            let _sub = node.subscribe(document_id, TestDocument::new()).await;
             let documents = node.documents::<[u8; 32]>().await.unwrap();
 
             assert_eq!(documents.len(), 1);
@@ -98,12 +99,12 @@ mod tests {
 
             let test_document = TestDocument::new();
 
-            let document_id: [u8; 32] = node.create_document().await.unwrap();
+            let document_id: [u8; 32] = [0; 32];
+            let subscription = node.subscribe(document_id, test_document).await.unwrap();
+
             let documents = node.documents::<[u8; 32]>().await.unwrap();
             assert_eq!(documents.len(), 1);
             assert_eq!(documents.first().unwrap().id, document_id);
-
-            let subscription = node.subscribe(document_id, test_document).await.unwrap();
 
             let private_key2 = PrivateKey::new();
             let network_id2 = Hash::new(b"reflection");

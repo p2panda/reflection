@@ -671,36 +671,6 @@ impl Document {
             .build()
     }
 
-    pub async fn create(service: &Service) -> Self {
-        let id: DocumentId = service
-            .node()
-            .create_document()
-            .await
-            .expect("Create document");
-
-        glib::Object::builder()
-            .property("service", service)
-            .property("id", &id)
-            .build()
-    }
-
-    pub async fn create_with_main_context(
-        service: &Service,
-        main_context: &glib::MainContext,
-    ) -> Self {
-        let id: DocumentId = service
-            .node()
-            .create_document()
-            .await
-            .expect("Create document");
-
-        glib::Object::builder()
-            .property("service", service)
-            .property("id", id)
-            .property("main-context", main_context)
-            .build()
-    }
-
     pub fn with_main_context(
         service: &Service,
         id: &DocumentId,

@@ -75,7 +75,7 @@ mod tests {
     use glib::clone;
     use test_log::test;
 
-    use crate::document::Document;
+    use crate::document::{Document, DocumentId};
     use crate::identity::PrivateKey;
     use crate::service::Service;
 
@@ -96,7 +96,7 @@ mod tests {
                 let service = Service::new(&private_key, None);
                 service.startup().await.unwrap();
 
-                let document = Document::create_with_main_context(&service, &context).await;
+                let document = Document::with_main_context(&service, &DocumentId::new(), &context);
                 document.subscribe().await;
 
                 assert!(document.insert_text(0, test_string).is_ok());
@@ -127,7 +127,7 @@ mod tests {
                 let service = Service::new(&private_key, None);
                 service.startup().await.unwrap();
 
-                let document = Document::create_with_main_context(&service, &context).await;
+                let document = Document::with_main_context(&service, &DocumentId::new(), &context);
                 document.subscribe().await;
                 let id = document.id();
 
@@ -172,7 +172,7 @@ mod tests {
                 let service = Service::new(&private_key, None);
                 service.startup().await.unwrap();
 
-                let document = Document::create_with_main_context(&service, &context).await;
+                let document = Document::with_main_context(&service, &DocumentId::new(), &context);
                 document.subscribe().await;
                 let id = document.id();
 
@@ -226,7 +226,7 @@ mod tests {
                 let service = Service::new(&private_key, None);
                 service.startup().await.unwrap();
 
-                let document = Document::create_with_main_context(&service, &context).await;
+                let document = Document::with_main_context(&service, &DocumentId::new(), &context);
                 let id = document.id();
 
                 document.subscribe().await;

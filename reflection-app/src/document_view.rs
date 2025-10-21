@@ -229,10 +229,7 @@ mod imp {
                 }
             ));
 
-            // FIXME: Would be nice to be able to create a new document sync
-            let document = glib::MainContext::new()
-                .block_on(async move { Document::create(self.service.get().unwrap()).await });
-            self.set_document(document);
+            self.set_document(Document::new(&self.obj().service(), &DocumentId::new()));
         }
     }
 
