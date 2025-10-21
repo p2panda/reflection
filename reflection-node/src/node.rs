@@ -1,11 +1,13 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use p2panda_core::{Hash, PrivateKey};
 use thiserror::Error;
 
 use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
-use crate::document_store::Document;
+pub use crate::document_store::Author;
+use crate::document_store::StoreDocument;
 use crate::node_inner::NodeInner;
 
 #[derive(Debug, Error)]
@@ -26,6 +28,14 @@ pub enum ConnectionMode {
     None,
     Bluetooth,
     Network,
+}
+
+#[derive(Clone, Debug)]
+pub struct Document<ID> {
+    pub id: ID,
+    pub name: Option<String>,
+    pub last_accessed: Option<DateTime<Utc>>,
+    pub authors: Vec<Author>,
 }
 
 #[derive(Debug)]
@@ -74,28 +84,52 @@ impl Node {
         Ok(())
     }
 
-    pub async fn documents(&self) -> Result<Vec<Document>, DocumentError> {
+    pub async fn documents<ID: From<[u8; 32]>>(&self) -> Result<Vec<Document<ID>>, DocumentError> {
         let inner_clone = self.inner.clone();
-        Ok(self
+        let documents = self
             .inner
             .runtime
             .spawn(async move { inner_clone.document_store.documents().await })
-            .await??)
+            .await??;
+
+        let documents = documents
+            .into_iter()
+            .map(|document| {
+                let StoreDocument {
+                    id,
+                    name,
+                    last_accessed,
+                    authors,
+                } = document;
+                Document {
+                    id: <[u8; 32]>::from(id).into(),
+                    name,
+                    last_accessed,
+                    authors,
+                }
+            })
+            .collect();
+
+        Ok(documents)
     }
 
-    pub async fn create_document(&self) -> Result<DocumentId, DocumentError> {
+    pub async fn create_document<ID: From<[u8; 32]>>(&self) -> Result<ID, DocumentError> {
         let inner_clone = self.inner.clone();
-        self.inner
+        let document_id = self
+            .inner
             .runtime
             .spawn(async move { inner_clone.create_document().await })
-            .await?
+            .await??;
+
+        Ok(<[u8; 32]>::from(document_id).into())
     }
 
-    pub async fn subscribe<T: SubscribableDocument + 'static>(
+    pub async fn subscribe<ID: Into<[u8; 32]>, T: SubscribableDocument + 'static>(
         &self,
-        document_id: DocumentId,
+        document_id: ID,
         document_handle: T,
     ) -> Result<Subscription<T>, DocumentError> {
+        let document_id: DocumentId = DocumentId::from(document_id.into());
         let document_handle = Arc::new(document_handle);
         let inner_clone = self.inner.clone();
         self.inner

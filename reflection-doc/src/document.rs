@@ -1,16 +1,14 @@
 use std::fmt;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::Result;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
+pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use reflection_node::document::{
-    DocumentId as DocumentIdNode, SubscribableDocument, Subscription as DocumentSubscription,
-};
+use reflection_node::document::{SubscribableDocument, Subscription as DocumentSubscription};
 use reflection_node::p2panda_core;
 use tracing::error;
 
@@ -21,19 +19,42 @@ use crate::service::Service;
 
 #[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
 #[boxed_type(name = "ReflectionDocumentId", nullable)]
-pub struct DocumentId(pub(crate) DocumentIdNode);
+pub struct DocumentId([u8; 32]);
 
-impl FromStr for DocumentId {
-    type Err = p2panda_core::HashError;
+impl From<DocumentId> for [u8; 32] {
+    fn from(id: DocumentId) -> Self {
+        id.0
+    }
+}
 
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Ok(DocumentId(DocumentIdNode::from_str(value)?))
+impl From<[u8; 32]> for DocumentId {
+    fn from(bytes: [u8; 32]) -> Self {
+        Self(bytes)
     }
 }
 
 impl fmt::Display for DocumentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        f.write_str(&self.to_hex())
+    }
+}
+
+impl DocumentId {
+    pub fn new() -> Self {
+        let mut arr = [0u8; 32];
+        rand::fill(&mut arr[..]);
+        DocumentId(arr)
+    }
+
+    pub fn from_hex(hex: &str) -> Result<DocumentId, FromHexError> {
+        let mut bytes = [0u8; 32];
+        hex::decode_to_slice(hex, &mut bytes as &mut [u8])?;
+
+        Ok(DocumentId(bytes))
+    }
+
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.0)
     }
 }
 
@@ -651,7 +672,7 @@ impl Document {
     }
 
     pub async fn create(service: &Service) -> Self {
-        let id = service
+        let id: DocumentId = service
             .node()
             .create_document()
             .await
@@ -659,7 +680,7 @@ impl Document {
 
         glib::Object::builder()
             .property("service", service)
-            .property("id", DocumentId(id))
+            .property("id", &id)
             .build()
     }
 
@@ -667,7 +688,7 @@ impl Document {
         service: &Service,
         main_context: &glib::MainContext,
     ) -> Self {
-        let id = service
+        let id: DocumentId = service
             .node()
             .create_document()
             .await
@@ -675,7 +696,7 @@ impl Document {
 
         glib::Object::builder()
             .property("service", service)
-            .property("id", DocumentId(id))
+            .property("id", id)
             .property("main-context", main_context)
             .build()
     }
@@ -781,9 +802,8 @@ impl Document {
             return;
         }
 
-        let document_id = self.id().0;
         let handle = DocumentHandle(self.downgrade());
-        match self.service().node().subscribe(document_id, handle).await {
+        match self.service().node().subscribe(self.id(), handle).await {
             Ok(subscription) => {
                 self.imp()
                     .subscription

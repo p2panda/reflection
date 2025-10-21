@@ -79,7 +79,7 @@ impl Extension<DocumentId> for ReflectionExtensions {
         // invalid operation. In this case we return `None` here and our validation logic will
         // fail.
         match header.seq_num {
-            0 => Some(header.hash().into()),
+            0 => Some((*header.hash().as_bytes()).into()),
             _ => None,
         }
     }

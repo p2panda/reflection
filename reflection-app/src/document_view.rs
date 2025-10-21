@@ -300,7 +300,7 @@ mod imp {
 
         fn format_document_id(document_id: &DocumentId) -> String {
             document_id
-                .to_string()
+                .to_hex()
                 .chars()
                 .enumerate()
                 .flat_map(|(i, c)| {

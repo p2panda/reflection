@@ -38,8 +38,8 @@ mod tests {
                 .await
                 .unwrap();
 
-            let document_id = node.create_document().await.unwrap();
-            let documents = node.documents().await.unwrap();
+            let document_id: [u8; 32] = node.create_document().await.unwrap();
+            let documents = node.documents::<[u8; 32]>().await.unwrap();
 
             assert_eq!(documents.len(), 1);
             assert_eq!(documents.first().unwrap().id, document_id);
@@ -98,8 +98,8 @@ mod tests {
 
             let test_document = TestDocument::new();
 
-            let document_id = node.create_document().await.unwrap();
-            let documents = node.documents().await.unwrap();
+            let document_id: [u8; 32] = node.create_document().await.unwrap();
+            let documents = node.documents::<[u8; 32]>().await.unwrap();
             assert_eq!(documents.len(), 1);
             assert_eq!(documents.first().unwrap().id, document_id);
 
@@ -118,7 +118,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            let documents2 = node2.documents().await.unwrap();
+            let documents2 = node2.documents::<[u8; 32]>().await.unwrap();
             assert_eq!(documents2.len(), 1);
             assert_eq!(documents2.first().unwrap().id, document_id);
 
