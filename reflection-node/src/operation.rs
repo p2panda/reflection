@@ -32,12 +32,9 @@ pub struct ReflectionExtensions {
     #[serde(rename = "t")]
     pub log_type: LogType,
 
-    /// Identifier of the text document this operation relates to.
-    ///
-    /// Can be `None` if this operation indicates that we are creating a new document. In this case
-    /// we take the hash of the header itself to derive the document id.
+    /// Identifier of the document this operation relates to.
     #[serde(rename = "d")]
-    pub document: Option<DocumentId>,
+    pub document: DocumentId,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
@@ -61,27 +58,7 @@ impl Extension<LogType> for ReflectionExtensions {
 
 impl Extension<DocumentId> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<DocumentId> {
-        // Check if header mentions an document.
-        let document_id = header
-            .extensions
-            .as_ref()
-            .and_then(|extensions| extensions.document);
-        if document_id.is_some() {
-            return document_id;
-        }
-
-        // No document was mentioned, we must be creating a new document.
-        //
-        // If this is the first operation in the append-only log we use the hash of the header
-        // itself to determine the document id.
-        //
-        // Subsequent operations will continue to mention it, if this is not the case we have an
-        // invalid operation. In this case we return `None` here and our validation logic will
-        // fail.
-        match header.seq_num {
-            0 => Some((*header.hash().as_bytes()).into()),
-            _ => None,
-        }
+        Some(header.extensions.as_ref()?.document)
     }
 }
 

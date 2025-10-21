@@ -53,7 +53,7 @@ impl OperationStore {
         &self,
         private_key: &PrivateKey,
         log_type: LogType,
-        document: Option<DocumentId>,
+        document: DocumentId,
         body: Option<&[u8]>,
         prune_flag: bool,
     ) -> Result<Operation<ReflectionExtensions>, CreationError> {
@@ -66,13 +66,8 @@ impl OperationStore {
         let body = body.map(Body::new);
         let public_key = private_key.public_key();
 
-        let latest_operation = match document {
-            Some(ref document) => {
-                let log_id = LogId::new(log_type, document);
-                self.inner.latest_operation(&public_key, &log_id).await?
-            }
-            None => None,
-        };
+        let log_id = LogId::new(log_type, &document);
+        let latest_operation = self.inner.latest_operation(&public_key, &log_id).await?;
 
         let (seq_num, backlink) = match latest_operation {
             Some((header, _)) => (header.seq_num + 1, Some(header.hash())),
@@ -103,8 +98,6 @@ impl OperationStore {
         };
         header.sign(private_key);
 
-        let log_id: LogId = header.extension().expect("LogId from our own logs");
-
         let operation = Operation {
             hash: header.hash(),
             header,
@@ -112,7 +105,6 @@ impl OperationStore {
         };
 
         let mut inner_clone = self.clone_inner();
-
         inner_clone
             .insert_operation(
                 operation.hash,
