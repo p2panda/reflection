@@ -7,13 +7,61 @@ use p2panda_core::PublicKey;
 use p2panda_store::LogStore;
 use p2panda_sync::log_sync::TopicLogMap;
 use serde::{Deserialize, Serialize};
-use sqlx;
-use sqlx::Row;
+use sqlx::{
+    Decode, Encode, FromRow, Row, Sqlite, Type,
+    encode::IsNull,
+    error::BoxDynError,
+    sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef},
+};
 use tracing::error;
 
-use crate::document::{Author, Document, DocumentId};
+use crate::document::DocumentId;
 use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
+
+#[derive(Debug, FromRow)]
+pub struct Document {
+    #[sqlx(rename = "document_id")]
+    pub id: DocumentId,
+    #[sqlx(default)]
+    pub name: Option<String>,
+    pub last_accessed: Option<DateTime<Utc>>,
+    #[sqlx(skip)]
+    pub authors: Vec<Author>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Author {
+    pub public_key: PublicKey,
+    pub last_seen: Option<DateTime<Utc>>,
+}
+
+impl Type<Sqlite> for DocumentId {
+    fn type_info() -> SqliteTypeInfo {
+        <&[u8] as Type<Sqlite>>::type_info()
+    }
+
+    fn compatible(ty: &SqliteTypeInfo) -> bool {
+        <&[u8] as Type<Sqlite>>::compatible(ty)
+    }
+}
+
+impl<'q> Encode<'q, Sqlite> for &'q DocumentId {
+    fn encode_by_ref(
+        &self,
+        args: &mut Vec<SqliteArgumentValue<'q>>,
+    ) -> Result<IsNull, BoxDynError> {
+        <&[u8] as Encode<Sqlite>>::encode_by_ref(&self.as_bytes(), args)
+    }
+}
+
+impl Decode<'_, Sqlite> for DocumentId {
+    fn decode(value: SqliteValueRef<'_>) -> Result<Self, BoxDynError> {
+        let value = <&[u8] as Decode<Sqlite>>::decode(value)?;
+
+        Ok(DocumentId::from(TryInto::<[u8; 32]>::try_into(value)?))
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct DocumentStore {
