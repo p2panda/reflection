@@ -16,8 +16,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::str::FromStr;
-
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::prelude::*;
@@ -78,7 +76,7 @@ mod imp {
                 self,
                 move |_| {
                     let open_document_buffer = this.open_document_entry.buffer();
-                    let document_id = DocumentId::from_str(
+                    let document_id = DocumentId::from_hex(
                         &open_document_buffer
                             .text(
                                 &open_document_buffer.start_iter(),
@@ -108,7 +106,7 @@ mod imp {
                         .collect();
 
                     let document_id = if input.len() == 64 {
-                        DocumentId::from_str(&input).ok()
+                        DocumentId::from_hex(&input).ok()
                     } else {
                         None
                     };

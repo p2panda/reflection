@@ -241,10 +241,7 @@ async fn setup_network<T: SubscribableDocument + 'static>(
     let (document_tx, mut document_rx, gossip_ready) = match network.subscribe(document_id).await {
         Ok(result) => result,
         Err(error) => {
-            warn!(
-                "Failed to setup network for subscription to document {}: {error}",
-                document_id
-            );
+            warn!("Failed to setup network for subscription to document {document_id}: {error}");
             return (None, abort_handles);
         }
     };
@@ -372,7 +369,7 @@ async fn setup_network<T: SubscribableDocument + 'static>(
 
     abort_handles.push(abort_handle);
 
-    info!("Network subscription set up for document {}", document_id);
+    info!("Network subscription set up for document {document_id}");
 
     (Some(document_tx), abort_handles)
 }
@@ -390,9 +387,6 @@ async fn teardown_network<T: SubscribableDocument + 'static>(
     author_tracker.set_document_tx(None).await;
 
     if tx.is_some() {
-        info!(
-            "Network subscription torn down for document {}",
-            document_id
-        );
+        info!("Network subscription torn down for document {document_id}");
     }
 }

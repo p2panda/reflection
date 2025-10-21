@@ -20,7 +20,7 @@ use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
 
 #[derive(Debug, FromRow)]
-pub struct Document {
+pub struct StoreDocument {
     #[sqlx(rename = "document_id")]
     pub id: DocumentId,
     #[sqlx(default)]
@@ -51,7 +51,7 @@ impl<'q> Encode<'q, Sqlite> for &'q DocumentId {
         &self,
         args: &mut Vec<SqliteArgumentValue<'q>>,
     ) -> Result<IsNull, BoxDynError> {
-        <&[u8] as Encode<Sqlite>>::encode_by_ref(&self.as_bytes(), args)
+        <&[u8] as Encode<Sqlite>>::encode_by_ref(&self.as_slice(), args)
     }
 }
 
@@ -85,8 +85,8 @@ impl DocumentStore {
             .collect())
     }
 
-    pub async fn documents(&self) -> sqlx::Result<Vec<Document>> {
-        let mut documents: Vec<Document> =
+    pub async fn documents(&self) -> sqlx::Result<Vec<StoreDocument>> {
+        let mut documents: Vec<StoreDocument> =
             sqlx::query_as("SELECT document_id, name, last_accessed FROM documents")
                 .fetch_all(&self.pool)
                 .await?;

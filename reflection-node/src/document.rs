@@ -1,13 +1,12 @@
 use std::fmt;
-use std::hash::Hash as StdHash;
-use std::str::FromStr;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::node_inner::NodeInner;
 use crate::operation_store::CreationError;
 use crate::subscription_inner::SubscriptionInner;
 
-use p2panda_core::{Hash, HashError, PublicKey};
+use p2panda_core::PublicKey;
 use p2panda_net::{ToNetwork, TopicId};
 use p2panda_sync::TopicQuery;
 use serde::{Deserialize, Serialize};
@@ -18,12 +17,12 @@ use tokio::{
 };
 use tracing::info;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct DocumentId(Hash);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub(crate) struct DocumentId(#[serde(with = "serde_bytes")] [u8; 32]);
 
 impl DocumentId {
-    pub fn as_bytes(&self) -> &[u8] {
-        self.0.as_ref()
+    pub const fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
     }
 }
 
@@ -31,53 +30,25 @@ impl TopicQuery for DocumentId {}
 
 impl TopicId for DocumentId {
     fn id(&self) -> [u8; 32] {
-        *self.0.as_bytes()
+        self.0
     }
 }
 
 impl From<[u8; 32]> for DocumentId {
     fn from(bytes: [u8; 32]) -> Self {
-        Self(Hash::from_bytes(bytes))
+        Self(bytes)
     }
 }
 
-impl From<Hash> for DocumentId {
-    fn from(document_id: Hash) -> Self {
-        Self(document_id)
-    }
-}
-
-impl From<DocumentId> for Hash {
-    fn from(document: DocumentId) -> Self {
-        document.0
-    }
-}
-
-impl From<&DocumentId> for Hash {
-    fn from(value: &DocumentId) -> Self {
-        value.0
+impl From<DocumentId> for [u8; 32] {
+    fn from(id: DocumentId) -> Self {
+        id.0
     }
 }
 
 impl fmt::Display for DocumentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl FromStr for DocumentId {
-    type Err = HashError;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        Ok(Hash::from_str(value)?.into())
-    }
-}
-
-impl TryFrom<&[u8]> for DocumentId {
-    type Error = HashError;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        Ok(Hash::try_from(value)?.into())
+        f.write_str(&hex::encode(self.0))
     }
 }
 

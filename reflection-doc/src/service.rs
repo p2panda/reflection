@@ -163,7 +163,7 @@ impl Service {
 
         self.imp().update_node_connection_mode().await;
 
-        if let Ok(documents) = self.node().documents().await {
+        if let Ok(documents) = self.node().documents::<DocumentId>().await {
             for document in documents {
                 let last_accessed = document.last_accessed.and_then(|last_accessed| {
                     glib::DateTime::from_unix_utc(last_accessed.timestamp()).ok()
@@ -194,7 +194,7 @@ impl Service {
                 // The document is inserted automatically in the document list
                 let _document = Document::with_state(
                     self,
-                    Some(&DocumentId(document.id)),
+                    Some(&document.id),
                     document.name.as_deref(),
                     last_accessed.as_ref(),
                     &authors,
