@@ -4,7 +4,8 @@ use std::sync::Arc;
 use p2panda_core::{Hash, PrivateKey};
 use thiserror::Error;
 
-use crate::document::{Document, DocumentError, DocumentId, SubscribableDocument, Subscription};
+use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
+use crate::document_store::Document;
 use crate::node_inner::NodeInner;
 
 #[derive(Debug, Error)]
