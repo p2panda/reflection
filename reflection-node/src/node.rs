@@ -113,17 +113,6 @@ impl Node {
         Ok(documents)
     }
 
-    pub async fn create_document<ID: From<[u8; 32]>>(&self) -> Result<ID, DocumentError> {
-        let inner_clone = self.inner.clone();
-        let document_id = self
-            .inner
-            .runtime
-            .spawn(async move { inner_clone.create_document().await })
-            .await??;
-
-        Ok(<[u8; 32]>::from(document_id).into())
-    }
-
     pub async fn subscribe<ID: Into<[u8; 32]>, T: SubscribableDocument + 'static>(
         &self,
         document_id: ID,

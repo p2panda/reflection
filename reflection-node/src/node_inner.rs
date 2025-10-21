@@ -6,7 +6,6 @@ use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscript
 use crate::document_store::DocumentStore;
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node::{ConnectionMode, NodeError};
-use crate::operation::LogType;
 use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
 use crate::utils::CombinedMigrationSource;
@@ -154,25 +153,6 @@ impl NodeInner {
                 warn!("Failed to shutdown network: {error}");
             }
         }
-    }
-
-    pub async fn create_document(self: Arc<Self>) -> Result<DocumentId, DocumentError> {
-        let operation = self
-            .operation_store
-            .create_operation(&self.private_key, LogType::Snapshot, None, None, false)
-            .await?;
-
-        let document_id: DocumentId = operation
-            .header
-            .extension()
-            .expect("document id from our own logs");
-        self.document_store.add_document(&document_id).await?;
-
-        // Add ourselves as an author to the document store.
-        self.document_store
-            .add_author(&document_id, &self.private_key.public_key())
-            .await?;
-        Ok(document_id)
     }
 
     pub async fn subscribe<T: SubscribableDocument + 'static>(
