@@ -136,7 +136,7 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
                     .create_operation(
                         &self.node.private_key,
                         LogType::Delta,
-                        Some(self.id),
+                        self.id,
                         Some(&data),
                         false,
                     )
@@ -167,7 +167,7 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
             .create_operation(
                 &self.node.private_key,
                 LogType::Snapshot,
-                Some(self.id),
+                self.id,
                 Some(&data),
                 true,
             )
@@ -183,13 +183,7 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
         let operation = self
             .node
             .operation_store
-            .create_operation(
-                &self.node.private_key,
-                LogType::Delta,
-                Some(self.id),
-                None,
-                true,
-            )
+            .create_operation(&self.node.private_key, LogType::Delta, self.id, None, true)
             .await?;
 
         info!("Snapshot saved for document with id {}", self.id);
