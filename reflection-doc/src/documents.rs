@@ -1,8 +1,9 @@
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 use gio::prelude::*;
 use gio::subclass::prelude::ListModelImpl;
 use glib::subclass::prelude::*;
+use indexmap::IndexMap;
 
 use crate::document::{Document, DocumentId};
 
@@ -11,7 +12,7 @@ mod imp {
 
     #[derive(Default)]
     pub struct Documents {
-        pub(super) list: Mutex<Vec<Document>>,
+        pub(super) list: RwLock<IndexMap<DocumentId, Document>>,
     }
 
     #[glib::object_subclass]
@@ -29,16 +30,14 @@ mod imp {
         }
 
         fn n_items(&self) -> u32 {
-            self.list.lock().unwrap().len() as u32
+            self.list.read().unwrap().len() as u32
         }
 
         fn item(&self, index: u32) -> Option<glib::Object> {
-            self.list
-                .lock()
-                .unwrap()
-                .get(index as usize)
+            let list = self.list.read().unwrap();
+            list.get_index(list.len() - index as usize - 1)
+                .map(|(_, v)| v.upcast_ref::<glib::Object>())
                 .cloned()
-                .map(Cast::upcast)
         }
     }
 }
@@ -63,19 +62,21 @@ impl Documents {
     }
 
     pub(crate) fn add(&self, document: Document) {
-        let mut list = self.imp().list.lock().unwrap();
+        let mut list = self.imp().list.write().unwrap();
+        let document_id = document.id();
 
-        // FIXME: Inserting a new document at the top of the list is quite inefficient
-        list.insert(0, document.clone());
+        if list.contains_key(&document_id) {
+            return;
+        }
+
+        list.insert(document_id, document);
         drop(list);
         self.items_changed(0, 0, 1);
     }
 
-    pub fn by_id(&self, document_id: &DocumentId) -> Option<Document> {
-        let list = self.imp().list.lock().unwrap();
+    pub fn document(&self, document_id: &DocumentId) -> Option<Document> {
+        let list = self.imp().list.read().unwrap();
 
-        list.iter()
-            .find(|document| &document.id() == document_id)
-            .cloned()
+        list.get(document_id).cloned()
     }
 }

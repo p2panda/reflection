@@ -185,7 +185,7 @@ mod imp {
                                 .expect("Service to run");
                             let document = service
                                 .documents()
-                                .by_id(document_id)
+                                .document(document_id)
                                 .unwrap_or_else(|| Document::new(&service, document_id));
 
                             this.obj()
