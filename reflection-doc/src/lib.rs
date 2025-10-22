@@ -5,6 +5,8 @@ pub mod documents;
 pub mod service;
 
 pub mod identity {
+    use std::hash::Hash;
+
     use reflection_node::p2panda_core;
     pub use reflection_node::p2panda_core::identity::IdentityError;
     use std::fmt;
@@ -47,7 +49,7 @@ pub mod identity {
         }
     }
 
-    #[derive(Clone, Debug, PartialEq, glib::Boxed)]
+    #[derive(Clone, Debug, PartialEq, Hash, Eq, glib::Boxed)]
     #[boxed_type(name = "ReflectionPublicKey", nullable)]
     pub struct PublicKey(pub(crate) p2panda_core::PublicKey);
 
