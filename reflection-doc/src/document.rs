@@ -1,4 +1,5 @@
 use std::fmt;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -17,7 +18,7 @@ use crate::authors::Authors;
 use crate::identity::PublicKey;
 use crate::service::Service;
 
-#[derive(Clone, Debug, PartialEq, Eq, glib::Boxed)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, glib::Boxed)]
 #[boxed_type(name = "ReflectionDocumentId", nullable)]
 pub struct DocumentId([u8; 32]);
 
