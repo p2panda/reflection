@@ -145,7 +145,7 @@ glib::wrapper! {
     pub struct Author(ObjectSubclass<imp::Author>);
 }
 impl Author {
-    pub fn new(public_key: &PublicKey) -> Self {
+    pub(crate) fn new(public_key: &PublicKey) -> Self {
         let obj: Self = glib::Object::builder()
             .property("public-key", public_key)
             .build();
@@ -161,14 +161,17 @@ impl Author {
             .build()
     }
 
-    pub fn for_this_device(public_key: &PublicKey, last_seen: Option<&glib::DateTime>) -> Self {
+    pub(crate) fn for_this_device(
+        public_key: &PublicKey,
+        last_seen: Option<&glib::DateTime>,
+    ) -> Self {
         let obj = Self::with_state(public_key, last_seen);
 
         obj.imp().is_this_device.set(true);
         obj
     }
 
-    pub(crate) fn set_is_online(&self, is_online: bool) {
+    pub(crate) fn set_online(&self, is_online: bool) {
         let was_online = self.imp().is_online.get();
         self.imp().is_online.set(is_online);
         if !is_online && was_online {
