@@ -10,7 +10,6 @@ use tracing::error;
 use crate::identity::{PrivateKey, PublicKey};
 use crate::{
     author::Author,
-    authors::Authors,
     document::{Document, DocumentId},
     documents::Documents,
 };
@@ -190,15 +189,15 @@ impl Service {
                     })
                     .collect();
 
-                let authors = Authors::from_vec(authors);
                 // The document is inserted automatically in the document list
-                let _document = Document::with_state(
+                let document = Document::with_state(
                     self,
                     Some(&document.id),
                     document.name.as_deref(),
                     last_accessed.as_ref(),
-                    &authors,
                 );
+
+                document.authors().load(authors);
             }
         }
 

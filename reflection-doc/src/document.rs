@@ -104,8 +104,8 @@ mod imp {
         pub(super) subscription: RwLock<Option<Arc<DocumentSubscription<DocumentHandle>>>>,
         #[property(get = Self::service, set = Self::set_service, construct_only, type = Service)]
         service: glib::WeakRef<Service>,
-        #[property(get, set = Self::set_authors, construct_only)]
-        authors: OnceCell<Authors>,
+        #[property(get)]
+        authors: Authors,
         pub(super) tasks: Mutex<Vec<glib::JoinHandle<()>>>,
         pub(super) snapshot_scheduled: Cell<bool>,
 
@@ -161,12 +161,6 @@ mod imp {
 
         fn set_service(&self, service: &Service) {
             self.service.set(Some(service));
-        }
-
-        fn set_authors(&self, authors: Option<Authors>) {
-            if let Some(authors) = authors {
-                self.authors.set(authors).unwrap();
-            }
         }
 
         pub fn text(&self) -> String {
@@ -648,13 +642,9 @@ mod imp {
 
             self.setup_loro_document();
 
-            self.authors.get_or_init(|| {
-                let authors = Authors::new();
-
-                // Add ourself to the list of authors
-                authors.add_this_device(self.obj().service().private_key().public_key());
-                authors
-            });
+            // Add ourself to the list of authors
+            self.authors
+                .add_this_device(self.obj().service().private_key().public_key());
 
             self.obj().service().documents().add(self.obj().clone());
         }
@@ -689,12 +679,10 @@ impl Document {
         id: Option<&DocumentId>,
         name: Option<&str>,
         last_accessed: Option<&glib::DateTime>,
-        authors: &Authors,
     ) -> Self {
         glib::Object::builder()
             .property("service", service)
             .property("id", id)
-            .property("authors", authors)
             .property("name", name)
             .property("last-accessed", last_accessed)
             .build()
@@ -869,7 +857,7 @@ impl SubscribableDocument for DocumentHandle {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 document.imp().on_remote_message(data);
-                document.authors().ensure_author(PublicKey(author));
+                document.authors().add(PublicKey(author));
             });
         }
     }
@@ -877,7 +865,8 @@ impl SubscribableDocument for DocumentHandle {
     fn author_joined(&self, author: p2panda_core::PublicKey) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                document.authors().add_or_update(PublicKey(author), true);
+                let author = document.authors().add(PublicKey(author));
+                author.set_online(true);
                 // When a new author joins we need to send ephemeral messages again
                 document.imp().brodcast_ephemeral();
             });
@@ -887,7 +876,8 @@ impl SubscribableDocument for DocumentHandle {
     fn author_left(&self, author: p2panda_core::PublicKey) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                document.authors().add_or_update(PublicKey(author), false);
+                let author = document.authors().add(PublicKey(author));
+                author.set_online(false);
             });
         }
     }
@@ -896,7 +886,7 @@ impl SubscribableDocument for DocumentHandle {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 if let Ok(data) = decode_cbor(&data[..]) {
-                    if let Some(author) = document.authors().author(PublicKey(author)) {
+                    if let Some(author) = document.authors().author(&PublicKey(author)) {
                         document.imp().handle_ephemeral_data(author, data);
                     }
                 }
