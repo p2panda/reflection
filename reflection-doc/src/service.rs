@@ -7,13 +7,10 @@ use std::sync::{Mutex, OnceLock};
 use thiserror::Error;
 use tracing::error;
 
-use crate::identity::{PrivateKey, PublicKey};
-use crate::{
-    author::Author,
-    document::{Document, DocumentId},
-    documents::Documents,
-};
+use crate::identity::PrivateKey;
+use crate::{document::Document, documents::Documents};
 use reflection_node::{
+    document::DocumentError,
     node,
     node::{Node, NodeError},
 };
@@ -22,6 +19,8 @@ use reflection_node::{
 pub enum StartupError {
     #[error(transparent)]
     Node(#[from] NodeError),
+    #[error(transparent)]
+    Document(#[from] DocumentError),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, glib::Enum, Default)]
@@ -142,7 +141,6 @@ impl Service {
 
     pub async fn startup(&self) -> Result<(), StartupError> {
         let private_key = self.private_key().0;
-        let public_key = private_key.public_key();
         let network_id = Hash::new(b"reflection");
         let path = self.data_dir().and_then(|data_dir| data_dir.path());
         let node = Node::new(
@@ -161,45 +159,7 @@ impl Service {
             .expect("Service to startup only once");
 
         self.imp().update_node_connection_mode().await;
-
-        if let Ok(documents) = self.node().documents::<DocumentId>().await {
-            for document in documents {
-                let last_accessed = document.last_accessed.and_then(|last_accessed| {
-                    glib::DateTime::from_unix_utc(last_accessed.timestamp()).ok()
-                });
-
-                let authors: Vec<Author> = document
-                    .authors
-                    .iter()
-                    .map(|author| {
-                        if author.public_key == public_key {
-                            let last_seen = author.last_seen.and_then(|last_seen| {
-                                glib::DateTime::from_unix_utc(last_seen.timestamp()).ok()
-                            });
-                            Author::for_this_device(
-                                &PublicKey(author.public_key),
-                                last_seen.as_ref(),
-                            )
-                        } else {
-                            let last_seen = author.last_seen.and_then(|last_seen| {
-                                glib::DateTime::from_unix_utc(last_seen.timestamp()).ok()
-                            });
-                            Author::with_state(&PublicKey(author.public_key), last_seen.as_ref())
-                        }
-                    })
-                    .collect();
-
-                // The document is inserted automatically in the document list
-                let document = Document::with_state(
-                    self,
-                    Some(&document.id),
-                    document.name.as_deref(),
-                    last_accessed.as_ref(),
-                );
-
-                document.authors().load(authors);
-            }
-        }
+        self.documents().load(self).await?;
 
         Ok(())
     }
