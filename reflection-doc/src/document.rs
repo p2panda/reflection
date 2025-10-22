@@ -171,7 +171,7 @@ mod imp {
                 .to_string()
         }
 
-        fn update_name(&self) {
+        pub(super) fn update_name(&self) {
             let crdt_text = self
                 .crdt_doc
                 .get()
@@ -187,7 +187,13 @@ mod imp {
             *self.name.lock().unwrap() = name.clone();
             self.obj().notify_name();
 
+            self.store_name();
+        }
+
+        pub(super) fn store_name(&self) {
             if let Some(subscription) = self.subscription() {
+                let name = self.obj().name();
+
                 let handle = self.main_context().spawn(clone!(
                     #[weak]
                     subscription,
@@ -345,7 +351,7 @@ mod imp {
         }
 
         fn mark_for_snapshot(&self) {
-            if !self.snapshot_scheduled.get() {
+            if !self.snapshot_scheduled.get() && self.subscribed() {
                 let obj = self.obj();
                 let handle = self.main_context().spawn_with_priority(
                     glib::source::Priority::LOW,
@@ -645,8 +651,6 @@ mod imp {
             // Add ourself to the list of authors
             self.authors
                 .add_this_device(self.obj().service().private_key().public_key());
-
-            self.obj().service().documents().add(self.obj().clone());
         }
     }
 }
@@ -776,6 +780,12 @@ impl Document {
         }
 
         *self.imp().last_accessed.lock().unwrap() = None;
+
+        self.store_snapshot().await;
+        self.imp().store_name();
+
+        // Only keep the document once it was subscribed to at least once
+        self.service().documents().add(self.clone());
 
         self.notify_last_accessed();
         self.notify_subscribed();
