@@ -26,7 +26,7 @@ use reflection_doc::{
 };
 
 use adw::{prelude::*, subclass::prelude::*};
-use gtk::{gdk, glib, glib::clone};
+use gtk::{gdk, gio::prelude::ApplicationExtManual, glib, glib::clone};
 
 use crate::{
     ConnectionPopover, OpenPopover, ReflectionApplication, ReflectionTextBuffer, TextView,
@@ -284,11 +284,15 @@ mod imp {
             let old_document = self.document.replace(Some(document));
 
             if let Some(old_document) = old_document {
+                // We need to make sure that unsubscribe runs
+                // to termination before the app is terminated
+                let hold_guard = ReflectionApplication::default().hold();
                 glib::spawn_future_local(clone!(
                     #[weak]
                     old_document,
                     async move {
                         old_document.unsubscribe().await;
+                        drop(hold_guard);
                     }
                 ));
             }
