@@ -214,6 +214,15 @@ mod imp {
                         window.present();
                     } else {
                         this.set_document(document.to_owned());
+                        let hold_guard = ReflectionApplication::default().hold();
+                        glib::spawn_future_local(clone!(
+                            #[weak]
+                            document,
+                            async move {
+                                document.subscribe().await;
+                                drop(hold_guard);
+                            }
+                        ));
                     }
                 }
             ));
@@ -271,14 +280,6 @@ mod imp {
             ));
             self.connection_button_label
                 .set_label(&format!("{}", authors.n_items()));
-
-            glib::spawn_future_local(clone!(
-                #[weak]
-                document,
-                async move {
-                    document.subscribe().await;
-                }
-            ));
 
             let old_document = self.document.replace(Some(document));
 

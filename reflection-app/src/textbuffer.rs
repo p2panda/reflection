@@ -35,11 +35,14 @@ use tracing::{debug, error, info};
 mod imp {
     use super::*;
 
+    use crate::ReflectionApplication;
+
     #[derive(Debug, Default, glib::Properties)]
     #[properties(wrapper_type = super::ReflectionTextBuffer)]
     pub struct ReflectionTextBuffer {
         pub inhibit_text_change: Cell<bool>,
         pub document_handlers: OnceCell<glib::SignalGroup>,
+        pub changed_handler: RefCell<Option<glib::SignalHandlerId>>,
         #[property(get, set = Self::set_document)]
         pub document: RefCell<Option<Document>>,
         #[property(name = "custom-can-undo", get = Self::custom_can_undo, type = bool)]
@@ -62,9 +65,35 @@ mod imp {
 
         fn set_document(&self, document: Option<&Document>) {
             if let Some(document) = document.as_ref() {
+                if let Some(changed_handler) = self.changed_handler.take() {
+                    self.obj().disconnect(changed_handler);
+                }
                 self.obj().set_inhibit_text_change(true);
                 self.obj().set_text(&document.text());
                 self.obj().set_inhibit_text_change(false);
+            }
+
+            if document.map_or(false, |document| !document.subscribed()) {
+                let handle = self.obj().connect_changed(move |obj| {
+                    if let Some(changed_handler) = obj.imp().changed_handler.take() {
+                        obj.disconnect(changed_handler);
+                    }
+                    // We need to make sure that subscription runs
+                    // to termination before the app is terminated
+                    let guard = ReflectionApplication::default().hold();
+                    glib::spawn_future_local(clone!(
+                        #[weak]
+                        obj,
+                        async move {
+                            if let Some(document) = obj.document() {
+                                document.subscribe().await;
+                                drop(guard)
+                            }
+                        }
+                    ));
+                });
+
+                self.changed_handler.replace(Some(handle));
             }
 
             self.document_handlers.get().unwrap().set_target(document);
