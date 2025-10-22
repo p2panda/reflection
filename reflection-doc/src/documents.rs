@@ -5,7 +5,13 @@ use gio::subclass::prelude::ListModelImpl;
 use glib::subclass::prelude::*;
 use indexmap::IndexMap;
 
-use crate::document::{Document, DocumentId};
+use crate::identity::PublicKey;
+use crate::service::StartupError;
+use crate::{
+    author::Author,
+    document::{Document, DocumentId},
+    service::Service,
+};
 
 mod imp {
     use super::*;
@@ -59,6 +65,56 @@ impl Default for Documents {
 impl Documents {
     pub fn new() -> Self {
         glib::Object::new()
+    }
+
+    pub(crate) async fn load(&self, service: &Service) -> Result<(), StartupError> {
+        let public_key = service.private_key().public_key();
+        let mut list = self.imp().list.write().unwrap();
+
+        assert!(list.is_empty());
+
+        let documents = service.node().documents::<DocumentId>().await?;
+        let documents_len = documents.len();
+        for document in documents {
+            let last_accessed = document.last_accessed.and_then(|last_accessed| {
+                glib::DateTime::from_unix_utc(last_accessed.timestamp()).ok()
+            });
+
+            let authors: Vec<Author> = document
+                .authors
+                .iter()
+                .map(|author| {
+                    let author_public_key = PublicKey(author.public_key);
+                    if author_public_key == public_key {
+                        let last_seen = author.last_seen.and_then(|last_seen| {
+                            glib::DateTime::from_unix_utc(last_seen.timestamp()).ok()
+                        });
+                        Author::for_this_device(&PublicKey(author.public_key), last_seen.as_ref())
+                    } else {
+                        let last_seen = author.last_seen.and_then(|last_seen| {
+                            glib::DateTime::from_unix_utc(last_seen.timestamp()).ok()
+                        });
+                        Author::with_state(&author_public_key, last_seen.as_ref())
+                    }
+                })
+                .collect();
+
+            let obj = Document::with_state(
+                service,
+                Some(&document.id),
+                document.name.as_deref(),
+                last_accessed.as_ref(),
+            );
+
+            obj.authors().load(authors);
+
+            list.insert(document.id, obj);
+        }
+
+        drop(list);
+        self.items_changed(0, 0, documents_len as u32);
+
+        Ok(())
     }
 
     pub(crate) fn add(&self, document: Document) {
