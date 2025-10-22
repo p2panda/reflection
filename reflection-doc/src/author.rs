@@ -146,12 +146,9 @@ glib::wrapper! {
 }
 impl Author {
     pub(crate) fn new(public_key: &PublicKey) -> Self {
-        let obj: Self = glib::Object::builder()
+        glib::Object::builder()
             .property("public-key", public_key)
-            .build();
-
-        obj.imp().is_online.set(true);
-        obj
+            .build()
     }
 
     pub(crate) fn with_state(public_key: &PublicKey, last_seen: Option<&glib::DateTime>) -> Self {
