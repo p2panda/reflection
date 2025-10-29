@@ -46,19 +46,19 @@ pub enum LogType {
 
 impl Extension<PruneFlag> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<PruneFlag> {
-        Some(header.extensions.as_ref()?.prune_flag.clone())
+        Some(header.extensions.prune_flag.clone())
     }
 }
 
 impl Extension<LogType> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<LogType> {
-        Some(header.extensions.as_ref()?.log_type)
+        Some(header.extensions.log_type)
     }
 }
 
 impl Extension<DocumentId> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<DocumentId> {
-        Some(header.extensions.as_ref()?.document)
+        Some(header.extensions.document)
     }
 }
 

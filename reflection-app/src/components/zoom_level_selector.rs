@@ -70,7 +70,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct ZoomLevelSelector(ObjectSubclass<imp::ZoomLevelSelector>)
-        @extends gtk::Widget, gtk::Box;
+        @extends gtk::Widget, gtk::Box,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl ZoomLevelSelector {

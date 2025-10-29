@@ -39,7 +39,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct MultilineEntry(ObjectSubclass<imp::MultilineEntry>)
-        @extends gtk::Widget, gtk::TextView;
+        @extends gtk::Widget, gtk::TextView,
+         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Scrollable;
 }
 
 impl MultilineEntry {

@@ -324,7 +324,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct DocumentView(ObjectSubclass<imp::DocumentView>)
-        @extends gtk::Widget, gtk::Window, adw::Bin;
+        @extends gtk::Widget, gtk::Window, adw::Bin,
+         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl DocumentView {

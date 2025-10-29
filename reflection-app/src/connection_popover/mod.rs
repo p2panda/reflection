@@ -156,7 +156,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct ConnectionPopover(ObjectSubclass<imp::ConnectionPopover>)
-        @extends gtk::Widget, gtk::Popover;
+        @extends gtk::Widget, gtk::Popover,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::ShortcutManager, gtk::Native;
 }
 
 impl ConnectionPopover {

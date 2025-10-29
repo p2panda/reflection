@@ -94,7 +94,7 @@ impl OperationStore {
             seq_num,
             backlink,
             previous: vec![],
-            extensions: Some(extensions),
+            extensions: extensions,
         };
         header.sign(private_key);
 
