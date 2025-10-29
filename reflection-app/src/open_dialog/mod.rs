@@ -16,10 +16,9 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use adw::subclass::prelude::*;
 use gettextrs::gettext;
-use gtk::prelude::*;
-use gtk::{glib, glib::clone, glib::closure_local};
+
+use gtk::{glib, glib::clone, glib::closure_local, prelude::ObjectExt};
 
 use reflection_doc::document::DocumentId;
 
@@ -27,8 +26,18 @@ use crate::ReflectionApplication;
 
 mod imp {
     use super::*;
-    use adw::prelude::AdwDialogExt;
+
+    use adw::prelude::{
+        AdwDialogExt, ButtonExt, StaticType, TextBufferExt, TextBufferExtManual, TextViewExt,
+        WidgetExt,
+    };
+    use adw::subclass::prelude::{
+        AdwDialogImpl, CompositeTemplateClass, CompositeTemplateInitializingExt, WidgetClassExt,
+        WidgetImpl, WindowImpl,
+    };
     use glib::subclass::Signal;
+    use glib::subclass::prelude::*;
+    use gtk::TemplateChild;
     use std::sync::LazyLock;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
@@ -184,14 +193,15 @@ mod imp {
     }
 
     impl WidgetImpl for OpenDialog {}
-    impl DialogImpl for OpenDialog {}
     impl WindowImpl for OpenDialog {}
     impl AdwDialogImpl for OpenDialog {}
 }
 
 glib::wrapper! {
     pub struct OpenDialog(ObjectSubclass<imp::OpenDialog>)
-        @extends gtk::Widget, adw::Dialog, adw::Window;
+        @extends gtk::Widget, adw::Dialog, adw::Window, gtk::Window,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::ShortcutManager,
+            gtk::Root, gtk::Native;
 }
 
 impl OpenDialog {

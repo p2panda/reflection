@@ -204,7 +204,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct TextView(ObjectSubclass<imp::TextView>)
-        @extends gtk::Widget, gtk::TextView, sourceview::View;
+        @extends gtk::Widget, gtk::TextView, sourceview::View,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Scrollable;
 }
 
 impl TextView {}

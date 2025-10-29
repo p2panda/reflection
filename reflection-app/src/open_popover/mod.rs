@@ -16,10 +16,13 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use adw::subclass::prelude::*;
 use gettextrs::gettext;
-use gtk::prelude::*;
-use gtk::{glib, glib::clone, glib::closure_local};
+use gtk::{
+    glib,
+    glib::clone,
+    glib::closure_local,
+    prelude::{IsA, ObjectExt},
+};
 
 use crate::system_settings::ClockFormat;
 use crate::{ReflectionApplication, open_dialog::OpenDialog};
@@ -27,8 +30,18 @@ use reflection_doc::{document::Document, documents::Documents};
 
 mod imp {
     use super::*;
-    use adw::prelude::AdwDialogExt;
+
+    use adw::prelude::{
+        AdwDialogExt, ButtonExt, Cast, EditableExt, ListBoxRowExt, ListModelExt, PopoverExt,
+        StaticType, WidgetExt,
+    };
+    use adw::subclass::prelude::{
+        CompositeTemplateClass, CompositeTemplateInitializingExt, PopoverImpl, WidgetClassExt,
+        WidgetImpl,
+    };
     use glib::subclass::Signal;
+    use glib::subclass::prelude::*;
+    use gtk::TemplateChild;
     use std::sync::LazyLock;
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
@@ -217,7 +230,9 @@ mod imp {
 
 glib::wrapper! {
     pub struct OpenPopover(ObjectSubclass<imp::OpenPopover>)
-        @extends gtk::Widget, gtk::Popover;
+        @extends gtk::Widget, gtk::Popover,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::ShortcutManager,
+            gtk::Native;
 }
 
 impl OpenPopover {

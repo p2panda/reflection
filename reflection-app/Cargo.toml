@@ -11,14 +11,14 @@ authors = [
 [dependencies]
 reflection-doc = { path = "../reflection-doc" }
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
-gtk = { version = "0.9", package = "gtk4", features = ["gnome_47"] }
-sourceview = { package = "sourceview5", version = "0.9" }
+gtk = { version = "0.10", package = "gtk4", features = ["gnome_47"] }
+sourceview = { package = "sourceview5", version = "0.10" }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-ashpd = { version = "0.9", default-features = false, features = ["tracing", "async-std"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+ashpd = { version = "0.12", default-features = false, features = ["tracing", "async-std"] }
 thiserror = { version = "2.0" }
 futures-util = "0.3"
-oo7 = { version = "0.4", default-features = false, features = [
+oo7 = { version = "0.5", default-features = false, features = [
     "openssl_crypto",
     "async-std",
     "tracing",
@@ -26,5 +26,5 @@ oo7 = { version = "0.4", default-features = false, features = [
 
 [dependencies.adw]
 package = "libadwaita"
-version = "0.7"
+version = "0.8"
 features = ["v1_7"]

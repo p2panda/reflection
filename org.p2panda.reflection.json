@@ -34,6 +34,18 @@
         "*.a"
     ],
     "modules" : [
+    	{
+    	    "name" : "libspelling",
+    	    "builddir": true,
+	    "buildsystem" : "meson",
+	    "sources" : [
+	    	{
+	    	    "type" : "git",
+	    	    "url" : "https://gitlab.gnome.org/GNOME/libspelling.git",
+	    	    "branch" : "main"
+	    	}
+	    ]
+    	},
         {
             "name" : "reflection",
             "builddir" : true,

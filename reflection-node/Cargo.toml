@@ -9,9 +9,9 @@ authors = [
 ]
 
 [dependencies]
-thiserror = "2.0.11"
-async-trait = "0.1.83"
-chrono = "0.4.40"
+thiserror = "2.0.17"
+async-trait = "0.1.89"
+chrono = "0.4.42"
 ciborium = "0.2.2"
 p2panda-core = { git = "https://github.com/p2panda/p2panda" }
 p2panda-discovery = { git = "https://github.com/p2panda/p2panda", features = ["mdns"] }
@@ -19,11 +19,11 @@ p2panda-net = { git = "https://github.com/p2panda/p2panda" }
 p2panda-store = { git = "https://github.com/p2panda/p2panda", features = ["sqlite"], default-features = false}
 p2panda-stream = { git = "https://github.com/p2panda/p2panda" }
 p2panda-sync = { git = "https://github.com/p2panda/p2panda", features = ["log-sync"] }
-serde = { version = "1.0.215", features = ["derive"] }
-serde_bytes = "0.11.17"
-sqlx = { version = "0.8.5", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false}
-tokio = { version = "1.44.2", features = ["rt", "sync"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_bytes = "0.11.19"
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false}
+tokio = { version = "1.48.0", features = ["rt", "sync"] }
 tokio-stream = "0.1.17"
 tracing = "0.1"
-test-log = { version = "0.2.17", default-features = false, features = ["trace", "color"] }
+test-log = { version = "0.2.18", default-features = false, features = ["trace", "color"] }
 hex = "0.4.3"

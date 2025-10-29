@@ -140,7 +140,8 @@ mod imp {
 
 glib::wrapper! {
     pub struct AuthorList(ObjectSubclass<imp::AuthorList>)
-        @extends gtk::Widget, adw::Bin;
+        @extends gtk::Widget, adw::Bin,
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl AuthorList {

@@ -60,11 +60,13 @@ mod imp {
 
     impl WidgetImpl for ErrorPage {}
     impl BinImpl for ErrorPage {}
+    impl AccessibleImpl for ErrorPage {}
 }
 
 glib::wrapper! {
     pub struct ErrorPage(ObjectSubclass<imp::ErrorPage>)
-        @extends gtk::Widget, adw::Bin;
+        @extends gtk::Widget, adw::Bin,
+         @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl ErrorPage {
