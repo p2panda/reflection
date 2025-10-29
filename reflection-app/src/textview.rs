@@ -67,10 +67,23 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            // HACK: The enabled state of the actions `text.undo` and `text.redo` are controlled
-            // via `Buffer.can_undo` and `Buffer.can_redo` properties. but we don't have any way to control the properties
             self.obj()
                 .connect_notify_local(Some("buffer"), move |view, _| {
+                    if let Ok(buffer) = view.buffer().downcast::<sourceview::Buffer>() {
+                        let checker = libspelling::Checker::default();
+                        let adapter = libspelling::TextBufferAdapter::new(&buffer, &checker);
+
+                        let extra_menu = adapter.menu_model();
+
+                        view.set_extra_menu(Some(&extra_menu));
+                        view.insert_action_group("spelling", Some(&adapter));
+
+                        adapter.set_enabled(true);
+                    }
+
+                    // HACK: The enabled state of the actions `text.undo` and `text.redo` are controlled
+                    // via `Buffer.can_undo` and `Buffer.can_redo` properties. but we don't have any way to control the properties
+
                     let Ok(buffer): Result<ReflectionTextBuffer, _> = view.buffer().downcast()
                     else {
                         return;
