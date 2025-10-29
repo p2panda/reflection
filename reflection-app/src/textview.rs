@@ -29,6 +29,7 @@ mod imp {
 
     #[derive(Debug, Default)]
     pub struct TextView {
+        spelling_adapter: RefCell<Option<libspelling::TextBufferAdapter>>,
         buffer_notify_handler:
             RefCell<Option<(glib::WeakRef<ReflectionTextBuffer>, glib::SignalHandlerId)>>,
     }
@@ -67,56 +68,103 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            self.obj()
-                .connect_notify_local(Some("buffer"), move |view, _| {
-                    if let Ok(buffer) = view.buffer().downcast::<sourceview::Buffer>() {
-                        let checker = libspelling::Checker::default();
-                        let adapter = libspelling::TextBufferAdapter::new(&buffer, &checker);
-
-                        let extra_menu = adapter.menu_model();
-
-                        view.set_extra_menu(Some(&extra_menu));
-                        view.insert_action_group("spelling", Some(&adapter));
-
-                        adapter.set_enabled(true);
-                    }
-
-                    // HACK: The enabled state of the actions `text.undo` and `text.redo` are controlled
-                    // via `Buffer.can_undo` and `Buffer.can_redo` properties. but we don't have any way to control the properties
-
-                    let Ok(buffer): Result<ReflectionTextBuffer, _> = view.buffer().downcast()
-                    else {
+            let controller = gtk::GestureClick::new();
+            controller.set_button(0);
+            controller.connect_pressed(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |click, n_press, x, y| {
+                    let Some(ref adapter) = *this.spelling_adapter.borrow() else {
                         return;
                     };
+                    let triggers_context_menu = click
+                        .last_event(click.current_sequence().as_ref())
+                        .map_or(false, |event| event.triggers_context_menu());
 
-                    let handler_id = buffer.connect_notify_local(
-                        // HACK: gtk::TextView does update the action enabled state on every notify,
-                        // probably a mistake in GTK.
-                        None,
-                        clone!(
-                            #[weak]
-                            view,
-                            #[weak]
-                            buffer,
-                            move |_, _| {
-                                view.action_set_enabled("text.undo", buffer.custom_can_undo());
-                                view.action_set_enabled("text.redo", buffer.custom_can_redo());
-                            }
-                        ),
-                    );
-                    let old_handler = view
-                        .imp()
-                        .buffer_notify_handler
-                        .replace(Some((buffer.downgrade(), handler_id)));
-                    if let Some((buffer_weak, old_handler_id)) = old_handler {
-                        if let Some(buffer) = buffer_weak.upgrade() {
-                            buffer.disconnect(old_handler_id);
-                        }
+                    if n_press != 1 || !triggers_context_menu {
+                        adapter.update_corrections();
+                        return;
                     }
 
-                    view.action_set_enabled("text.undo", buffer.custom_can_undo());
-                    view.action_set_enabled("text.redo", buffer.custom_can_redo());
-                });
+                    let buffer = this.obj().buffer();
+                    if buffer.selection_bounds().is_some() {
+                        adapter.update_corrections();
+                        return;
+                    }
+
+                    // Move the insert mark to the context menu position, since the spellchecker
+                    // looks at the insert mark
+                    let (buf_x, buf_y) = this.obj().window_to_buffer_coords(
+                        gtk::TextWindowType::Widget,
+                        x as i32,
+                        y as i32,
+                    );
+                    if let Some(iter) = this.obj().iter_at_location(buf_x, buf_y) {
+                        buffer.select_range(&iter, &iter);
+                    }
+
+                    adapter.update_corrections();
+                }
+            ));
+            self.obj().add_controller(controller);
+
+            self.obj().connect_notify_local(
+                Some("buffer"),
+                clone!(
+                    #[weak(rename_to = this)]
+                    self,
+                    move |view, _| {
+                        if let Ok(buffer) = view.buffer().downcast::<sourceview::Buffer>() {
+                            let checker = libspelling::Checker::default();
+                            let adapter = libspelling::TextBufferAdapter::new(&buffer, &checker);
+
+                            let extra_menu = adapter.menu_model();
+
+                            view.set_extra_menu(Some(&extra_menu));
+                            view.insert_action_group("spelling", Some(&adapter));
+
+                            adapter.set_enabled(true);
+                            this.spelling_adapter.replace(Some(adapter));
+                        }
+
+                        // HACK: The enabled state of the actions `text.undo` and `text.redo` are controlled
+                        // via `Buffer.can_undo` and `Buffer.can_redo` properties. but we don't have any way to control the properties
+
+                        let Ok(buffer): Result<ReflectionTextBuffer, _> = view.buffer().downcast()
+                        else {
+                            return;
+                        };
+
+                        let handler_id = buffer.connect_notify_local(
+                            // HACK: gtk::TextView does update the action enabled state on every notify,
+                            // probably a mistake in GTK.
+                            None,
+                            clone!(
+                                #[weak]
+                                view,
+                                #[weak]
+                                buffer,
+                                move |_, _| {
+                                    view.action_set_enabled("text.undo", buffer.custom_can_undo());
+                                    view.action_set_enabled("text.redo", buffer.custom_can_redo());
+                                }
+                            ),
+                        );
+                        let old_handler = view
+                            .imp()
+                            .buffer_notify_handler
+                            .replace(Some((buffer.downgrade(), handler_id)));
+                        if let Some((buffer_weak, old_handler_id)) = old_handler {
+                            if let Some(buffer) = buffer_weak.upgrade() {
+                                buffer.disconnect(old_handler_id);
+                            }
+                        }
+
+                        view.action_set_enabled("text.undo", buffer.custom_can_undo());
+                        view.action_set_enabled("text.redo", buffer.custom_can_redo());
+                    }
+                ),
+            );
         }
     }
     impl WidgetImpl for TextView {}
