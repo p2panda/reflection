@@ -23,6 +23,7 @@ oo7 = { version = "0.5", default-features = false, features = [
     "async-std",
     "tracing",
 ] }
+libspelling = "0.4.1"
 
 [dependencies.adw]
 package = "libadwaita"
