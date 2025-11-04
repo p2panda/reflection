@@ -11,7 +11,7 @@ authors = [
 [dependencies]
 reflection-doc = { path = "../reflection-doc" }
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
-gtk = { version = "0.10", package = "gtk4", features = ["gnome_47"] }
+gtk = { version = "0.10", package = "gtk4", features = ["gnome_48", "v4_20"] }
 sourceview = { package = "sourceview5", version = "0.10" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
