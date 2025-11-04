@@ -94,9 +94,22 @@ impl Authors {
 
     pub(crate) fn add(&self, author_key: PublicKey) -> Author {
         let mut list = self.imp().list.write().unwrap();
-        list.entry(author_key)
-            .or_insert_with_key(|key| Author::new(&key))
-            .to_owned()
+        let entry = list.entry(author_key);
+        let index = entry.index();
+
+        let was_vacant = if let indexmap::map::Entry::Vacant(_) = entry {
+            true
+        } else {
+            false
+        };
+        let author = entry.or_insert_with_key(|key| Author::new(&key)).to_owned();
+        drop(list);
+
+        if was_vacant {
+            self.items_changed(index as u32, 0, 1);
+        }
+
+        author
     }
 
     pub(crate) fn author(&self, author_key: &PublicKey) -> Option<Author> {
