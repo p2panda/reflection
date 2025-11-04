@@ -82,7 +82,7 @@ mod imp {
                     .can_focus(false)
                     .can_target(false)
                     .build();
-                let avatar = Avatar::new();
+                let avatar = Avatar::new(Some(author));
                 row.add_prefix(&avatar);
                 if author.is_this_device() {
                     let this_device_label = gtk::Label::builder()
@@ -99,10 +99,6 @@ mod imp {
                     .build();
                 // FIXME: format last seen according to the mockups
                 //author.bind_property ("last-seen", row, "subtitle").sync_create().build();
-                author
-                    .bind_property("emoji", &avatar, "emoji")
-                    .sync_create()
-                    .build();
                 author
                     .bind_property("is-online", &row, "subtitle")
                     .sync_create()
@@ -125,7 +121,6 @@ mod imp {
                         }
                     })
                     .build();
-                avatar.add_css_class(&format!("bg-{}", author.color()));
 
                 row.upcast()
             });
