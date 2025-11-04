@@ -1,5 +1,8 @@
 use adw::{prelude::*, subclass::prelude::*};
 use gtk::{glib, glib::GString};
+use std::cell::RefCell;
+
+use reflection_doc::author::Author;
 
 mod imp {
     use super::*;
@@ -7,8 +10,10 @@ mod imp {
     #[derive(Default, glib::Properties)]
     #[properties(wrapper_type = super::Avatar)]
     pub struct Avatar {
-        #[property(name = "emoji", get = Self::emoji, set = Self::set_emoji, type = GString)]
+        #[property(name = "emoji", get = Self::emoji, type = GString)]
         label: gtk::Label,
+        #[property(get, set = Self::set_author, nullable)]
+        author: RefCell<Option<Author>>,
     }
 
     #[glib::object_subclass]
@@ -37,6 +42,14 @@ mod imp {
         fn set_emoji(&self, emoji: &str) {
             self.label.set_label(emoji);
         }
+
+        fn set_author(&self, author: Option<Author>) {
+            // Emoji and color do never change
+            if let Some(author) = author {
+                self.set_emoji(&author.emoji());
+                self.obj().add_css_class(&format!("bg-{}", author.color()));
+            }
+        }
     }
 
     impl WidgetImpl for Avatar {}
@@ -50,7 +63,7 @@ glib::wrapper! {
 }
 
 impl Avatar {
-    pub fn new() -> Self {
-        glib::Object::new()
+    pub fn new(author: Option<&Author>) -> Self {
+        glib::Object::builder().property("author", author).build()
     }
 }
