@@ -53,6 +53,12 @@
 }
 
 .avatar {
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 9999px;
+}
+
+.connection-popover .avatar {
   min-width: 46px;
   min-height: 46px;
   border-radius: 32px;
@@ -67,6 +73,7 @@
 	font-weight: 700;
 	font-size: 9px;
 }
+
 .open-popover contents {
   padding: 0px;
   min-width: 300px;
@@ -83,4 +90,30 @@
 
 .open-popover .open-document {
   margin: 12px;
+}
+
+overlapping-avatars .avatar {
+  background-clip: content-box;
+  padding: 2px;
+}
+
+overlapping-avatars .avatar:dir(rtl):not(:first-child) {
+  margin-right: -12px;
+}
+
+overlapping-avatars .avatar:dir(ltr):not(:last-child) {
+  margin-right: -12px;
+}
+
+overlapping-avatars .avatar {
+  font-size: .75em;
+  min-width: 20px;
+  min-height: 20px;
+}
+
+.authors-stack-overflow {
+	background: color-mix(in srgb, currentColor 10%, transparent);
+  border-radius: 99px;
+	font-size: 9px;
+	padding: 3px 6px;
 }

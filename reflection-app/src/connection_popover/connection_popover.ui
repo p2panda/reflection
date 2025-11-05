@@ -50,12 +50,13 @@
               </object>
             </child>
             <child>
-              <object class="GtkLabel" id="connection_button_label">
-                <property name="label">34</property>
-                <property name="vexpand">False</property>
-                <style>
-                  <class name="user-counter"/>
-                </style>
+              <object class="ReflectionAuthorsStack">
+                <property name="max-visible">4</property>
+                <binding name="model">
+                  <lookup name="authors" type="Document">
+                    <lookup name="document">ReflectionConnectionPopover</lookup>
+                  </lookup>
+                </binding>
               </object>
             </child>
           </object>

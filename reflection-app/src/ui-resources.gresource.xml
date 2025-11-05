@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/org/p2panda/reflection">
     <file preprocess="xml-stripblanks">connection_popover/connection_popover.ui</file>
+    <file preprocess="xml-stripblanks">connection_popover/authors_stack.ui</file>
     <file preprocess="xml-stripblanks">error_page.ui</file>
     <file preprocess="xml-stripblanks">open_dialog/open_dialog.ui</file>
     <file preprocess="xml-stripblanks">open_popover/open_popover.ui</file>
