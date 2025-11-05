@@ -10,10 +10,43 @@
         </style>
         <child>
           <object class="GtkBox">
+            <property name="spacing">3</property>
             <child>
-              <object class="GtkImage">
-                <property name="margin-end">6</property>
-                <property name="icon-name">system-users-symbolic</property>
+              <object class="GtkStack" id="button_icon_stack">
+                <property name="transition-type">crossfade</property>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">offline</property>
+                    <property name="child">
+                      <object class="GtkImage">
+                        <property name="icon-name">offline-symbolic</property>
+                        <style>
+                          <class name="dim-label"/>
+                        </style>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">network</property>
+                    <property name="child">
+                      <object class="GtkImage">
+                        <property name="icon-name">network-symbolic</property>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkStackPage">
+                    <property name="name">no-network</property>
+                    <property name="child">
+                      <object class="GtkImage">
+                        <property name="icon-name">no-network-symbolic</property>
+                      </object>
+                    </property>
+                  </object>
+                </child>
               </object>
             </child>
             <child>

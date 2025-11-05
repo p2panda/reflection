@@ -37,6 +37,8 @@ mod imp {
     #[template(resource = "/org/p2panda/reflection/connection_popover/connection_popover.ui")]
     pub struct ConnectionPopover {
         #[template_child]
+        button_icon_stack: TemplateChild<gtk::Stack>,
+        #[template_child]
         connection_button_label: TemplateChild<gtk::Label>,
         #[template_child]
         author_list: TemplateChild<AuthorList>,
@@ -179,6 +181,18 @@ mod imp {
             } else {
                 self.network_toggle_image
                     .set_icon_name(Some("no-network-symbolic"));
+            }
+
+            if let Some(mode) = self.connection_mode_switch.active_name() {
+                let page_name = match mode.as_str() {
+                    "offline" => Some("offline"),
+                    "network" if !monitor.is_network_available() => Some("no-network"),
+                    "network" => Some("network"),
+                    _ => None,
+                };
+                if let Some(page_name) = page_name {
+                    self.button_icon_stack.set_visible_child_name(page_name);
+                }
             }
         }
     }
