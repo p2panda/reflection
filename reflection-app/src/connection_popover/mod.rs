@@ -27,7 +27,11 @@ use gtk::{gio, glib, glib::clone};
 use reflection_doc::{document::Document, service::ConnectionMode};
 
 mod author_list;
+mod authors_stack;
+mod overlapping_avatars;
+
 use self::author_list::AuthorList;
+use self::authors_stack::AuthorsStack;
 
 mod imp {
     use super::*;
@@ -38,8 +42,6 @@ mod imp {
     pub struct ConnectionPopover {
         #[template_child]
         button_icon_stack: TemplateChild<gtk::Stack>,
-        #[template_child]
-        connection_button_label: TemplateChild<gtk::Label>,
         #[template_child]
         author_list: TemplateChild<AuthorList>,
         #[template_child]
@@ -53,7 +55,6 @@ mod imp {
         #[property(get, set)]
         popover: RefCell<Option<Document>>,
         connection_mode_binding: RefCell<Option<glib::Binding>>,
-        authors_changed_handler: RefCell<Option<glib::SignalHandlerId>>,
     }
 
     #[glib::object_subclass]
@@ -64,6 +65,7 @@ mod imp {
 
         fn class_init(klass: &mut Self::Class) {
             AuthorList::static_type();
+            AuthorsStack::static_type();
             klass.bind_template();
         }
         fn instance_init(obj: &glib::subclass::InitializingObject<Self>) {
@@ -100,14 +102,8 @@ mod imp {
 
     impl ConnectionPopover {
         fn set_document(&self, document: Option<Document>) {
-            if let Some(old_document) = self.document.take() {
-                if let Some(binding) = self.connection_mode_binding.take() {
-                    binding.unbind();
-                }
-
-                if let Some(handler) = self.authors_changed_handler.take() {
-                    old_document.disconnect(handler);
-                }
+            if let Some(binding) = self.connection_mode_binding.take() {
+                binding.unbind();
             }
 
             let Some(document) = document else {
@@ -115,23 +111,7 @@ mod imp {
                 return;
             };
 
-            let authors = document.authors();
-
             self.author_list.set_model(Some(document.authors()));
-
-            // TODO: we need to do the same as fractal to allow gettext string substitution
-            //self.connection_button.set_tooltip_text(gettext!("{} People Connected", authors.n_items()));
-            let handler = authors.connect_items_changed(clone!(
-                #[weak(rename_to = this)]
-                self,
-                move |authors, _, _, _| {
-                    this.connection_button_label
-                        .set_label(&format!("{}", authors.n_items()));
-                }
-            ));
-
-            self.connection_button_label
-                .set_label(&format!("{}", authors.n_items()));
 
             let binding = document
                 .service()
@@ -161,7 +141,6 @@ mod imp {
                 })
                 .build();
 
-            self.authors_changed_handler.replace(Some(handler));
             self.connection_mode_binding.replace(Some(binding));
             self.document.replace(Some(document));
         }
