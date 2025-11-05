@@ -44,6 +44,11 @@ mod imp {
         }
 
         fn set_author(&self, author: Option<Author>) {
+            for css_class in self.obj().css_classes() {
+                if css_class.starts_with("bg-") {
+                    self.obj().remove_css_class(&css_class);
+                }
+            }
             // Emoji and color do never change
             if let Some(author) = author {
                 self.set_emoji(&author.emoji());
