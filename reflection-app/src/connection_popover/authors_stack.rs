@@ -32,7 +32,7 @@ mod imp {
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::AuthorsStack)]
-    #[template(resource = "/org/p2panda/reflection/connection_popover/authors_stack.ui")]
+    #[template(file = "src/connection_popover/authors_stack.blp")]
     pub struct AuthorsStack {
         #[template_child]
         main_stack: TemplateChild<gtk::Stack>,
@@ -177,3 +177,4 @@ impl AuthorsStack {
         glib::Object::new()
     }
 }
+

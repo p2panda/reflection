@@ -1,0 +1,20 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ReflectionWindow: Adw.ApplicationWindow {
+  title: _("Reflection");
+  default-width: 800;
+  default-height: 600;
+
+  content: Adw.ToastOverlay toast_overlay {
+    child: Stack main_stack {
+      transition-type: crossfade;
+
+      StackPage {
+        name: "error";
+
+        child: $ReflectionErrorPage error_page {};
+      }
+    };
+  };
+}

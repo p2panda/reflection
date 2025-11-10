@@ -1,0 +1,168 @@
+using Gtk 4.0;
+using Adw 1;
+
+menu primary_menu {
+  section {
+    item {
+      custom: "focus-level";
+    }
+  }
+
+  section {
+    item {
+      label: _("_New Window");
+      action: "app.new-window";
+    }
+
+    item {
+      label: _("_Preferences");
+      action: "app.preferences";
+    }
+
+    item {
+      label: _("_Keyboard Shortcuts");
+      action: "win.show-help-overlay";
+    }
+
+    item {
+      label: _("_About Reflection");
+      action: "app.about";
+    }
+  }
+}
+
+template $ReflectionDocumentView: Adw.Bin {
+  styles [
+    "view",
+  ]
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      [start]
+      MenuButton open_popover_button {
+        child: Box {
+          Label {
+            label: _("_Open");
+            use-underline: true;
+          }
+
+          Image {
+            icon-name: "down-smaller-symbolic";
+          }
+        };
+
+        popover: $ReflectionOpenPopover open_popover {};
+
+        styles [
+          "flat",
+        ]
+      }
+
+      [end]
+      MenuButton {
+        primary: true;
+        icon-name: "open-menu-symbolic";
+        tooltip-text: _("Main Menu");
+
+        popover: PopoverMenu {
+          menu-model: primary_menu;
+
+          [focus-level]
+          $ZoomLevelSelector {
+            zoom-level: bind template.zoom-level;
+          }
+        };
+      }
+
+      [end]
+      MenuButton ShareButton {
+        icon-name: "folder-publicshare-symbolic";
+        tooltip-text: _("Share Document");
+        popover: share_popover;
+      }
+
+      [end]
+      $ReflectionConnectionPopover {
+        document: bind template.document;
+      }
+    }
+
+    content: ScrolledWindow {
+      $ReflectionTextView text_view {
+        top-margin: "6";
+        bottom-margin: "12";
+        left-margin: "12";
+        right-margin: "12";
+        wrap-mode: "GTK_WRAP_WORD_CHAR";
+        indent-width: "4";
+        auto-indent: "True";
+
+        styles [
+          "inline",
+          "editor",
+          "monospace",
+        ]
+      }
+    };
+  };
+}
+
+Popover share_popover {
+  has-arrow: true;
+  name: "share_popover";
+
+  child: Box plain-popover-box {
+    margin-top: 24;
+    margin-bottom: 24;
+    margin-start: 24;
+    margin-end: 24;
+    orientation: vertical;
+    spacing: 12;
+    width-request: 100;
+    name: "share-popover-box";
+
+    Label {
+      label: _("Share Document");
+
+      styles [
+        "title-2",
+      ]
+    }
+
+    Label {
+      wrap: true;
+      justify: center;
+      max-width-chars: 25;
+      natural-wrap-mode: word;
+      label: _("Invite people to collaborate by sharing the invite code");
+    }
+
+    Label share_code_label {
+      wrap: true;
+      wrap-mode: char;
+      max-width-chars: 26;
+
+      styles [
+        "invite-code",
+        "monospace",
+      ]
+    }
+
+    Box {
+      halign: center;
+      margin-top: 6;
+
+      Button copy_code_button {
+        styles [
+          "pill",
+        ]
+
+        child: Adw.ButtonContent {
+          icon-name: "edit-copy-symbolic";
+          label: _("Copy to Clipboard");
+        };
+      }
+    }
+  };
+}

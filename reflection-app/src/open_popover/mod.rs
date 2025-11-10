@@ -46,7 +46,7 @@ mod imp {
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::OpenPopover)]
-    #[template(resource = "/org/p2panda/reflection/open_popover/open_popover.ui")]
+    #[template(file = "src/open_popover/open_popover.blp")]
     pub struct OpenPopover {
         #[template_child]
         search_entry: TemplateChild<gtk::SearchEntry>,

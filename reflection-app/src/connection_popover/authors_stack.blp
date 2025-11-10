@@ -1,0 +1,24 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ReflectionAuthorsStack: Adw.Bin {
+  child: Stack main_stack {
+    transition-type: crossfade;
+
+    Box avatars_box {
+      $ReflectionOverlappingAvatars avatars {}
+
+      Label overflow_label {
+        valign: center;
+
+        styles [
+          "authors-stack-overflow",
+        ]
+      }
+    }
+
+    Image arrow_image {
+      icon-name: "pan-down-symbolic";
+    }
+  };
+}

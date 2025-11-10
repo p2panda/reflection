@@ -1,15 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
   <gresource prefix="/org/p2panda/reflection">
-    <file preprocess="xml-stripblanks">connection_popover/connection_popover.ui</file>
-    <file preprocess="xml-stripblanks">connection_popover/authors_stack.ui</file>
-    <file preprocess="xml-stripblanks">error_page.ui</file>
-    <file preprocess="xml-stripblanks">open_dialog/open_dialog.ui</file>
-    <file preprocess="xml-stripblanks">open_popover/open_popover.ui</file>
-    <file preprocess="xml-stripblanks">document_view.ui</file>
-    <file preprocess="xml-stripblanks">components/zoom_level_selector.ui</file>
-    <file preprocess="xml-stripblanks">gtk/help-overlay.ui</file>
-    <file preprocess="xml-stripblanks">window.ui</file>
     <file compressed="true" alias="style.css">style.css</file>
   </gresource>
 </gresources>

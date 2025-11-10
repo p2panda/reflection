@@ -38,7 +38,7 @@ mod imp {
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::ConnectionPopover)]
-    #[template(resource = "/org/p2panda/reflection/connection_popover/connection_popover.ui")]
+    #[template(file = "src/connection_popover/connection_popover.blp")]
     pub struct ConnectionPopover {
         #[template_child]
         button_icon_stack: TemplateChild<gtk::Stack>,

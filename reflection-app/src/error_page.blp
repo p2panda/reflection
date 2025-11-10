@@ -1,0 +1,83 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ReflectionErrorPage: Adw.Bin {
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      title-widget: Adw.WindowTitle {
+        title: _("Error");
+      };
+
+      [end]
+      Button {
+        action-name: "app.about";
+        icon-name: "about-symbolic";
+      }
+    }
+
+    content: Stack main_stack {
+      transition-type: crossfade;
+
+      StackPage {
+        child: Adw.StatusPage secret_service_error {
+          title: _("Unable to Access System Keyring");
+          description: _("Failed to access the system keyring to load or store your identity. As a workaround it's possible to use a temporary identity, but this means you will show up as a different user each time the app restarts.");
+          icon-name: "key-symbolic";
+          vexpand: true;
+
+          child: Button {
+            action-name: "app.new-temporary-identity";
+            label: _("Use Temporary Identity");
+            halign: center;
+
+            styles [
+              "suggested-action",
+              "pill",
+            ]
+          };
+        };
+      }
+
+      StackPage {
+        child: Adw.StatusPage network_service_error {
+          title: _("Unable to Start Network Service");
+          description: _("Failed to create the necessary network service. As a workaround it's possible to use a temporary identity, but this means you will show up as a different user each time the app restarts.");
+          icon-name: "network-computer-symbolic";
+          vexpand: true;
+
+          child: Button {
+            action-name: "app.new-temporary-identity";
+            label: _("Use Temporary Identity");
+            halign: center;
+
+            styles [
+              "suggested-action",
+              "pill",
+            ]
+          };
+        };
+      }
+
+      StackPage {
+        child: Adw.StatusPage filesystem_error {
+          title: _("No File System Access");
+          description: _("This means storing a persistent identity is not possible. As a workaround it's possible to use a temporary identity, but this means you will show up as a different user each time the app restarts.");
+          icon-name: "folder-symbolic";
+          vexpand: true;
+
+          child: Button {
+            action-name: "app.new-temporary-identity";
+            label: _("Use Temporary Identity");
+            halign: center;
+
+            styles [
+              "suggested-action",
+              "pill",
+            ]
+          };
+        };
+      }
+    };
+  }
+}
