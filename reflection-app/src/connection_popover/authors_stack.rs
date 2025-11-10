@@ -177,4 +177,3 @@ impl AuthorsStack {
         glib::Object::new()
     }
 }
-

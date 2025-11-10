@@ -86,4 +86,3 @@ impl ErrorPage {
             .set_visible_child(visible_child.deref());
     }
 }
-

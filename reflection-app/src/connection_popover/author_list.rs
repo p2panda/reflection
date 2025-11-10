@@ -86,7 +86,7 @@ mod imp {
                 row.add_prefix(&avatar);
                 if author.is_this_device() {
                     let this_device_label = gtk::Label::builder()
-                        .label("This Device")
+                        .label(gettext("This Device"))
                         .valign(gtk::Align::Start)
                         .margin_top(6)
                         .css_classes(["this-device-pill"])
@@ -105,7 +105,7 @@ mod imp {
                     .transform_to(|binding, is_online: bool| {
                         let author: Author = binding.source().unwrap().downcast().unwrap();
                         if is_online {
-                            Some("Online".to_string())
+                            Some(gettext("Online"))
                         } else if let Some(last_seen) = author.last_seen() {
                             if author.is_this_device() {
                                 Some(format_last_online(&last_seen))
@@ -114,9 +114,9 @@ mod imp {
                             }
                         } else {
                             if author.is_this_device() {
-                                Some("Offline".to_string())
+                                Some(gettext("Offline"))
                             } else {
-                                Some("Never seen".to_string())
+                                Some(gettext("Never seen"))
                             }
                         }
                     })
