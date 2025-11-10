@@ -30,6 +30,7 @@ mod secret;
 mod system_settings;
 mod textbuffer;
 mod textview;
+mod utils;
 mod window;
 
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};

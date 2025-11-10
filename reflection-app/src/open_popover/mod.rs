@@ -24,8 +24,8 @@ use gtk::{
     prelude::{IsA, ObjectExt},
 };
 
-use crate::system_settings::ClockFormat;
-use crate::{ReflectionApplication, open_dialog::OpenDialog};
+use crate::open_dialog::OpenDialog;
+use crate::utils::format_datetime;
 use reflection_doc::{document::Document, documents::Documents};
 
 mod imp {
@@ -167,7 +167,7 @@ mod imp {
                     .transform_to(|binding, last_accessed: Option<glib::DateTime>| {
                         let document: Document = binding.source().unwrap().downcast().unwrap();
                         if let Some(last_accessed) = last_accessed {
-                            Some(format_last_accessed(&last_accessed))
+                            Some(format_datetime(&gettext("Last accessed"), &last_accessed))
                         } else if document.subscribed() {
                             Some(gettext("Currently open"))
                         } else {
@@ -253,121 +253,4 @@ impl OpenPopover {
             }),
         )
     }
-}
-
-// This was copied from Fractal
-// See: https://gitlab.gnome.org/World/fractal/-/blob/main/src/session/model/user_sessions_list/user_session.rs#L258
-fn format_last_accessed(datetime: &glib::DateTime) -> String {
-    let datetime = datetime.to_local().unwrap();
-    let clock_format = ReflectionApplication::default()
-        .system_settings()
-        .clock_format();
-    let use_24 = clock_format == ClockFormat::TwentyFourHours;
-
-    // This was ported from Nautilus and simplified for our use case.
-    // See: https://gitlab.gnome.org/GNOME/nautilus/-/blob/1c5bd3614a35cfbb49de087bc10381cdef5a218f/src/nautilus-file.c#L5001
-    let now = glib::DateTime::now_local().unwrap();
-    let format;
-    let days_ago = {
-        let today_midnight =
-            glib::DateTime::from_local(now.year(), now.month(), now.day_of_month(), 0, 0, 0f64)
-                .expect("constructing GDateTime works");
-
-        let date = glib::DateTime::from_local(
-            datetime.year(),
-            datetime.month(),
-            datetime.day_of_month(),
-            0,
-            0,
-            0f64,
-        )
-        .expect("constructing GDateTime works");
-
-        today_midnight.difference(&date).as_days()
-    };
-
-    // Show only the time if date is on today
-    if days_ago == 0 {
-        if use_24 {
-            // Translators: Time in 24h format, i.e. "23:04".
-            // Do not change the time format as it will follow the system settings.
-            // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-            format = gettext("Last accessed at %H:%M");
-        } else {
-            // Translators: Time in 12h format, i.e. "11:04 PM".
-            // Do not change the time format as it will follow the system settings.
-            // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-            format = gettext("Last accessed at %I:%M %p");
-        }
-    }
-    // Show the word "Yesterday" and time if date is on yesterday
-    else if days_ago == 1 {
-        if use_24 {
-            // Translators: this a time in 24h format, i.e. "Last seen yesterday at 23:04".
-            // Do not change the time format as it will follow the system settings.
-            // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-            // xgettext:no-c-format
-            format = gettext("Last accessed yesterday at %H:%M");
-        } else {
-            // Translators: this is a time in 12h format, i.e. "Last seen Yesterday at 11:04
-            // PM".
-            // Do not change the time format as it will follow the system settings.
-            // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-            // xgettext:no-c-format
-            format = gettext("Last accessed yesterday at %I:%M %p");
-        }
-    }
-    // Show a week day and time if date is in the last week
-    else if days_ago > 1 && days_ago < 7 {
-        if use_24 {
-            // Translators: this is the name of the week day followed by a time in 24h
-            // format, i.e. "Last seen Monday at 23:04".
-            // Do not change the time format as it will follow the system settings.
-            //  See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-            // xgettext:no-c-format
-            format = gettext("Last accessed %A at %H:%M");
-        } else {
-            // Translators: this is the week day name followed by a time in 12h format, i.e.
-            // "Last seen Monday at 11:04 PM".
-            // Do not change the time format as it will follow the system settings.
-            // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-            // xgettext:no-c-format
-            format = gettext("Last accessed %A at %I:%M %p");
-        }
-    } else if datetime.year() == now.year() {
-        if use_24 {
-            // Translators: this is the month and day and the time in 24h format, i.e. "Last
-            // seen February 3 at 23:04".
-            // Do not change the time format as it will follow the system settings.
-            // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-            // xgettext:no-c-format
-            format = gettext("Last accessed %B %-e at %H:%M");
-        } else {
-            // Translators: this is the month and day and the time in 12h format, i.e. "Last
-            // seen February 3 at 11:04 PM".
-            // Do not change the time format as it will follow the system settings.
-            // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-            // xgettext:no-c-format
-            format = gettext("Last accessed %B %-e at %I:%M %p");
-        }
-    } else if use_24 {
-        // Translators: this is the full date and the time in 24h format, i.e. "Last
-        // seen February 3 2015 at 23:04".
-        // Do not change the time format as it will follow the system settings.
-        // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-        // xgettext:no-c-format
-        format = gettext("Last accessed %B %-e %Y at %H:%M");
-    } else {
-        // Translators: this is the full date and the time in 12h format, i.e. "Last
-        // seen February 3 2015 at 11:04 PM".
-        // Do not change the time format as it will follow the system settings.
-        // See `man strftime` or the documentation of g_date_time_format for the available specifiers: <https://docs.gtk.org/glib/method.DateTime.format.html>
-        // xgettext:no-c-format
-        format = gettext("Last accessed %B %-e %Y at %I:%M %p");
-    }
-
-    datetime
-        .format(&format)
-        .expect("formatting GDateTime works")
-        .into()
 }
