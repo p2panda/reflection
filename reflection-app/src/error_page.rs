@@ -27,7 +27,7 @@ mod imp {
     use super::*;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(resource = "/org/p2panda/reflection/error_page.ui")]
+    #[template(file = "src/error_page.blp")]
     pub struct ErrorPage {
         #[template_child]
         pub(super) main_stack: TemplateChild<gtk::Stack>,
@@ -86,3 +86,4 @@ impl ErrorPage {
             .set_visible_child(visible_child.deref());
     }
 }
+

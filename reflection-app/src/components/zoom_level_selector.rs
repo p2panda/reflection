@@ -29,7 +29,7 @@ mod imp {
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::ZoomLevelSelector)]
-    #[template(resource = "/org/p2panda/reflection/components/zoom_level_selector.ui")]
+    #[template(file = "src/components/zoom_level_selector.blp")]
     pub struct ZoomLevelSelector {
         #[template_child]
         pub button: TemplateChild<gtk::Button>,
@@ -79,3 +79,4 @@ impl ZoomLevelSelector {
         glib::Object::builder().build()
     }
 }
+

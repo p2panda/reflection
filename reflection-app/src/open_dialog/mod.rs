@@ -41,7 +41,7 @@ mod imp {
     use std::sync::LazyLock;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
-    #[template(resource = "/org/p2panda/reflection/open_dialog/open_dialog.ui")]
+    #[template(file = "src/open_dialog/open_dialog.blp")]
     pub struct OpenDialog {
         #[template_child]
         pub open_document_button: TemplateChild<gtk::Button>,
@@ -220,3 +220,4 @@ impl OpenDialog {
         )
     }
 }
+

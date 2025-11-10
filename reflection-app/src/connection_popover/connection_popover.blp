@@ -1,0 +1,177 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ReflectionConnectionPopover: Adw.Bin {
+  child: MenuButton connection_button {
+    styles [
+      "flat",
+    ]
+
+    Box {
+      spacing: 3;
+
+      Stack button_icon_stack {
+        transition-type: crossfade;
+
+        StackPage {
+          name: "offline";
+
+          child: Image {
+            icon-name: "offline-symbolic";
+
+            styles [
+              "dim-label",
+            ]
+          };
+        }
+
+        StackPage {
+          name: "network";
+
+          child: Image {
+            icon-name: "network-symbolic";
+          };
+        }
+
+        StackPage {
+          name: "no-network";
+
+          child: Image {
+            icon-name: "no-network-symbolic";
+          };
+        }
+      }
+
+      $ReflectionAuthorsStack {
+        max-visible: "4";
+        model: bind template.document as <$Document>.authors;
+      }
+    }
+
+    popover: Popover {
+      child: Adw.Clamp {
+        maximum-size: 300;
+
+        child: Box {
+          orientation: vertical;
+
+          Box {
+            hexpand: true;
+            margin-bottom: 6;
+
+            Label {
+              hexpand: true;
+              halign: start;
+              label: _("Connection Mode");
+            }
+
+            styles [
+              "heading",
+            ]
+          }
+
+          Adw.ToggleGroup connection_mode_switch {
+            homogeneous: true;
+
+            Adw.Toggle {
+              tooltip: _("Disable communication with the outside world");
+              name: "offline";
+
+              child: Box {
+                orientation: vertical;
+                spacing: 6;
+                halign: center;
+                margin-top: 3;
+
+                Image {
+                  icon-name: "offline-symbolic";
+                }
+
+                Label {
+                  label: _("Offline");
+                }
+              };
+            }
+
+            Adw.Toggle {
+              tooltip: _("Communicate via network");
+              name: "network";
+
+              child: Box {
+                orientation: vertical;
+                spacing: 6;
+                halign: center;
+                margin-top: 3;
+
+                Image network_toggle_image {
+                  icon-name: "network-symbolic";
+                }
+
+                Label {
+                  label: _("Network");
+                }
+              };
+            }
+
+            styles [
+              "connection-mode-toggle",
+            ]
+          }
+
+          Revealer no_network_revealer {
+            child: Box {
+              margin-top: 12;
+              spacing: 12;
+
+              Image {
+                icon-name: "no-wifi-symbolic";
+                valign: center;
+
+                styles [
+                  "circular",
+                ]
+              }
+
+              Box {
+                orientation: vertical;
+                valign: center;
+
+                Label {
+                  label: _("No Network Connection");
+                  halign: start;
+
+                  styles [
+                    "caption-heading",
+                  ]
+                }
+
+                Label {
+                  label: _("Check if the WiFi, mobile data, or other connection is working");
+                  wrap: true;
+                  halign: start;
+
+                  styles [
+                    "caption",
+                  ]
+                }
+              }
+            };
+          }
+
+          ScrolledWindow {
+            propagate-natural-width: true;
+            propagate-natural-height: true;
+            max-content-height: 300;
+            margin-top: 18;
+
+            child: $ReflectionAuthorList author_list {};
+          }
+        };
+      };
+
+      styles [
+        "connection-popover",
+      ]
+    };
+  };
+}

@@ -1,0 +1,51 @@
+using Gtk 4.0;
+
+template $ZoomLevelSelector: Box {
+  hexpand: true;
+
+  Box {
+    spacing: 12;
+    margin-start: 18;
+    margin-end: 18;
+
+    Button {
+      icon-name: "zoom-out-symbolic";
+      tooltip-text: _("Zoom Out");
+      action-name: "window.zoom-out";
+
+      accessibility {
+        label: _("Zoom Out");
+      }
+
+      styles [
+        "circular",
+        "flat",
+      ]
+    }
+
+    Button button {
+      hexpand: true;
+      action-name: "window.zoom-one";
+
+      styles [
+        "circular",
+        "flat",
+      ]
+    }
+
+    Button {
+      icon-name: "zoom-in-symbolic";
+      tooltip-text: _("Zoom In");
+      action-name: "window.zoom-in";
+
+      accessibility {
+        label: _("Zoom In");
+      }
+
+      styles [
+        "circular",
+        "flat",
+      ]
+    }
+  }
+}

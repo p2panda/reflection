@@ -40,7 +40,7 @@ mod imp {
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::DocumentView)]
-    #[template(resource = "/org/p2panda/reflection/document_view.ui")]
+    #[template(file = "src/document_view.blp")]
     pub struct DocumentView {
         // Template widgets
         #[template_child]
@@ -314,3 +314,4 @@ impl DocumentView {
         glib::Object::builder().property("service", service).build()
     }
 }
+

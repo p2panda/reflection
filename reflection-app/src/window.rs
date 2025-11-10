@@ -31,7 +31,7 @@ mod imp {
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::Window)]
-    #[template(resource = "/org/p2panda/reflection/window.ui")]
+    #[template(file = "src/window.blp")]
     pub struct Window {
         #[template_child]
         pub(super) toast_overlay: TemplateChild<adw::ToastOverlay>,

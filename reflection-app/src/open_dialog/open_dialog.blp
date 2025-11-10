@@ -1,0 +1,65 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ReflectionOpenDialog: Adw.Dialog {
+  can-close: true;
+  content-width: 460;
+  content-height: 380;
+  default-widget: open_document_button;
+
+  Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    Box {
+      orientation: vertical;
+      margin-top: 0;
+      margin-bottom: 36;
+      margin-start: 36;
+      margin-end: 36;
+      spacing: 12;
+
+      Label {
+        label: _("Open Document");
+
+        styles [
+          "title-2",
+        ]
+      }
+
+      Label {
+        wrap: true;
+        justify: center;
+        max-width-chars: 25;
+        natural-wrap-mode: word;
+        label: _("Enter an invite code to start collaborating on a document");
+      }
+
+      $MultilineEntry open_document_entry {
+        margin-top: "12";
+        wrap-mode: "char";
+
+        styles [
+          "invite-code-entry",
+          "monospace",
+        ]
+      }
+
+      Box {
+        halign: center;
+        margin-top: 12;
+
+        Button open_document_button {
+          label: _("Open");
+          sensitive: false;
+
+          styles [
+            "pill",
+            "suggested-action",
+            "open-document-button",
+          ]
+        }
+      }
+    }
+  }
+}

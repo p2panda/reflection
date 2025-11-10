@@ -1,3 +1,5 @@
 target
 .flatpak-builder
 reflection-app/src/config.rs
+
+/subprojects/blueprint-compiler
