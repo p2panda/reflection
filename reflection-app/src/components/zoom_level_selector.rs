@@ -79,4 +79,3 @@ impl ZoomLevelSelector {
         glib::Object::builder().build()
     }
 }
-

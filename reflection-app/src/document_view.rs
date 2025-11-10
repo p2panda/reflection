@@ -314,4 +314,3 @@ impl DocumentView {
         glib::Object::builder().property("service", service).build()
     }
 }
-

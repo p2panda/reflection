@@ -220,4 +220,3 @@ impl OpenDialog {
         )
     }
 }
-
