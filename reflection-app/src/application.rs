@@ -70,6 +70,7 @@ mod imp {
             obj.setup_gactions();
             obj.set_accels_for_action("app.quit", &["<primary>q"]);
             obj.set_accels_for_action("app.new-window", &["<control>n"]);
+            obj.set_accels_for_action("window.close", &["<Control>w"]);
         }
     }
 
