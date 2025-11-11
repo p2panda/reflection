@@ -9,7 +9,6 @@ src/connection_popover/author_list.rs
 src/connection_popover/authors_stack.blp
 src/connection_popover/connection_popover.blp
 src/document_view.blp
-src/gtk/help-overlay.blp
 src/open_dialog/mod.rs
 src/open_dialog/open_dialog.blp
 src/open_popover/open_popover.blp
