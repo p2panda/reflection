@@ -25,15 +25,21 @@
 }
 
 .connection-popover > contents {
-  padding: 16px;
+  padding: 0px;
+  padding-top: 6px;
 }
 
-.connection-popover row .header {
-	margin: 0px;
+.connection-popover .connection-mode-toggle,
+.connection-popover .no-network-revealer {
+  margin: 0px 12px;
 }
 
 .connection-popover row {
-	padding: 0px;
+  padding: 0px;
+}
+
+.connection-popover row:last-child {
+  margin-bottom: 6px;
 }
 
 .connection-popover list {
