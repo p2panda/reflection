@@ -902,9 +902,10 @@ impl SubscribableDocument for DocumentHandle {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 if let Ok(data) = decode_cbor(&data[..])
-                    && let Some(author) = document.authors().author(&PublicKey(author)) {
-                        document.imp().handle_ephemeral_data(author, data);
-                    }
+                    && let Some(author) = document.authors().author(&PublicKey(author))
+                {
+                    document.imp().handle_ephemeral_data(author, data);
+                }
             });
         }
     }

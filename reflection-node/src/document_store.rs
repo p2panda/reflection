@@ -1,28 +1,22 @@
 use std::collections::HashMap;
 use std::hash::Hash as StdHash;
 
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use p2panda_core::PublicKey;
+use p2panda_net::TopicId;
 use p2panda_store::LogStore;
-use p2panda_sync::log_sync::TopicLogMap;
+use p2panda_sync::{log_sync::Logs, topic_log_sync::TopicLogMap};
 use serde::{Deserialize, Serialize};
-use sqlx::{
-    Decode, Encode, FromRow, Row, Sqlite, Type,
-    encode::IsNull,
-    error::BoxDynError,
-    sqlite::{SqliteArgumentValue, SqliteTypeInfo, SqliteValueRef},
-};
+use sqlx::{FromRow, Row};
 use tracing::error;
 
-use crate::document::DocumentId;
 use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
 
 #[derive(Debug, FromRow)]
 pub struct StoreDocument {
-    #[sqlx(rename = "document_id")]
-    pub id: DocumentId,
+    #[sqlx(try_from = "Vec<u8>")]
+    pub id: TopicId,
     #[sqlx(default)]
     pub name: Option<String>,
     pub last_accessed: Option<DateTime<Utc>>,
@@ -36,33 +30,6 @@ pub struct Author {
     pub last_seen: Option<DateTime<Utc>>,
 }
 
-impl Type<Sqlite> for DocumentId {
-    fn type_info() -> SqliteTypeInfo {
-        <&[u8] as Type<Sqlite>>::type_info()
-    }
-
-    fn compatible(ty: &SqliteTypeInfo) -> bool {
-        <&[u8] as Type<Sqlite>>::compatible(ty)
-    }
-}
-
-impl<'q> Encode<'q, Sqlite> for &'q DocumentId {
-    fn encode_by_ref(
-        &self,
-        args: &mut Vec<SqliteArgumentValue<'q>>,
-    ) -> Result<IsNull, BoxDynError> {
-        <&[u8] as Encode<Sqlite>>::encode_by_ref(&self.as_slice(), args)
-    }
-}
-
-impl Decode<'_, Sqlite> for DocumentId {
-    fn decode(value: SqliteValueRef<'_>) -> Result<Self, BoxDynError> {
-        let value = <&[u8] as Decode<Sqlite>>::decode(value)?;
-
-        Ok(DocumentId::from(TryInto::<[u8; 32]>::try_into(value)?))
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct DocumentStore {
     pool: sqlx::SqlitePool,
@@ -73,9 +40,9 @@ impl DocumentStore {
         Self { pool }
     }
 
-    async fn authors(&self, document_id: &DocumentId) -> sqlx::Result<Vec<PublicKey>> {
+    async fn authors(&self, document_id: &TopicId) -> sqlx::Result<Vec<PublicKey>> {
         let list = sqlx::query("SELECT public_key FROM authors WHERE document_id = ?")
-            .bind(document_id)
+            .bind(document_id.as_slice())
             .fetch_all(&self.pool)
             .await?;
 
@@ -95,7 +62,7 @@ impl DocumentStore {
             .await?;
 
         let mut authors_per_document = authors.iter().fold(HashMap::new(), |mut acc, row| {
-            let Ok(document_id) = row.try_get::<DocumentId, _>("document_id") else {
+            let Ok(document_id) = TopicId::try_from(row.get::<&[u8], _>("document_id")) else {
                 return acc;
             };
             let Ok(public_key) = PublicKey::try_from(row.get::<&[u8], _>("public_key")) else {
@@ -122,7 +89,7 @@ impl DocumentStore {
         Ok(documents)
     }
 
-    pub async fn add_document(&self, document_id: &DocumentId) -> sqlx::Result<()> {
+    pub async fn add_document(&self, document_id: &TopicId) -> sqlx::Result<()> {
         // The document_id is the primary key in the table therefore ignore insertion when the document exists already
         sqlx::query(
             "
@@ -130,7 +97,7 @@ impl DocumentStore {
             VALUES ( ? )
             ",
         )
-        .bind(document_id)
+        .bind(document_id.as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -139,7 +106,7 @@ impl DocumentStore {
 
     pub async fn add_author(
         &self,
-        document_id: &DocumentId,
+        document_id: &TopicId,
         public_key: &PublicKey,
     ) -> sqlx::Result<()> {
         // The author/document_id pair is required to be unique therefore ignore if the insertion fails
@@ -150,7 +117,7 @@ impl DocumentStore {
             ",
         )
         .bind(public_key.as_bytes().as_slice())
-        .bind(document_id)
+        .bind(document_id.as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -179,7 +146,7 @@ impl DocumentStore {
 
     pub async fn set_name_for_document(
         &self,
-        document_id: &DocumentId,
+        document_id: &TopicId,
         name: Option<String>,
     ) -> sqlx::Result<()> {
         sqlx::query(
@@ -190,7 +157,7 @@ impl DocumentStore {
             ",
         )
         .bind(name)
-        .bind(document_id)
+        .bind(document_id.as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -199,7 +166,7 @@ impl DocumentStore {
 
     pub async fn set_last_accessed_for_document(
         &self,
-        document_id: &DocumentId,
+        document_id: &TopicId,
         last_accessed: Option<DateTime<Utc>>,
     ) -> sqlx::Result<()> {
         sqlx::query(
@@ -210,7 +177,7 @@ impl DocumentStore {
             ",
         )
         .bind(last_accessed)
-        .bind(document_id)
+        .bind(document_id.as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -220,7 +187,7 @@ impl DocumentStore {
     pub async fn operations_for_document(
         &self,
         operation_store: &OperationStore,
-        document_id: &DocumentId,
+        document_id: &TopicId,
     ) -> sqlx::Result<Vec<p2panda_core::Operation<ReflectionExtensions>>> {
         let operation_store = operation_store.inner();
         let authors = self.authors(document_id).await?;
@@ -264,29 +231,27 @@ impl DocumentStore {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct LogId(LogType, DocumentId);
+pub struct LogId(LogType, TopicId);
 
 impl LogId {
-    pub fn new(log_type: LogType, document: &DocumentId) -> Self {
+    pub fn new(log_type: LogType, document: &TopicId) -> Self {
         Self(log_type, *document)
     }
 }
 
-#[async_trait]
-impl TopicLogMap<DocumentId, LogId> for DocumentStore {
-    async fn get(&self, topic: &DocumentId) -> Option<HashMap<PublicKey, Vec<LogId>>> {
-        let Ok(authors) = self.authors(topic).await else {
-            return None;
-        };
+impl TopicLogMap<TopicId, LogId> for DocumentStore {
+    type Error = sqlx::Error;
+
+    async fn get(&self, topic: &TopicId) -> Result<Logs<LogId>, Self::Error> {
+        let authors = self.authors(topic).await?;
+
         let log_ids = [
             LogId::new(LogType::Delta, topic),
             LogId::new(LogType::Snapshot, topic),
         ];
-        Some(
-            authors
-                .into_iter()
-                .map(|author| (author, log_ids.to_vec()))
-                .collect(),
-        )
+        Ok(authors
+            .into_iter()
+            .map(|author| (author, log_ids.to_vec()))
+            .collect())
     }
 }

@@ -155,9 +155,10 @@ mod imp {
                             .buffer_notify_handler
                             .replace(Some((buffer.downgrade(), handler_id)));
                         if let Some((buffer_weak, old_handler_id)) = old_handler
-                            && let Some(buffer) = buffer_weak.upgrade() {
-                                buffer.disconnect(old_handler_id);
-                            }
+                            && let Some(buffer) = buffer_weak.upgrade()
+                        {
+                            buffer.disconnect(old_handler_id);
+                        }
 
                         view.action_set_enabled("text.undo", buffer.custom_can_undo());
                         view.action_set_enabled("text.redo", buffer.custom_can_redo());
