@@ -27,6 +27,7 @@ use gtk::{gio, glib, glib::clone};
 use reflection_doc::{document::Document, service::ConnectionMode};
 
 mod author_list;
+mod author_row;
 mod authors_stack;
 mod overlapping_avatars;
 

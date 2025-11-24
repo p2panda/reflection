@@ -1,0 +1,51 @@
+using Gtk 4.0;
+
+template $ReflectionAuthorRow: ListBoxRow {
+  selectable: false;
+  activatable: false;
+  can_focus: false;
+  can_target: false;
+
+  child: Box horizontal_box {
+    orientation: horizontal;
+    styles [
+      "header"
+    ]
+
+    $Avatar avatar {
+      author: bind template.author;
+    }
+
+    Box vertical_box {
+      orientation: vertical;
+      valign: center;
+      styles [
+        "title"
+      ]
+
+      Box title_box {
+        spacing: 6;
+        Label title {
+          label: bind template.author as <$Author>.name;
+        }
+
+        Label {
+          label: _("This Device");
+          visible: bind template.author as <$Author>.is_this_device;
+
+          styles [
+            "this-device-pill"
+          ]
+        }
+      }
+
+      Label subtitle {
+        label: bind $format_subtitle(template.author as <$Author>.is_online) as <string>;
+        halign: start;
+        styles [
+          "subtitle"
+        ]
+      }
+    }
+  };
+}
