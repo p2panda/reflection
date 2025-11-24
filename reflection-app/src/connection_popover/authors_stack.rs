@@ -105,7 +105,6 @@ mod imp {
             let mut child = self.avatars.first_child();
             for index in 0..max_visible {
                 let avatar = if let Some(widget) = child {
-                    
                     widget.downcast::<Avatar>().unwrap()
                 } else {
                     self.create_avatar()
