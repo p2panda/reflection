@@ -27,10 +27,10 @@ and run the project. It can be installed with flatpak.
 
 ### Multiple Instances
 
-If you need multiple instances of the app on the same computer for testing, you
-can run GNOME Builder in a separate dbus session:
+If you need multiple instances of the app on the same computer for testing, open
+a runtime terminal in Builder and then run as many instances as you need, like so:
 
-`dbus-run-session flatpak run org.gnome.Builder`
+`dbus-run-session reflection & dbus-run-session reflection & dbus-run-session reflection`
 
 ### Diagnostics
 
