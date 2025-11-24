@@ -20,14 +20,11 @@
 
 use std::cell::RefCell;
 
-use adw::prelude::ActionRowExt;
 use adw::subclass::prelude::*;
-use gettextrs::gettext;
 use gtk::glib;
 use gtk::prelude::*;
 
-use crate::components::Avatar;
-use crate::utils::format_datetime;
+use crate::connection_popover::author_row::AuthorRow;
 use reflection_doc::{author::Author, author::COLORS, authors::Authors};
 
 mod imp {
@@ -75,49 +72,7 @@ mod imp {
         fn set_model(&self, model: Option<Authors>) {
             self.list_box.bind_model(model.as_ref(), |author| {
                 let author = author.downcast_ref::<Author>().unwrap();
-                let row = adw::ActionRow::builder()
-                    .selectable(false)
-                    .activatable(false)
-                    .can_focus(false)
-                    .can_target(false)
-                    .build();
-                let avatar = Avatar::new(Some(author));
-                row.add_prefix(&avatar);
-                if author.is_this_device() {
-                    let this_device_label = gtk::Label::builder()
-                        .label(gettext("This Device"))
-                        .valign(gtk::Align::Start)
-                        .margin_top(6)
-                        .css_classes(["this-device-pill"])
-                        .build();
-                    row.add_suffix(&this_device_label);
-                }
-                author
-                    .bind_property("name", &row, "title")
-                    .sync_create()
-                    .build();
-                author
-                    .bind_property("is-online", &row, "subtitle")
-                    .sync_create()
-                    .transform_to(|binding, is_online: bool| {
-                        let author: Author = binding.source().unwrap().downcast().unwrap();
-                        if is_online {
-                            Some(gettext("Online"))
-                        } else if let Some(last_seen) = author.last_seen() {
-                            if author.is_this_device() {
-                                Some(format_datetime(&gettext("Last online"), &last_seen))
-                            } else {
-                                Some(format_datetime(&gettext("Last seen"), &last_seen))
-                            }
-                        } else {
-                            if author.is_this_device() {
-                                Some(gettext("Offline"))
-                            } else {
-                                Some(gettext("Never seen"))
-                            }
-                        }
-                    })
-                    .build();
+                let row = AuthorRow::new(Some(author));
 
                 row.upcast()
             });
