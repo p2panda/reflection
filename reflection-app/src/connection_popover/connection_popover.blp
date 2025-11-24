@@ -168,9 +168,12 @@ template $ReflectionConnectionPopover: Adw.Bin {
             propagate-natural-width: true;
             propagate-natural-height: true;
             max-content-height: 300;
-            margin-top: 18;
+            margin-top: 12;
 
             child: $ReflectionAuthorList author_list {};
+            styles [
+              "undershoot-top",
+            ]
           }
         };
       };
