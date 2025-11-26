@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use crate::document::{DocumentError, SubscribableDocument, Subscription};
 use crate::document_store::{DocumentStore, LogId};
@@ -10,8 +10,9 @@ use crate::operation_store::OperationStore;
 use crate::utils::CombinedMigrationSource;
 
 use p2panda_core::{Hash, PrivateKey};
+use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::address_book::memory::MemoryStore as MemoryAddressBook;
-use p2panda_net::{MdnsDiscoveryMode, TopicId};
+use p2panda_net::{MdnsDiscoveryMode, NodeInfo, TopicId};
 use p2panda_net::{Network, NetworkBuilder};
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
@@ -21,7 +22,7 @@ use tokio::{
     runtime::{Builder, Runtime},
     sync::{Notify, RwLock},
 };
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 pub type TopicSyncManager = p2panda_sync::managers::topic_sync_manager::TopicSyncManager<
     TopicId,
@@ -47,6 +48,22 @@ pub struct NodeInner {
     pub(crate) network: RwLock<Option<Network<TopicSyncManager>>>,
     pub(crate) network_notifier: Notify,
 }
+
+static RELAY_URL: LazyLock<iroh::RelayUrl> = LazyLock::new(|| {
+    "https://euc1-1.relay.n0.iroh-canary.iroh.link"
+        .parse()
+        .expect("valid relay URL")
+});
+
+static BOOTSTRAP_NODE: LazyLock<NodeInfo> = LazyLock::new(|| {
+    let endpoint_addr = iroh::EndpointAddr::new(
+        "7ccdbeed587a8ec8c71cdc9b98e941ac597e11b0216aac1387ef81089a4930b2"
+            .parse()
+            .expect("valid bootstrap node id"),
+    )
+    .with_relay_url(RELAY_URL.clone());
+    NodeInfo::from(endpoint_addr).bootstrap()
+});
 
 impl NodeInner {
     pub async fn new(
@@ -186,6 +203,11 @@ async fn setup_network(
     operation_store: &OperationStore,
 ) -> Option<Network<TopicSyncManager>> {
     let address_book = MemoryAddressBook::new(rand_chacha::ChaCha20Rng::from_os_rng());
+
+    if let Err(error) = address_book.insert_node_info(BOOTSTRAP_NODE.clone()).await {
+        error!("Failed to add bootstrap node to the address book: {error}");
+    }
+
     let sync_conf = TopicSyncManagerConfig {
         store: operation_store.clone_inner(),
         topic_map: document_store.clone(),
@@ -193,6 +215,7 @@ async fn setup_network(
     let network = NetworkBuilder::new(network_id.into())
         .private_key(private_key.clone())
         .mdns(MdnsDiscoveryMode::Active)
+        .relay(RELAY_URL.clone())
         .build(address_book, sync_conf)
         .await;
 
