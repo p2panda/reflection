@@ -10,8 +10,9 @@ use crate::operation_store::OperationStore;
 use crate::utils::CombinedMigrationSource;
 
 use p2panda_core::{Hash, PrivateKey};
+use p2panda_discovery::address_book::AddressBookStore;
 use p2panda_discovery::address_book::memory::MemoryStore as MemoryAddressBook;
-use p2panda_net::{MdnsDiscoveryMode, TopicId};
+use p2panda_net::{MdnsDiscoveryMode, NodeInfo, TopicId};
 use p2panda_net::{Network, NetworkBuilder};
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
@@ -48,8 +49,9 @@ pub struct NodeInner {
     pub(crate) network_notifier: Notify,
 }
 
-//const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
-//const BOOTSTRAP_NODE_ID: &str = "d825a2f929f935efcd6889bed5c3f5510b40f014969a729033d3fb7e33b97dbe";
+const RELAY_URL: &str = "https://euc1-1.relay.n0.iroh-canary.iroh.link.";
+
+const BOOTSTRAP_NODE_ID: &str = "7ccdbeed587a8ec8c71cdc9b98e941ac597e11b0216aac1387ef81089a4930b2";
 
 impl NodeInner {
     pub async fn new(
@@ -184,6 +186,19 @@ async fn setup_network(
     operation_store: &OperationStore,
 ) -> Option<Network<TopicSyncManager>> {
     let address_book = MemoryAddressBook::new(rand_chacha::ChaCha20Rng::from_os_rng());
+
+    if address_book
+        .insert_node_info({
+            let endpoint_addr = iroh::EndpointAddr::new(BOOTSTRAP_NODE_ID.parse().unwrap());
+            let endpoint_addr = endpoint_addr.with_relay_url(RELAY_URL.parse().unwrap());
+            NodeInfo::from(endpoint_addr).bootstrap()
+        })
+        .await
+        .is_err()
+    {
+        warn!("failed to register bootstrap node in address book");
+    }
+
     let sync_conf = TopicSyncManagerConfig {
         store: operation_store.clone_inner(),
         topic_map: document_store.clone(),
@@ -191,15 +206,7 @@ async fn setup_network(
     let network = NetworkBuilder::new(network_id.into())
         .private_key(private_key.clone())
         .mdns(MdnsDiscoveryMode::Active)
-        // NOTE(glyph): Internet networking is disabled until we can fix the
-        // more-than-two-peers gossip issue.
-        //
-        //.relay(RELAY_URL.parse().expect("valid relay URL"), false, 0)
-        //.direct_address(
-        //    BOOTSTRAP_NODE_ID.parse().expect("valid node ID"),
-        //    vec![],
-        //    None,
-        //)
+        .relay(RELAY_URL.parse().expect("valid relay URL"))
         .build(address_book, sync_conf)
         .await;
 

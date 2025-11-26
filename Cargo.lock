@@ -4556,6 +4556,7 @@ dependencies = [
  "chrono",
  "ciborium",
  "hex",
+ "iroh",
  "p2panda-core",
  "p2panda-discovery-next",
  "p2panda-net-next",
