@@ -3,6 +3,7 @@ use std::ops::{Deref, DerefMut, Drop};
 use std::sync::Arc;
 
 use chrono::Utc;
+use p2panda_core::Hash;
 use p2panda_core::{
     Body, Header,
     cbor::{decode_cbor, encode_cbor},
@@ -299,7 +300,12 @@ async fn setup_network<T: SubscribableDocument + 'static>(
 
     abort_handles.push(abort_handle);
 
-    let ephemeral_stream = network.ephemeral_stream(document_id).await.unwrap();
+    // Generate a different topic than eventually consistent streams to avoid collisions.
+    //
+    // @TODO(adz): We want to throw an error if users try to subscribe with the same topic across
+    // different streams.
+    let topic = Hash::new(document_id);
+    let ephemeral_stream = network.ephemeral_stream(topic.into()).await.unwrap();
     let mut ephemeral_rx = ephemeral_stream.subscribe().await.unwrap();
     let ephemeral_tx = ephemeral_stream;
 
@@ -399,7 +405,8 @@ async fn setup_network<T: SubscribableDocument + 'static>(
         hex::encode(document_id)
     );
 
-    let ephemeral_tx = network.ephemeral_stream(document_id).await.unwrap();
+    let topic = Hash::new(document_id);
+    let ephemeral_tx = network.ephemeral_stream(topic.into()).await.unwrap();
 
     (Some(document_tx), Some(ephemeral_tx), abort_handles)
 }
