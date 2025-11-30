@@ -97,12 +97,8 @@ impl Authors {
         let entry = list.entry(author_key);
         let index = entry.index();
 
-        let was_vacant = if let indexmap::map::Entry::Vacant(_) = entry {
-            true
-        } else {
-            false
-        };
-        let author = entry.or_insert_with_key(|key| Author::new(&key)).to_owned();
+        let was_vacant = matches!(entry, indexmap::map::Entry::Vacant(_));
+        let author = entry.or_insert_with_key(Author::new).to_owned();
         drop(list);
 
         if was_vacant {

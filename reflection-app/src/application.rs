@@ -143,7 +143,7 @@ impl ReflectionApplication {
             .find(|window| {
                 window
                     .document()
-                    .map_or(false, |document| &document.id() == document_id)
+                    .is_some_and(|document| &document.id() == document_id)
             })
     }
 

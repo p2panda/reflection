@@ -114,8 +114,7 @@ mod imp {
                     };
                 }
                 if let Some(font_name) = namespace.get(MONOSPACE_FONT_NAME_KEY) {
-                    match <&str>::try_from(font_name)
-                        .and_then(|font_name| Ok(pango::FontDescription::from_string(font_name)))
+                    match <&str>::try_from(font_name).map(pango::FontDescription::from_string)
                     {
                         Ok(font) => {
                             self.set_monospace_font_name(Some(font));
@@ -155,9 +154,7 @@ mod imp {
                             }
 
                             if setting.key() == MONOSPACE_FONT_NAME_KEY {
-                                match <&str>::try_from(setting.value()).and_then(|font_name| {
-                                    Ok(pango::FontDescription::from_string(font_name))
-                                }) {
+                                match <&str>::try_from(setting.value()).map(pango::FontDescription::from_string) {
                                     Ok(font) => {
                                         obj.imp().set_monospace_font_name(Some(font));
                                     }

@@ -40,6 +40,12 @@ impl fmt::Display for DocumentId {
     }
 }
 
+impl Default for DocumentId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DocumentId {
     pub fn new() -> Self {
         let mut arr = [0u8; 32];
@@ -140,7 +146,7 @@ mod imp {
             name.len() < DOCUMENT_NAME_LENGTH
         });
 
-        if name.trim().len() > 0 {
+        if !name.trim().is_empty() {
             Some(name)
         } else {
             None
@@ -396,7 +402,7 @@ mod imp {
             .expect("set peer id for new document");
 
             doc.subscribe(
-                &*TEXT_CONTAINER_ID,
+                &TEXT_CONTAINER_ID,
                 Arc::new(clone!(
                     #[weak]
                     obj,
@@ -895,11 +901,10 @@ impl SubscribableDocument for DocumentHandle {
     fn ephemeral_bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                if let Ok(data) = decode_cbor(&data[..]) {
-                    if let Some(author) = document.authors().author(&PublicKey(author)) {
+                if let Ok(data) = decode_cbor(&data[..])
+                    && let Some(author) = document.authors().author(&PublicKey(author)) {
                         document.imp().handle_ephemeral_data(author, data);
                     }
-                }
             });
         }
     }

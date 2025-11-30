@@ -15,6 +15,12 @@ pub mod identity {
     #[boxed_type(name = "ReflectionPrivateKey", nullable)]
     pub struct PrivateKey(pub(crate) p2panda_core::PrivateKey);
 
+    impl Default for PrivateKey {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl PrivateKey {
         pub fn new() -> PrivateKey {
             PrivateKey(p2panda_core::PrivateKey::new())

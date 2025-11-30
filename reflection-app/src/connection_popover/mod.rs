@@ -151,7 +151,7 @@ mod imp {
             let wants_network = self
                 .connection_mode_switch
                 .active_name()
-                .map_or(false, |name| name.as_str() == "network");
+                .is_some_and(|name| name.as_str() == "network");
             let is_offline = !monitor.is_network_available() && wants_network;
 
             self.no_network_revealer.set_reveal_child(is_offline);
