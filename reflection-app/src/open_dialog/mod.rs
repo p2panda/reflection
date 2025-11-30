@@ -93,7 +93,7 @@ mod imp {
                                 false,
                             )
                             .chars()
-                            .filter(|c| c.is_digit(16))
+                            .filter(|c| c.is_ascii_hexdigit())
                             .collect::<String>(),
                     )
                     .expect("valid document id");
@@ -111,7 +111,7 @@ mod imp {
                     let input: String = buffer
                         .text(&buffer.start_iter(), &buffer.end_iter(), false)
                         .chars()
-                        .filter(|c| c.is_digit(16))
+                        .filter(|c| c.is_ascii_hexdigit())
                         .collect();
 
                     let document_id = if input.len() == 64 {
@@ -146,7 +146,7 @@ mod imp {
                     let filterd_text: String = new_text
                         .chars()
                         .filter(|c| {
-                            if c.is_digit(16) {
+                            if c.is_ascii_hexdigit() {
                                 prev_char = None;
                                 true
                             } else if c == &' ' && prev_char != Some(' ') {
@@ -158,7 +158,7 @@ mod imp {
                         })
                         .collect();
 
-                    let mut before_iter = pos.clone();
+                    let mut before_iter = *pos;
                     let before_char = if before_iter.backward_char() {
                         Some(before_iter.char())
                     } else {
@@ -179,14 +179,14 @@ mod imp {
                     let input_len = buffer
                         .text(&buffer.start_iter(), &buffer.end_iter(), false)
                         .chars()
-                        .filter(|c| c.is_digit(16))
+                        .filter(|c| c.is_ascii_hexdigit())
                         .count();
 
-                    if trimmed_text.len() == 0 || (input_len >= 64 && trimmed_text != " ") {
+                    if trimmed_text.is_empty() || (input_len >= 64 && trimmed_text != " ") {
                         buffer.stop_signal_emission_by_name("insert-text");
                     } else if new_text != trimmed_text {
                         buffer.stop_signal_emission_by_name("insert-text");
-                        buffer.insert(pos, &trimmed_text);
+                        buffer.insert(pos, trimmed_text);
                     }
                 });
         }

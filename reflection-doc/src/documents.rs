@@ -69,11 +69,12 @@ impl Documents {
 
     pub(crate) async fn load(&self, service: &Service) -> Result<(), StartupError> {
         let public_key = service.private_key().public_key();
-        let mut list = self.imp().list.write().unwrap();
-
-        assert!(list.is_empty());
 
         let documents = service.node().documents::<DocumentId>().await?;
+
+        let mut list = self.imp().list.write().unwrap();
+        assert!(list.is_empty());
+
         let documents_len = documents.len();
         for document in documents {
             let last_accessed = document.last_accessed.and_then(|last_accessed| {

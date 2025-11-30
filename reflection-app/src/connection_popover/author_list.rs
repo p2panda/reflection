@@ -73,7 +73,6 @@ mod imp {
             self.list_box.bind_model(model.as_ref(), |author| {
                 let author = author.downcast_ref::<Author>().unwrap();
                 let row = AuthorRow::new(Some(author));
-
                 row.upcast()
             });
 

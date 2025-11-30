@@ -92,8 +92,8 @@ mod imp {
             let mut child = self.avatars.first_child();
             for index in 0..max_visible {
                 let avatar = if let Some(widget) = child {
-                    let avatar = widget.downcast::<Avatar>().unwrap();
-                    avatar
+                    
+                    widget.downcast::<Avatar>().unwrap()
                 } else {
                     self.create_avatar()
                 };
@@ -135,12 +135,12 @@ mod imp {
             filter.append(
                 gtk::BoolFilter::builder()
                     .invert(true)
-                    .expression(&Author::this_expression("is-this-device"))
+                    .expression(Author::this_expression("is-this-device"))
                     .build(),
             );
             filter.append(
                 gtk::BoolFilter::builder()
-                    .expression(&Author::this_expression("is-online"))
+                    .expression(Author::this_expression("is-online"))
                     .build(),
             );
 

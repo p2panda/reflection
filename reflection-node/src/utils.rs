@@ -25,8 +25,7 @@ impl<'s> MigrationSource<'s> for CombinedMigrationSource {
             Ok(self
                 .migrators
                 .iter()
-                .map(|migrator| migrator.iter())
-                .flatten()
+                .flat_map(|migrator| migrator.iter())
                 .cloned()
                 .collect())
         })

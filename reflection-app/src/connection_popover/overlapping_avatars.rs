@@ -47,8 +47,8 @@ mod imp {
 
             while let Some(widget) = child {
                 let prev_widget = widget.prev_sibling();
-                if let Some(ref prev_widget) = prev_widget {
-                    if let Some(rect) = prev_widget.compute_bounds(self.obj().as_ref()) {
+                if let Some(ref prev_widget) = prev_widget
+                    && let Some(rect) = prev_widget.compute_bounds(self.obj().as_ref()) {
                         snapshot.push_mask(gtk::gsk::MaskMode::InvertedAlpha);
                         // This only works for circular widgets like avatars,
                         // maybe we should just use the widget as mask so it works for all widgets?
@@ -60,7 +60,6 @@ mod imp {
                         // Finish creating the mask
                         snapshot.pop();
                     }
-                }
 
                 self.obj().snapshot_child(&widget, snapshot);
                 if prev_widget.is_some() {

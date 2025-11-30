@@ -79,7 +79,7 @@ mod imp {
                     };
                     let triggers_context_menu = click
                         .last_event(click.current_sequence().as_ref())
-                        .map_or(false, |event| event.triggers_context_menu());
+                        .is_some_and(|event| event.triggers_context_menu());
 
                     if n_press != 1 || !triggers_context_menu {
                         adapter.update_corrections();
@@ -154,11 +154,10 @@ mod imp {
                             .imp()
                             .buffer_notify_handler
                             .replace(Some((buffer.downgrade(), handler_id)));
-                        if let Some((buffer_weak, old_handler_id)) = old_handler {
-                            if let Some(buffer) = buffer_weak.upgrade() {
+                        if let Some((buffer_weak, old_handler_id)) = old_handler
+                            && let Some(buffer) = buffer_weak.upgrade() {
                                 buffer.disconnect(old_handler_id);
                             }
-                        }
 
                         view.action_set_enabled("text.undo", buffer.custom_can_undo());
                         view.action_set_enabled("text.redo", buffer.custom_can_redo());

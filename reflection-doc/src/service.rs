@@ -175,6 +175,6 @@ impl Service {
     }
 
     pub(crate) fn node(&self) -> &Node {
-        &self.imp().node.get().expect("Service to run")
+        self.imp().node.get().expect("Service to run")
     }
 }

@@ -7,6 +7,8 @@ use thiserror::Error;
 use crate::document::DocumentId;
 use crate::operation::ReflectionExtensions;
 
+type OperationWithRawHeader = (Header<ReflectionExtensions>, Option<Body>, Vec<u8>);
+
 #[derive(Debug, Error)]
 pub enum UnpackError {
     #[error(transparent)]
@@ -41,7 +43,7 @@ impl PersistentOperation {
     pub fn validate_and_unpack(
         self,
         document_id: DocumentId,
-    ) -> Result<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>), UnpackError> {
+    ) -> Result<OperationWithRawHeader, UnpackError> {
         let PersistentOperation { header, body } = self;
 
         // The header is serialized by Header::to_bytes() as cbor

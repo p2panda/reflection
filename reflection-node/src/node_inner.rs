@@ -148,11 +148,10 @@ impl NodeInner {
     pub async fn shutdown(&self) {
         // Wake up all subscriptions that may still exist
         self.network_notifier.notify_waiters();
-        if let Some(network) = self.network.write().await.take() {
-            if let Err(error) = network.shutdown().await {
+        if let Some(network) = self.network.write().await.take()
+            && let Err(error) = network.shutdown().await {
                 warn!("Failed to shutdown network: {error}");
             }
-        }
     }
 
     pub async fn subscribe<T: SubscribableDocument + 'static>(

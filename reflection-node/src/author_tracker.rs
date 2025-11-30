@@ -72,7 +72,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
 
         // Set all authors that the tracker has seen to offline, authors the tracker hasn't seen are already offline
         let old_authors =
-            std::mem::replace(self.last_ping.lock().await.deref_mut(), HashMap::new());
+            std::mem::take(self.last_ping.lock().await.deref_mut());
         for author in old_authors.into_keys() {
             self.document.author_left(author);
             self.set_last_seen(author).await;

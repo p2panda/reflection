@@ -7,7 +7,6 @@ use p2panda_core::{Body, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_store::{
     LogStore, OperationStore as TraitOperationStore, SqliteStore, SqliteStoreError,
 };
-use sqlx;
 use thiserror::Error;
 use tokio::sync::Semaphore;
 
@@ -94,7 +93,7 @@ impl OperationStore {
             seq_num,
             backlink,
             previous: vec![],
-            extensions: extensions,
+            extensions,
         };
         header.sign(private_key);
 

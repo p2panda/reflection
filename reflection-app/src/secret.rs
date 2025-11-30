@@ -23,7 +23,7 @@ use tracing::info;
 use crate::APP_ID;
 use reflection_doc::identity::{IdentityError, PrivateKey};
 
-const XDG_SCHEMA: &'static str = "xdg:schema";
+const XDG_SCHEMA: &str = "xdg:schema";
 
 fn attributes() -> HashMap<&'static str, String> {
     HashMap::from([(XDG_SCHEMA, APP_ID.to_owned())])
@@ -43,7 +43,7 @@ pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
     keyring.unlock().await?;
 
     let private_key: PrivateKey =
-        if let Some(item) = keyring.search_items(&attributes()).await?.get(0) {
+        if let Some(item) = keyring.search_items(&attributes()).await?.first() {
             item.unlock().await?;
             let private_key = PrivateKey::try_from(item.secret().await?.as_bytes())?;
             info!("Found existing identity: {}", private_key.public_key());

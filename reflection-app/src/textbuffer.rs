@@ -54,13 +54,13 @@ mod imp {
         fn custom_can_undo(&self) -> bool {
             self.obj()
                 .document()
-                .map_or(false, |document| document.can_undo())
+                .is_some_and(|document| document.can_undo())
         }
 
         fn custom_can_redo(&self) -> bool {
             self.obj()
                 .document()
-                .map_or(false, |document| document.can_redo())
+                .is_some_and(|document| document.can_redo())
         }
 
         fn set_document(&self, document: Option<&Document>) {
@@ -73,7 +73,7 @@ mod imp {
                 self.obj().set_inhibit_text_change(false);
             }
 
-            if document.map_or(false, |document| !document.subscribed()) {
+            if document.is_some_and(|document| !document.subscribed()) {
                 let handle = self.obj().connect_changed(move |obj| {
                     if let Some(changed_handler) = obj.imp().changed_handler.take() {
                         obj.disconnect(changed_handler);
