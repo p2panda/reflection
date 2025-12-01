@@ -41,7 +41,7 @@ mod imp {
         pub(super) error_page: TemplateChild<ErrorPage>,
         #[property(get = Self::service, set = Self::set_service, nullable)]
         service: PhantomData<Option<Service>>,
-        #[property(get = Self::document, nullable)]
+        #[property(get = Self::document, set = Self::set_document, nullable)]
         document: PhantomData<Option<Document>>,
     }
 
@@ -94,7 +94,13 @@ mod imp {
         }
 
         fn document(&self) -> Option<Document> {
-            Some(self.document_view()?.document())
+            self.document_view()?.document()
+        }
+
+        fn set_document(&self, document: Option<Document>) {
+            if let Some(document_view) = self.document_view() {
+                document_view.set_document(document);
+            }
         }
     }
 

@@ -63,7 +63,7 @@ mod imp {
         pub zoom_level: Cell<f64>,
         #[property(get, construct_only)]
         pub service: OnceCell<Service>,
-        #[property(get, type = Document)]
+        #[property(get, set = Self::set_document, nullable)]
         document: RefCell<Option<Document>>,
     }
 
@@ -210,7 +210,7 @@ mod imp {
                     if let Some(window) = app.window_for_document_id(&document.id()) {
                         window.present();
                     } else {
-                        this.set_document(document.to_owned());
+                        this.set_document(Some(document.to_owned()));
                         let hold_guard = ReflectionApplication::default().hold();
                         glib::spawn_future_local(clone!(
                             #[weak]
@@ -228,14 +228,17 @@ mod imp {
                 #[weak(rename_to = this)]
                 self,
                 move |button| {
-                    let document_id = Self::format_document_id(&this.obj().document().id());
+                    let Some(document) = this.obj().document() else {
+                        return;
+                    };
+                    let document_id = Self::format_document_id(&document.id());
                     let clipboard = button.display().clipboard();
                     clipboard.set(&document_id);
                     this.share_popover.popdown();
                 }
             ));
 
-            self.set_document(self.obj().service().join_document(&DocumentId::new()));
+            self.set_document(Some(self.obj().service().join_document(&DocumentId::new())));
         }
     }
 
@@ -253,29 +256,28 @@ mod imp {
             self.obj().action_set_enabled("window.zoom-out", size > 1.0);
         }
 
-        fn set_document(&self, document: Document) {
-            let document_id = Self::format_document_id(&document.id());
-            self.share_code_label.set_text(&document_id);
+        fn set_document(&self, document: Option<Document>) {
+            if let Some(ref document) = document {
+                let document_id = Self::format_document_id(&document.id());
+                self.share_code_label.set_text(&document_id);
+            }
+
             self.text_view
                 .buffer()
                 .downcast::<ReflectionTextBuffer>()
                 .unwrap()
-                .set_document(&document);
+                .set_document(document.as_ref());
 
-            let old_document = self.document.replace(Some(document));
+            let old_document = self.document.replace(document);
 
             if let Some(old_document) = old_document {
                 // We need to make sure that unsubscribe runs
                 // to termination before the app is terminated
                 let hold_guard = ReflectionApplication::default().hold();
-                glib::spawn_future_local(clone!(
-                    #[weak]
-                    old_document,
-                    async move {
-                        old_document.unsubscribe().await;
-                        drop(hold_guard);
-                    }
-                ));
+                glib::spawn_future_local(async move {
+                    old_document.unsubscribe().await;
+                    drop(hold_guard);
+                });
             }
 
             self.obj().notify("document");

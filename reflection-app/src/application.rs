@@ -28,6 +28,7 @@ use thiserror::Error;
 use tracing::error;
 
 use crate::config;
+use crate::open_dialog::OpenDialog;
 use crate::secret;
 use crate::system_settings::SystemSettings;
 use crate::window::Window;
@@ -157,6 +158,48 @@ impl ReflectionApplication {
         let new_window_action = gio::ActionEntry::builder("new-window")
             .activate(move |app: &Self, _, _| app.new_window())
             .build();
+        let new_document_action = gio::ActionEntry::builder("new-document")
+            .activate(move |app: &Self, _, _| app.new_document())
+            .build();
+        let join_document_action = gio::ActionEntry::builder("join-document")
+            .parameter_type(Some(&glib::VariantType::new_array(
+                &DocumentId::static_variant_type(),
+            )))
+            .activate(move |app: &Self, _, parameter| {
+                let parameter = parameter.unwrap();
+
+                if parameter.n_children() == 0 {
+                    app.open_join_document_dialog();
+                } else {
+                    for i in 0..parameter.n_children() {
+                        if let Some(document_id) = parameter.child_value(i).get() {
+                            app.join_document(&document_id);
+                            // FIXME: open all documents with it's own window
+                            break;
+                        } else {
+                            error!("Failed to join document: Invalid document id specified");
+                        }
+                    }
+                }
+            })
+            .build();
+        let delete_document_action = gio::ActionEntry::builder("delete-document")
+            .parameter_type(Some(&glib::VariantType::new_array(
+                &DocumentId::static_variant_type(),
+            )))
+            .activate(move |app: &Self, _, parameter| {
+                let parameter = parameter.unwrap();
+
+                for i in 0..parameter.n_children() {
+                    if let Some(document_id) = parameter.child_value(i).get() {
+                        app.delete_document(&document_id);
+                        break;
+                    } else {
+                        error!("Failed to delete document: Invalid document id specified");
+                    }
+                }
+            })
+            .build();
         let temporary_identity_action = gio::ActionEntry::builder("new-temporary-identity")
             .activate(move |app: &Self, _, _| {
                 glib::spawn_future_local(clone!(
@@ -168,10 +211,14 @@ impl ReflectionApplication {
                 ));
             })
             .build();
+
         self.add_action_entries([
             quit_action,
             about_action,
             new_window_action,
+            new_document_action,
+            join_document_action,
+            delete_document_action,
             temporary_identity_action,
         ]);
     }
@@ -183,6 +230,57 @@ impl ReflectionApplication {
             window.display_startup_error(error);
         }
         window.present();
+    }
+
+    fn new_document(&self) {
+        self.join_document(&DocumentId::new());
+    }
+
+    fn open_join_document_dialog(&self) {
+        let active = self.active_window();
+
+        let dialog = OpenDialog::new();
+        adw::prelude::AdwDialogExt::present(&dialog, active.as_ref());
+    }
+
+    fn join_document(&self, document_id: &DocumentId) {
+        if let Some(window) = self.window_for_document_id(document_id) {
+            window.present();
+        } else {
+            let Some(service) = self.service() else {
+                return;
+            };
+            let Some(active) = self.active_window().and_downcast::<Window>() else {
+                return;
+            };
+            let document = service.join_document(document_id);
+            active.set_document(Some(&document));
+            let hold_guard = self.hold();
+            glib::spawn_future_local(clone!(
+                #[weak]
+                document,
+                async move {
+                    document.subscribe().await;
+                    drop(hold_guard);
+                }
+            ));
+        }
+    }
+
+    fn delete_document(&self, document_id: &DocumentId) {
+        if let Some(service) = self.service()
+            && let Some(document) = service.documents().document(document_id)
+        {
+            let hold_guard = self.hold();
+            glib::spawn_future_local(clone!(
+                #[strong]
+                document,
+                async move {
+                    document.delete().await;
+                    drop(hold_guard);
+                }
+            ));
+        }
     }
 
     async fn new_temporary_identity(&self) {
@@ -209,26 +307,13 @@ impl ReflectionApplication {
             return;
         }
 
-        self.imp().service.replace(Some(service));
-
-        // FIXME: We can't use block_on() inside an async context
-        // New documents block on creating the document id, probably
-        // we should make document creating async
-        glib::source::idle_add_local(clone!(
-            #[weak(rename_to = this)]
-            self,
-            #[upgrade_or]
-            glib::ControlFlow::Break,
-            move || {
-                let service = this.service();
-                for window in this.windows() {
-                    if let Ok(window) = window.downcast::<Window>() {
-                        window.set_service(service.as_ref());
-                    }
-                }
-                glib::ControlFlow::Break
+        for window in self.windows() {
+            if let Ok(window) = window.downcast::<Window>() {
+                window.set_service(Some(&service));
             }
-        ));
+        }
+
+        self.imp().service.replace(Some(service));
     }
 
     fn show_about(&self) {
