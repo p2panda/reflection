@@ -8,7 +8,10 @@ use thiserror::Error;
 use tracing::error;
 
 use crate::identity::PrivateKey;
-use crate::{document::Document, documents::Documents};
+use crate::{
+    document::{Document, DocumentId},
+    documents::Documents,
+};
 use reflection_node::{
     document::DocumentError,
     node,
@@ -137,6 +140,34 @@ impl Service {
             .property("private-key", private_key)
             .property("data-dir", data_dir)
             .build()
+    }
+
+    pub fn join_document(&self, document_id: &DocumentId) -> Document {
+        let list = self.documents();
+        if let Some(document) = list.document(document_id) {
+            document
+        } else {
+            let document = Document::new(self, document_id, None);
+            list.add(document.clone());
+
+            document
+        }
+    }
+
+    pub fn join_document_with_main_context(
+        &self,
+        document_id: &DocumentId,
+        main_context: &glib::MainContext,
+    ) -> Document {
+        let list = self.documents();
+        if let Some(document) = list.document(document_id) {
+            document
+        } else {
+            let document = Document::new(self, document_id, Some(main_context));
+            list.add(document.clone());
+
+            document
+        }
     }
 
     pub async fn startup(&self) -> Result<(), StartupError> {

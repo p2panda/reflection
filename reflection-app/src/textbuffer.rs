@@ -43,7 +43,7 @@ mod imp {
         pub inhibit_text_change: Cell<bool>,
         pub document_handlers: OnceCell<glib::SignalGroup>,
         pub changed_handler: RefCell<Option<glib::SignalHandlerId>>,
-        #[property(get, set = Self::set_document)]
+        #[property(get, set = Self::set_document, nullable)]
         pub document: RefCell<Option<Document>>,
         #[property(name = "custom-can-undo", get = Self::custom_can_undo, type = bool)]
         #[property(name = "custom-can-redo", get = Self::custom_can_redo, type = bool)]

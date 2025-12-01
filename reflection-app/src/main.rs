@@ -24,8 +24,8 @@ mod config;
 mod connection_popover;
 mod document_view;
 mod error_page;
+mod landing_view;
 mod open_dialog;
-mod open_popover;
 mod secret;
 mod system_settings;
 mod textbuffer;
@@ -43,7 +43,6 @@ use tracing_subscriber::prelude::*;
 use self::application::ReflectionApplication;
 use self::config::*;
 use self::connection_popover::ConnectionPopover;
-use self::open_popover::OpenPopover;
 use self::textbuffer::ReflectionTextBuffer;
 use self::textview::TextView;
 

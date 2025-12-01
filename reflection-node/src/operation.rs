@@ -1,9 +1,9 @@
 use std::hash::Hash as StdHash;
 
 use p2panda_core::{Extension, Header, PruneFlag};
+use p2panda_net::TopicId;
 use serde::{Deserialize, Serialize};
 
-use crate::document::DocumentId;
 use crate::document_store::LogId;
 
 /// Custom extensions for p2panda header.
@@ -34,7 +34,7 @@ pub struct ReflectionExtensions {
 
     /// Identifier of the document this operation relates to.
     #[serde(rename = "d")]
-    pub document: DocumentId,
+    pub document: TopicId,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
@@ -56,8 +56,8 @@ impl Extension<LogType> for ReflectionExtensions {
     }
 }
 
-impl Extension<DocumentId> for ReflectionExtensions {
-    fn extract(header: &Header<Self>) -> Option<DocumentId> {
+impl Extension<TopicId> for ReflectionExtensions {
+    fn extract(header: &Header<Self>) -> Option<TopicId> {
         Some(header.extensions.document)
     }
 }
@@ -65,7 +65,7 @@ impl Extension<DocumentId> for ReflectionExtensions {
 impl Extension<LogId> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<LogId> {
         let log_type: LogType = header.extension()?;
-        let document_id: DocumentId = header.extension()?;
+        let document_id: TopicId = header.extension()?;
 
         Some(LogId::new(log_type, &document_id))
     }

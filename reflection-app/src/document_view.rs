@@ -18,18 +18,15 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::cell::{Cell, OnceCell, RefCell};
+use std::cell::{Cell, RefCell};
 
-use reflection_doc::{
-    document::{Document, DocumentId},
-    service::Service,
-};
+use reflection_doc::document::{Document, DocumentId};
 
 use adw::{prelude::*, subclass::prelude::*};
 use gtk::{gdk, gio::prelude::ApplicationExtManual, glib, glib::clone};
 
 use crate::{
-    ConnectionPopover, OpenPopover, ReflectionApplication, ReflectionTextBuffer, TextView,
+    ConnectionPopover, ReflectionApplication, ReflectionTextBuffer, TextView,
     components::{MultilineEntry, ZoomLevelSelector},
 };
 
@@ -46,10 +43,6 @@ mod imp {
         #[template_child]
         pub text_view: TemplateChild<sourceview::View>,
         #[template_child]
-        pub open_popover_button: TemplateChild<gtk::MenuButton>,
-        #[template_child]
-        pub open_popover: TemplateChild<OpenPopover>,
-        #[template_child]
         pub share_popover: TemplateChild<gtk::Popover>,
         #[template_child]
         pub share_code_label: TemplateChild<gtk::Label>,
@@ -61,9 +54,7 @@ mod imp {
         pub font_scale: Cell<f64>,
         #[property(get, default = 1.0)]
         pub zoom_level: Cell<f64>,
-        #[property(get, construct_only)]
-        pub service: OnceCell<Service>,
-        #[property(get, type = Document)]
+        #[property(get, set = Self::set_document, nullable)]
         document: RefCell<Option<Document>>,
     }
 
@@ -71,12 +62,11 @@ mod imp {
     impl ObjectSubclass for DocumentView {
         const NAME: &'static str = "ReflectionDocumentView";
         type Type = super::DocumentView;
-        type ParentType = adw::Bin;
+        type ParentType = adw::NavigationPage;
 
         fn class_init(klass: &mut Self::Class) {
             ZoomLevelSelector::static_type();
             MultilineEntry::static_type();
-            OpenPopover::static_type();
             TextView::static_type();
             ConnectionPopover::static_type();
 
@@ -199,43 +189,19 @@ mod imp {
             ));
             self.obj().add_controller(zoom_gesture);
 
-            self.open_popover
-                .set_model(self.obj().service().documents());
-
-            self.open_popover.connect_document_activated(clone!(
-                #[weak(rename_to = this)]
-                self,
-                move |_, document| {
-                    let app = ReflectionApplication::default();
-                    if let Some(window) = app.window_for_document_id(&document.id()) {
-                        window.present();
-                    } else {
-                        this.set_document(document.to_owned());
-                        let hold_guard = ReflectionApplication::default().hold();
-                        glib::spawn_future_local(clone!(
-                            #[weak]
-                            document,
-                            async move {
-                                document.subscribe().await;
-                                drop(hold_guard);
-                            }
-                        ));
-                    }
-                }
-            ));
-
             self.copy_code_button.connect_clicked(clone!(
                 #[weak(rename_to = this)]
                 self,
                 move |button| {
-                    let document_id = Self::format_document_id(&this.obj().document().id());
+                    let Some(document) = this.obj().document() else {
+                        return;
+                    };
+                    let document_id = Self::format_document_id(&document.id());
                     let clipboard = button.display().clipboard();
                     clipboard.set(&document_id);
                     this.share_popover.popdown();
                 }
             ));
-
-            self.set_document(Document::new(&self.obj().service(), &DocumentId::new()));
         }
     }
 
@@ -253,29 +219,28 @@ mod imp {
             self.obj().action_set_enabled("window.zoom-out", size > 1.0);
         }
 
-        fn set_document(&self, document: Document) {
-            let document_id = Self::format_document_id(&document.id());
-            self.share_code_label.set_text(&document_id);
+        fn set_document(&self, document: Option<Document>) {
+            if let Some(ref document) = document {
+                let document_id = Self::format_document_id(&document.id());
+                self.share_code_label.set_text(&document_id);
+            }
+
             self.text_view
                 .buffer()
                 .downcast::<ReflectionTextBuffer>()
                 .unwrap()
-                .set_document(&document);
+                .set_document(document.as_ref());
 
-            let old_document = self.document.replace(Some(document));
+            let old_document = self.document.replace(document);
 
             if let Some(old_document) = old_document {
                 // We need to make sure that unsubscribe runs
                 // to termination before the app is terminated
                 let hold_guard = ReflectionApplication::default().hold();
-                glib::spawn_future_local(clone!(
-                    #[weak]
-                    old_document,
-                    async move {
-                        old_document.unsubscribe().await;
-                        drop(hold_guard);
-                    }
-                ));
+                glib::spawn_future_local(async move {
+                    old_document.unsubscribe().await;
+                    drop(hold_guard);
+                });
             }
 
             self.obj().notify("document");
@@ -300,17 +265,19 @@ mod imp {
     }
 
     impl WidgetImpl for DocumentView {}
-    impl BinImpl for DocumentView {}
+    impl NavigationPageImpl for DocumentView {}
 }
 
 glib::wrapper! {
     pub struct DocumentView(ObjectSubclass<imp::DocumentView>)
-        @extends gtk::Widget, gtk::Window, adw::Bin,
+        @extends gtk::Widget, gtk::Window, adw::NavigationPage,
          @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 impl DocumentView {
-    pub fn new(service: &Service) -> Self {
-        glib::Object::builder().property("service", service).build()
+    pub fn new(document: Option<Document>) -> Self {
+        glib::Object::builder()
+            .property("document", document)
+            .build()
     }
 }

@@ -83,7 +83,7 @@ mod tests {
     use glib::clone;
     use test_log::test;
 
-    use crate::document::{Document, DocumentId};
+    use crate::document::DocumentId;
     use crate::identity::PrivateKey;
     use crate::service::Service;
 
@@ -104,7 +104,8 @@ mod tests {
                 let service = Service::new(&private_key, None);
                 service.startup().await.unwrap();
 
-                let document = Document::with_main_context(&service, &DocumentId::new(), &context);
+                let document =
+                    service.join_document_with_main_context(&DocumentId::new(), &context);
                 document.subscribe().await;
 
                 assert!(document.insert_text(0, test_string).is_ok());
@@ -135,7 +136,8 @@ mod tests {
                 let service = Service::new(&private_key, None);
                 service.startup().await.unwrap();
 
-                let document = Document::with_main_context(&service, &DocumentId::new(), &context);
+                let document =
+                    service.join_document_with_main_context(&DocumentId::new(), &context);
                 document.subscribe().await;
                 let id = document.id();
 
@@ -143,7 +145,7 @@ mod tests {
                 let service2 = Service::new(&private_key2, None);
                 service2.startup().await.unwrap();
 
-                let document2 = Document::with_main_context(&service2, &id, &context);
+                let document2 = service2.join_document_with_main_context(&id, &context);
                 document2.subscribe().await;
 
                 assert_eq!(document.id(), document2.id());
@@ -180,7 +182,8 @@ mod tests {
                 let service = Service::new(&private_key, None);
                 service.startup().await.unwrap();
 
-                let document = Document::with_main_context(&service, &DocumentId::new(), &context);
+                let document =
+                    service.join_document_with_main_context(&DocumentId::new(), &context);
                 document.subscribe().await;
                 let id = document.id();
 
@@ -188,7 +191,7 @@ mod tests {
                 let service2 = Service::new(&private_key2, None);
                 service2.startup().await.unwrap();
 
-                let document2 = Document::with_main_context(&service2, &id, &context);
+                let document2 = service2.join_document_with_main_context(&id, &context);
                 document2.subscribe().await;
 
                 assert_eq!(document.id(), document2.id());
@@ -234,7 +237,8 @@ mod tests {
                 let service = Service::new(&private_key, None);
                 service.startup().await.unwrap();
 
-                let document = Document::with_main_context(&service, &DocumentId::new(), &context);
+                let document =
+                    service.join_document_with_main_context(&DocumentId::new(), &context);
                 let id = document.id();
 
                 document.subscribe().await;
@@ -243,7 +247,7 @@ mod tests {
                 let service2 = Service::new(&private_key2, None);
                 service2.startup().await.unwrap();
 
-                let document2 = Document::with_main_context(&service2, &id, &context);
+                let document2 = service2.join_document_with_main_context(&id, &context);
                 document2.subscribe().await;
 
                 assert_eq!(document.id(), document2.id());

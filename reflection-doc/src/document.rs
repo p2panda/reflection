@@ -18,7 +18,7 @@ use crate::authors::Authors;
 use crate::identity::PublicKey;
 use crate::service::Service;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, glib::Boxed)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, glib::Boxed)]
 #[boxed_type(name = "ReflectionDocumentId", nullable)]
 pub struct DocumentId([u8; 32]);
 
@@ -37,6 +37,26 @@ impl From<[u8; 32]> for DocumentId {
 impl fmt::Display for DocumentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.to_hex())
+    }
+}
+
+impl glib::variant::StaticVariantType for DocumentId {
+    fn static_variant_type() -> std::borrow::Cow<'static, glib::VariantTy> {
+        <[u8]>::static_variant_type()
+    }
+}
+
+impl glib::variant::FromVariant for DocumentId {
+    fn from_variant(variant: &glib::Variant) -> Option<Self> {
+        Some(DocumentId(
+            <[u8; 32]>::try_from(variant.fixed_array::<u8>().ok()?).ok()?,
+        ))
+    }
+}
+
+impl glib::variant::ToVariant for DocumentId {
+    fn to_variant(&self) -> glib::Variant {
+        self.0.as_ref().to_variant()
     }
 }
 
@@ -91,7 +111,7 @@ mod imp {
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
-        #[property(get = Self::main_context, set, nullable)]
+        #[property(get = Self::main_context, set = Self::set_main_context, nullable, construct_only, type = glib::MainContext)]
         main_context: OnceLock<glib::MainContext>,
         #[property(get, construct_only)]
         name: Mutex<Option<String>>,
@@ -159,6 +179,12 @@ mod imp {
                 .get()
                 .unwrap_or(&glib::MainContext::ref_thread_default())
                 .clone()
+        }
+
+        fn set_main_context(&self, main_context: Option<glib::MainContext>) {
+            if let Some(main_context) = main_context {
+                self.main_context.set(main_context).unwrap();
+            }
         }
 
         fn service(&self) -> Service {
@@ -665,17 +691,10 @@ glib::wrapper! {
     pub struct Document(ObjectSubclass<imp::Document>);
 }
 impl Document {
-    pub fn new(service: &Service, id: &DocumentId) -> Self {
-        glib::Object::builder()
-            .property("service", service)
-            .property("id", id)
-            .build()
-    }
-
-    pub fn with_main_context(
+    pub(crate) fn new(
         service: &Service,
         id: &DocumentId,
-        main_context: &glib::MainContext,
+        main_context: Option<&glib::MainContext>,
     ) -> Self {
         glib::Object::builder()
             .property("service", service)
@@ -790,9 +809,6 @@ impl Document {
         self.store_snapshot().await;
         self.imp().store_name();
 
-        // Only keep the document once it was subscribed to at least once
-        self.service().documents().add(self.clone());
-
         self.notify_last_accessed();
         self.notify_subscribed();
     }
@@ -861,6 +877,15 @@ impl Document {
             }
         }
     }
+
+    pub async fn delete(&self) {
+        if let Err(error) = self.service().node().delete_document(self.id()).await {
+            error!("Failed to delete document from document store: {}", error);
+            return;
+        }
+
+        self.service().documents().remove(&self.id());
+    }
 }
 
 unsafe impl Send for Document {}
@@ -902,9 +927,10 @@ impl SubscribableDocument for DocumentHandle {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 if let Ok(data) = decode_cbor(&data[..])
-                    && let Some(author) = document.authors().author(&PublicKey(author)) {
-                        document.imp().handle_ephemeral_data(author, data);
-                    }
+                    && let Some(author) = document.authors().author(&PublicKey(author))
+                {
+                    document.imp().handle_ephemeral_data(author, data);
+                }
             });
         }
     }

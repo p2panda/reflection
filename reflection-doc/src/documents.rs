@@ -131,6 +131,16 @@ impl Documents {
         self.items_changed(0, 0, 1);
     }
 
+    pub fn remove(&self, document_id: &DocumentId) {
+        let mut list = self.imp().list.write().unwrap();
+        let list_len = list.len();
+
+        if let Some((index, _, _)) = list.shift_remove_full(document_id) {
+            drop(list);
+            self.items_changed((list_len - index - 1) as u32, 1, 0);
+        }
+    }
+
     pub fn document(&self, document_id: &DocumentId) -> Option<Document> {
         let list = self.imp().list.read().unwrap();
 

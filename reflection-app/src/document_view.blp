@@ -31,7 +31,7 @@ menu primary_menu {
   }
 }
 
-template $ReflectionDocumentView: Adw.Bin {
+template $ReflectionDocumentView: Adw.NavigationPage {
   styles [
     "view",
   ]
@@ -39,26 +39,6 @@ template $ReflectionDocumentView: Adw.Bin {
   child: Adw.ToolbarView {
     [top]
     Adw.HeaderBar {
-      [start]
-      MenuButton open_popover_button {
-        child: Box {
-          Label {
-            label: _("_Open");
-            use-underline: true;
-          }
-
-          Image {
-            icon-name: "down-smaller-symbolic";
-          }
-        };
-
-        popover: $ReflectionOpenPopover open_popover {};
-
-        styles [
-          "flat",
-        ]
-      }
-
       [end]
       MenuButton {
         primary: true;

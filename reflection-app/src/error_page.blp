@@ -1,10 +1,12 @@
 using Gtk 4.0;
 using Adw 1;
 
-template $ReflectionErrorPage: Adw.Bin {
+template $ReflectionErrorPage: Adw.NavigationPage {
   Adw.ToolbarView {
     [top]
     Adw.HeaderBar {
+      show-back-button: false;
+
       title-widget: Adw.WindowTitle {
         title: _("Error");
       };

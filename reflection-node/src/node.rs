@@ -3,9 +3,10 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use p2panda_core::{Hash, PrivateKey};
+use p2panda_net::TopicId;
 use thiserror::Error;
 
-use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
+use crate::document::{DocumentError, SubscribableDocument, Subscription};
 pub use crate::document_store::Author;
 use crate::document_store::StoreDocument;
 use crate::node_inner::NodeInner;
@@ -102,7 +103,7 @@ impl Node {
                     authors,
                 } = document;
                 Document {
-                    id: <[u8; 32]>::from(id).into(),
+                    id: id.into(),
                     name,
                     last_accessed,
                     authors,
@@ -118,12 +119,24 @@ impl Node {
         document_id: ID,
         document_handle: T,
     ) -> Result<Subscription<T>, DocumentError> {
-        let document_id: DocumentId = DocumentId::from(document_id.into());
+        let document_id: TopicId = document_id.into();
         let document_handle = Arc::new(document_handle);
         let inner_clone = self.inner.clone();
         self.inner
             .runtime
             .spawn(async move { inner_clone.subscribe(document_id, document_handle).await })
+            .await?
+    }
+
+    pub async fn delete_document<ID: Into<[u8; 32]>>(
+        &self,
+        document_id: ID,
+    ) -> Result<(), DocumentError> {
+        let document_id: TopicId = document_id.into();
+        let inner_clone = self.inner.clone();
+        self.inner
+            .runtime
+            .spawn(async move { inner_clone.delete_document(document_id).await })
             .await?
     }
 }

@@ -1,0 +1,60 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ReflectionDocumentRow: Adw.ActionRow {
+  selectable: false;
+  activatable: true;
+  action-name: "app.join-document";
+  /* FIXME: https://gitlab.gnome.org/GNOME/blueprint-compiler/-/issues/227 */
+  action-target: bind $transform_action_target(template.document as <$Document>.id) as <$GVariant>;
+
+  title: bind $transform_name(template.document as <$Document>.name) as <string>;
+  subtitle: bind $transform_last_accessed(template.document as <$Document>.last_accessed, template.document  as <$Document>.subscribed) as <string>;
+
+  $ReflectionAuthorsStack {
+    model: bind template.document as <$Document>.authors;
+    max-visible: 4;
+    show-offline: true;
+  }
+
+  MenuButton menu_button {
+    icon-name: "view-more-symbolic";
+    valign: center;
+
+    styles [
+      "flat"
+    ]
+  }
+}
+
+menu menu_model {
+  section {
+    item {
+      label: _("_Open in new Window");
+      action: "app.open-document-in-window";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Share Document...");
+      action: "app.share-document";
+      hidden-when: "action-missing";
+    }
+
+    item {
+      label: _("_Export to File...");
+      action: "app.export-to-file";
+      hidden-when: "action-missing";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Delete Document...");
+      action: "app.delete-document";
+      hidden-when: "action-missing";
+    }
+  }
+}

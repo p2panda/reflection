@@ -1,6 +1,7 @@
 use formatx::formatx;
 use gettextrs::gettext;
-use gtk::glib;
+use gio::prelude::{MenuLinkIterExt, MenuModelExt};
+use gtk::{gio, glib};
 
 use crate::ReflectionApplication;
 use crate::system_settings::ClockFormat;
@@ -161,4 +162,31 @@ pub fn format_datetime(last_string: &str, datetime: &glib::DateTime) -> String {
         .format(&format)
         .expect("formatting GDateTime works")
         .into()
+}
+
+/// Sets the given `target` as an action target for all entries with an action
+pub fn menu_set_action_target(
+    menu_model: &gio::MenuModel,
+    target: Option<&glib::Variant>,
+) -> gio::MenuModel {
+    let menu = gio::Menu::new();
+    for i in 0..menu_model.n_items() {
+        let item = gio::MenuItem::from_model(menu_model, i);
+        let link_iter = menu_model.iterate_item_links(i);
+        while let Some((name, menu_model)) = link_iter.next() {
+            let link_menu = menu_set_action_target(&menu_model, target);
+            item.set_link(&name, Some(&link_menu));
+        }
+
+        if item
+            .attribute_value(gio::MENU_ATTRIBUTE_ACTION, None)
+            .is_some()
+        {
+            item.set_attribute_value(gio::MENU_ATTRIBUTE_TARGET, target);
+        }
+
+        menu.append_item(&item);
+    }
+
+    menu.into()
 }

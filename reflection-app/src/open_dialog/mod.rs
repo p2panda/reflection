@@ -18,7 +18,11 @@
 
 use gettextrs::gettext;
 
-use gtk::{glib, glib::clone, glib::closure_local, prelude::ObjectExt};
+use gtk::{
+    glib,
+    glib::{clone, variant::ToVariant},
+    prelude::{ActionableExt, ObjectExt},
+};
 
 use reflection_doc::document::DocumentId;
 
@@ -28,17 +32,15 @@ mod imp {
     use super::*;
 
     use adw::prelude::{
-        AdwDialogExt, ButtonExt, StaticType, TextBufferExt, TextBufferExtManual, TextViewExt,
-        WidgetExt,
+        AdwDialogExt, ButtonExt, TextBufferExt, TextBufferExtManual, TextViewExt, WidgetExt,
     };
     use adw::subclass::prelude::{
         AdwDialogImpl, CompositeTemplateClass, CompositeTemplateInitializingExt, WidgetClassExt,
         WidgetImpl, WindowImpl,
     };
-    use glib::subclass::Signal;
+
     use glib::subclass::prelude::*;
     use gtk::TemplateChild;
-    use std::sync::LazyLock;
 
     #[derive(Debug, Default, gtk::CompositeTemplate)]
     #[template(file = "src/open_dialog/open_dialog.blp")]
@@ -65,18 +67,6 @@ mod imp {
     }
 
     impl ObjectImpl for OpenDialog {
-        fn signals() -> &'static [Signal] {
-            static SIGNALS: LazyLock<Vec<Signal>> = LazyLock::new(|| {
-                vec![
-                    // The user has clicked the open document button in the dialog.
-                    Signal::builder("open")
-                        .param_types([DocumentId::static_type()])
-                        .build(),
-                ]
-            });
-            SIGNALS.as_ref()
-        }
-
         fn constructed(&self) {
             self.parent_constructed();
 
@@ -84,21 +74,6 @@ mod imp {
                 #[weak(rename_to = this)]
                 self,
                 move |_| {
-                    let open_document_buffer = this.open_document_entry.buffer();
-                    let document_id = DocumentId::from_hex(
-                        &open_document_buffer
-                            .text(
-                                &open_document_buffer.start_iter(),
-                                &open_document_buffer.end_iter(),
-                                false,
-                            )
-                            .chars()
-                            .filter(|c| c.is_ascii_hexdigit())
-                            .collect::<String>(),
-                    )
-                    .expect("valid document id");
-
-                    this.obj().emit_by_name::<()>("open", &[&document_id]);
                     this.obj().close();
                 }
             ));
@@ -123,6 +98,9 @@ mod imp {
                         .set_sensitive(document_id.is_some());
 
                     let existing = if let Some(document_id) = document_id {
+                        this.open_document_button
+                            .set_action_target_value(Some(&[document_id].to_variant()));
+
                         let app = ReflectionApplication::default();
                         app.window_for_document_id(&document_id)
                     } else {
@@ -207,16 +185,5 @@ glib::wrapper! {
 impl OpenDialog {
     pub fn new() -> Self {
         glib::Object::new()
-    }
-
-    /// Connect to the signal emitted when a user clicks a document in the document list.
-    pub fn connect_open<F: Fn(&Self, &DocumentId) + 'static>(&self, f: F) -> glib::SignalHandlerId {
-        self.connect_closure(
-            "open",
-            true,
-            closure_local!(move |obj: Self, document_id: DocumentId| {
-                f(&obj, &document_id);
-            }),
-        )
     }
 }
