@@ -52,6 +52,8 @@ template $ReflectionOpenDialog: Adw.Dialog {
         Button open_document_button {
           label: _("Open");
           sensitive: false;
+          action-name: "app.join-document";
+          action-target: "@aay []";
 
           styles [
             "pill",

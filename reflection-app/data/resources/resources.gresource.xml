@@ -5,6 +5,7 @@
     <file preprocess="xml-stripblanks">icons/scalable/actions/bluetooth-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/status/folder-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/down-smaller-symbolic.svg</file>
+    <file preprocess="xml-stripblanks">icons/scalable/actions/add-document-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/join-document-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/status/key-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/status/network-computer-symbolic.svg</file>

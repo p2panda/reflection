@@ -1,0 +1,185 @@
+using Gtk 4.0;
+using Adw 1;
+
+template $ReflectionLandingView: Adw.NavigationPage {
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {
+      title-widget: Stack header_stack {
+        visible-child-name: bind document_list_stack.visible-child-name as <string>;
+        StackPage {
+          name: "no-documents";
+          child: Adw.WindowTitle title {
+            title: "Reflection";
+          };
+        }
+
+        StackPage {
+          name: "documents";
+          child: Adw.Clamp {
+            maximum-size: 400;
+            child: SearchEntry search_entry {
+              placeholder-text: _("Search Documents...");
+              hexpand: true;
+
+              accessibility {
+                label: _("Document Search");
+                description: _("Search for a document");
+              }
+            };
+          };
+        }
+      };
+
+      [end]
+      MenuButton {
+        primary: true;
+        icon-name: "open-menu-symbolic";
+        tooltip-text: _("Main Menu");
+
+        popover: PopoverMenu {
+          menu-model: primary_menu;
+        };
+      }
+    }
+
+    Stack document_list_stack {
+      vhomogeneous: false;
+
+      StackPage {
+        name: "no-documents";
+        child: Adw.StatusPage no-document-page {
+            icon-name: "org.p2panda.reflection-symbolic";
+            title: _("Take Notes, Together");
+            child: Box {
+              orientation: vertical;
+              halign: center;
+              spacing: 12;
+
+              Button {
+                action-name: "app.new-document";
+                child: Adw.ButtonContent {
+                  icon-name: "add-document-symbolic";
+                  label: _("_New Document");
+                  use-underline: true;
+                };
+
+                styles [
+                  "open-document",
+                  "pill",
+                  "suggested-action",
+                ]
+              }
+
+              Button {
+                action-name: "app.join-document";
+                action-target: "@aay []";
+                child: Adw.ButtonContent {
+                  icon-name: "join-document-symbolic";
+                  label: _("_Join Document");
+                  use-underline: true;
+                };
+
+                styles [
+                  "open-document",
+                  "pill",
+                ]
+              }
+            };
+        };
+      }
+
+      StackPage {
+        name: "no-matching-documents";
+        child: Adw.StatusPage no-matching-document-page {
+            icon-name: "system-search-symbolic";
+            title: _("No Documents Found");
+            description: _("Try another search term");
+        };
+      }
+
+      StackPage {
+        name: "documents";
+        child: ScrolledWindow document_list {
+          hscrollbar-policy: never;
+          child: Adw.Clamp {
+            maximum-size: 500;
+            child: ListBox listbox {
+              margin-top: 24;
+              margin-bottom: 24;
+              margin-start: 12;
+              margin-end: 12;
+              valign: start;
+              styles [
+                "card"
+              ]
+            };
+          };
+        };
+      }
+    }
+
+    [bottom]
+    Box bottom_buttons {
+      visible: true;
+      orientation: horizontal;
+      halign: center;
+      spacing: 12;
+      margin-start: 12;
+      margin-end: 12;
+      margin-top: 12;
+      margin-bottom: 12;
+
+      Button {
+        action-name: "app.new-document";
+        child: Adw.ButtonContent {
+          icon-name: "add-document-symbolic";
+          label: _("_New Document");
+          use-underline: true;
+        };
+
+        styles [
+          "open-document",
+          "pill",
+          "suggested-action"
+        ]
+      }
+
+      Button {
+        action-name: "app.join-document";
+        action-target: "@aay []";
+        child: Adw.ButtonContent {
+          icon-name: "join-document-symbolic";
+          label: _("_Join Document");
+          use-underline: true;
+        };
+
+        styles [
+          "open-document",
+          "pill",
+        ]
+      }
+    }
+  };
+}
+
+menu primary_menu {
+  section {
+    item {
+      label: _("_New Window");
+      action: "app.new-window";
+    }
+  }
+
+  section {
+    item {
+      label: _("_Keyboard Shortcuts");
+      action: "app.shortcuts";
+    }
+
+    item {
+      label: _("_About Reflection");
+      action: "app.about";
+    }
+  }
+}
