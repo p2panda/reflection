@@ -137,6 +137,15 @@ impl DocumentStore {
         Ok(())
     }
 
+    pub async fn delete_document(&self, document_id: &DocumentId) -> sqlx::Result<()> {
+        sqlx::query("DELETE FROM documents WHERE document_id = ?")
+            .bind(document_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
     pub async fn add_author(
         &self,
         document_id: &DocumentId,

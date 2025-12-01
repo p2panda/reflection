@@ -126,4 +126,16 @@ impl Node {
             .spawn(async move { inner_clone.subscribe(document_id, document_handle).await })
             .await?
     }
+
+    pub async fn delete_document<ID: Into<[u8; 32]>>(
+        &self,
+        document_id: ID,
+    ) -> Result<(), DocumentError> {
+        let document_id: DocumentId = DocumentId::from(document_id.into());
+        let inner_clone = self.inner.clone();
+        self.inner
+            .runtime
+            .spawn(async move { inner_clone.delete_document(document_id).await })
+            .await?
+    }
 }
