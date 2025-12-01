@@ -235,7 +235,7 @@ mod imp {
                 }
             ));
 
-            self.set_document(Document::new(&self.obj().service(), &DocumentId::new()));
+            self.set_document(self.obj().service().join_document(&DocumentId::new()));
         }
     }
 

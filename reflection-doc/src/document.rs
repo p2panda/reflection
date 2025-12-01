@@ -111,7 +111,7 @@ mod imp {
     #[derive(Properties, Default)]
     #[properties(wrapper_type = super::Document)]
     pub struct Document {
-        #[property(get = Self::main_context, set, nullable)]
+        #[property(get = Self::main_context, set = Self::set_main_context, nullable, construct_only, type = glib::MainContext)]
         main_context: OnceLock<glib::MainContext>,
         #[property(get, construct_only)]
         name: Mutex<Option<String>>,
@@ -179,6 +179,12 @@ mod imp {
                 .get()
                 .unwrap_or(&glib::MainContext::ref_thread_default())
                 .clone()
+        }
+
+        fn set_main_context(&self, main_context: Option<glib::MainContext>) {
+            if let Some(main_context) = main_context {
+                self.main_context.set(main_context).unwrap();
+            }
         }
 
         fn service(&self) -> Service {
@@ -685,17 +691,10 @@ glib::wrapper! {
     pub struct Document(ObjectSubclass<imp::Document>);
 }
 impl Document {
-    pub fn new(service: &Service, id: &DocumentId) -> Self {
-        glib::Object::builder()
-            .property("service", service)
-            .property("id", id)
-            .build()
-    }
-
-    pub fn with_main_context(
+    pub(crate) fn new(
         service: &Service,
         id: &DocumentId,
-        main_context: &glib::MainContext,
+        main_context: Option<&glib::MainContext>,
     ) -> Self {
         glib::Object::builder()
             .property("service", service)
@@ -809,9 +808,6 @@ impl Document {
 
         self.store_snapshot().await;
         self.imp().store_name();
-
-        // Only keep the document once it was subscribed to at least once
-        self.service().documents().add(self.clone());
 
         self.notify_last_accessed();
         self.notify_subscribed();
