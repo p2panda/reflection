@@ -881,6 +881,15 @@ impl Document {
             }
         }
     }
+
+    pub async fn delete(&self) {
+        if let Err(error) = self.service().node().delete_document(self.id()).await {
+            error!("Failed to delete document from document store: {}", error);
+            return;
+        }
+
+        self.service().documents().remove(&self.id());
+    }
 }
 
 unsafe impl Send for Document {}
