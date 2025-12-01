@@ -18,7 +18,7 @@ use crate::authors::Authors;
 use crate::identity::PublicKey;
 use crate::service::Service;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, glib::Boxed)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, glib::Boxed)]
 #[boxed_type(name = "ReflectionDocumentId", nullable)]
 pub struct DocumentId([u8; 32]);
 
@@ -37,6 +37,26 @@ impl From<[u8; 32]> for DocumentId {
 impl fmt::Display for DocumentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.to_hex())
+    }
+}
+
+impl glib::variant::StaticVariantType for DocumentId {
+    fn static_variant_type() -> std::borrow::Cow<'static, glib::VariantTy> {
+        <[u8]>::static_variant_type()
+    }
+}
+
+impl glib::variant::FromVariant for DocumentId {
+    fn from_variant(variant: &glib::Variant) -> Option<Self> {
+        Some(DocumentId(
+            <[u8; 32]>::try_from(variant.fixed_array::<u8>().ok()?).ok()?,
+        ))
+    }
+}
+
+impl glib::variant::ToVariant for DocumentId {
+    fn to_variant(&self) -> glib::Variant {
+        self.0.as_ref().to_variant()
     }
 }
 
