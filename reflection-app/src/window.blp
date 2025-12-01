@@ -7,13 +7,21 @@ template $ReflectionWindow: Adw.ApplicationWindow {
   default-height: 600;
 
   content: Adw.ToastOverlay toast_overlay {
-    child: Stack main_stack {
-      transition-type: crossfade;
+    child: Adw.NavigationView navigation {
 
-      StackPage {
-        name: "error";
+     $ReflectionLandingView landing_page {
+        title: bind template.title;
+        tag: "landing-page";
+      }
 
-        child: $ReflectionErrorPage error_page {};
+      $ReflectionDocumentView document_page {
+        title: bind template.title;
+        tag: "document-page";
+      }
+
+      $ReflectionErrorPage error_page {
+        title: bind template.title;
+        tag: "error-page";
       }
     };
   };

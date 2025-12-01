@@ -16,18 +16,20 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::marker::PhantomData;
-
 use adw::{prelude::*, subclass::prelude::*};
-use gtk::{gio, glib};
-use reflection_doc::{document::Document, service::Service};
+use gtk::{gio, glib, glib::clone};
+use reflection_doc::{document::Document, documents::Documents, service::Service};
 
 use crate::{
     application::Error as StartupError, document_view::DocumentView, error_page::ErrorPage,
+    landing_view::LandingView,
 };
 
 mod imp {
     use super::*;
+
+    use std::cell::RefCell;
+    use std::marker::PhantomData;
 
     #[derive(Debug, Default, glib::Properties, gtk::CompositeTemplate)]
     #[properties(wrapper_type = super::Window)]
@@ -36,11 +38,15 @@ mod imp {
         #[template_child]
         pub(super) toast_overlay: TemplateChild<adw::ToastOverlay>,
         #[template_child]
-        main_stack: TemplateChild<gtk::Stack>,
+        pub(super) navigation: TemplateChild<adw::NavigationView>,
+        #[template_child]
+        landing_page: TemplateChild<LandingView>,
+        #[template_child]
+        document_page: TemplateChild<DocumentView>,
         #[template_child]
         pub(super) error_page: TemplateChild<ErrorPage>,
-        #[property(get = Self::service, set = Self::set_service, nullable)]
-        service: PhantomData<Option<Service>>,
+        #[property(get, set = Self::set_service, nullable)]
+        service: RefCell<Option<Service>>,
         #[property(get = Self::document, set = Self::set_document, nullable)]
         document: PhantomData<Option<Document>>,
     }
@@ -54,6 +60,7 @@ mod imp {
         fn class_init(klass: &mut Self::Class) {
             DocumentView::static_type();
             ErrorPage::static_type();
+            LandingView::static_type();
 
             klass.bind_template();
         }
@@ -64,43 +71,26 @@ mod imp {
     }
 
     impl Window {
-        fn document_view(&self) -> Option<DocumentView> {
-            self.main_stack
-                .child_by_name("document-view")?
-                .downcast()
-                .ok()
-        }
-
-        fn set_service(&self, service: Option<&Service>) {
-            let Some(service) = service else {
-                return;
-            };
-
-            if let Some(document_view) = self.document_view() {
-                if &document_view.service() == service {
-                    return;
-                }
-                self.main_stack.remove(&document_view);
+        fn set_service(&self, service: Option<Service>) {
+            if let Some(service) = service.as_ref() {
+                self.landing_page.set_model(Some(service.documents()));
+                self.navigation.pop_to_tag("landing-page");
+            } else {
+                self.landing_page.set_model(None::<Documents>);
             }
-
-            let document_view = DocumentView::new(service);
-            self.main_stack
-                .add_named(&document_view, Some("document-view"));
-            self.main_stack.set_visible_child(&document_view);
-        }
-
-        fn service(&self) -> Option<Service> {
-            Some(self.document_view()?.service())
+            self.service.replace(service);
         }
 
         fn document(&self) -> Option<Document> {
-            self.document_view()?.document()
+            self.document_page.document()
         }
 
         fn set_document(&self, document: Option<Document>) {
-            if let Some(document_view) = self.document_view() {
-                document_view.set_document(document);
+            if document.is_some() {
+                self.navigation.push_by_tag("document-page");
             }
+
+            self.document_page.set_document(document);
         }
     }
 
@@ -108,6 +98,14 @@ mod imp {
     impl ObjectImpl for Window {
         fn constructed(&self) {
             self.parent_constructed();
+
+            self.navigation.connect_popped(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |_, _| {
+                    this.document_page.set_document(None::<Document>);
+                }
+            ));
         }
     }
 
@@ -133,6 +131,7 @@ impl Window {
 
     pub fn display_startup_error(&self, error: &StartupError) {
         self.imp().error_page.display_startup_error(error);
+        self.imp().navigation.push_by_tag("error-page");
     }
 
     pub fn add_toast(&self, toast: adw::Toast) {

@@ -268,15 +268,32 @@ impl ReflectionApplication {
     }
 
     fn delete_document(&self, document_id: &DocumentId) {
+        let dialog = adw::AlertDialog::builder()
+            .heading(gettext("Delete Document?"))
+            .body_use_markup(true)
+            .body(gettext("This document may be stored on other devices, and will only be deleted from this one."))
+            .default_response("confirm")
+            .close_response("cancel")
+            .build();
+
+        dialog.add_response("cancel", &gettext("Cancel"));
+        dialog.add_response("confirm", &gettext("Delete From This Device"));
+        dialog.set_response_appearance("confirm", adw::ResponseAppearance::Destructive);
+
         if let Some(service) = self.service()
             && let Some(document) = service.documents().document(document_id)
         {
             let hold_guard = self.hold();
             glib::spawn_future_local(clone!(
+                #[weak(rename_to = this)]
+                self,
                 #[strong]
                 document,
                 async move {
-                    document.delete().await;
+                    let window = this.active_window();
+                    if dialog.choose_future(window.as_ref()).await == "confirm" {
+                        document.delete().await;
+                    }
                     drop(hold_guard);
                 }
             ));
