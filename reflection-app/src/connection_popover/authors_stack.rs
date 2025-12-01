@@ -48,6 +48,9 @@ mod imp {
         model: gtk::FilterListModel,
         #[property(get, set = Self::set_max_visible)]
         max_visible: Cell<u32>,
+        #[property(get, set = Self::set_show_offline)]
+        show_offline: Cell<bool>,
+        filter: gtk::EveryFilter,
     }
 
     #[glib::object_subclass]
@@ -71,6 +74,16 @@ mod imp {
         fn set_max_visible(&self, max_visible: u32) {
             self.max_visible.set(max_visible);
             self.update_avatars();
+        }
+
+        fn set_show_offline(&self, show_offline: bool) {
+            if show_offline {
+                self.model.set_filter(None::<&gtk::Filter>);
+            } else {
+                self.model.set_filter(Some(&self.filter));
+            }
+
+            self.show_offline.set(show_offline);
         }
 
         fn model(&self) -> Option<Authors> {
@@ -131,21 +144,20 @@ mod imp {
         fn constructed(&self) {
             self.parent_constructed();
 
-            let filter = gtk::EveryFilter::new();
-            filter.append(
+            self.filter.append(
                 gtk::BoolFilter::builder()
                     .invert(true)
                     .expression(Author::this_expression("is-this-device"))
                     .build(),
             );
-            filter.append(
+            self.filter.append(
                 gtk::BoolFilter::builder()
                     .expression(Author::this_expression("is-online"))
                     .build(),
             );
 
             self.model.set_watch_items(true);
-            self.model.set_filter(Some(&filter));
+            self.model.set_filter(Some(&self.filter));
 
             self.model.connect_items_changed(clone!(
                 #[weak(rename_to = this)]
