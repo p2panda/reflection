@@ -114,9 +114,9 @@ impl DocumentStore {
         });
 
         for document in &mut documents {
-            document.authors = authors_per_document
-                .remove(&document.id)
-                .expect("Document does not exist");
+            if let Some(authors) = authors_per_document.remove(&document.id) {
+                document.authors = authors;
+            }
         }
 
         Ok(documents)
