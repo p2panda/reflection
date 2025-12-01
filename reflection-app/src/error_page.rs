@@ -43,7 +43,7 @@ mod imp {
     impl ObjectSubclass for ErrorPage {
         const NAME: &'static str = "ReflectionErrorPage";
         type Type = super::ErrorPage;
-        type ParentType = adw::Bin;
+        type ParentType = adw::NavigationPage;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -59,13 +59,13 @@ mod imp {
     impl ObjectImpl for ErrorPage {}
 
     impl WidgetImpl for ErrorPage {}
-    impl BinImpl for ErrorPage {}
+    impl NavigationPageImpl for ErrorPage {}
     impl AccessibleImpl for ErrorPage {}
 }
 
 glib::wrapper! {
     pub struct ErrorPage(ObjectSubclass<imp::ErrorPage>)
-        @extends gtk::Widget, adw::Bin,
+        @extends gtk::Widget, adw::NavigationPage,
          @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
