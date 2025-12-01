@@ -179,6 +179,14 @@ impl NodeInner {
 
         Ok(Subscription::new(self, document_id, document).await)
     }
+
+    pub async fn delete_document(
+        self: Arc<Self>,
+        document_id: DocumentId,
+    ) -> Result<(), DocumentError> {
+        self.document_store.delete_document(&document_id).await?;
+        Ok(())
+    }
 }
 
 async fn setup_network(
