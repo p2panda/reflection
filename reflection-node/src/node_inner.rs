@@ -51,10 +51,7 @@ impl NodeInner {
         db_location: Option<&Path>,
         connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
-        let runtime = Builder::new_multi_thread()
-            .worker_threads(1)
-            .enable_all()
-            .build()?;
+        let runtime = Builder::new_multi_thread().enable_all().build()?;
 
         let _guard = runtime.enter();
 
