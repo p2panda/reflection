@@ -23,26 +23,45 @@ and run the project. It can be installed with flatpak.
 4. Open the Builder application and navigate to the reflection repo.
    - You may be prompted to install or update the SDK in Builder.
 5. Run the project with `Shift+Ctrl+Space` or click the ► icon (top-middle of
-   the Builder appication).
+   the Builder application).
 
 ### Multiple Instances
 
-If you need multiple instances of the app on the same computer for testing, open
-a runtime terminal in Builder and then run as many instances as you need, like so:
+If you need multiple instances of the app on the same computer for testing,
+open a "runtime terminal" in Builder and then run as many instances as you
+need, like so:
 
-`dbus-run-session reflection & dbus-run-session reflection & dbus-run-session reflection`
+```bash
+# Launch three independent reflection instances
+reflection & dbus-run-session reflection & dbus-run-session reflection
+```
+
+Make sure you've compiled the `reflection` binary already once (step 5. in
+"Getting Started"), to be able to execute the program in the "runtime
+terminal".
 
 ### Diagnostics
 
 Set the `RUST_LOG` environment variable to your verbosity setting and filter to
 enable log-based diagnostics with [tracing](https://docs.rs/tracing). Example:
-`RUST_LOG=debug` or `RUST_LOG=p2panda_net=INFO` etc.
+`RUST_LOG=DEBUG` or `RUST_LOG=p2panda_net=INFO` etc.
 
-### Known Issues
+Use the "runtime terminal" in Builder and set the environment variable like
+that:
 
-Internet connectivity is currently disabled while we debug replication
-issues. Collaboration is still possible if all peers are on the same WiFi
-network.
+```bash
+# Launch reflection with logging enabled, set to verbosity level "warn"
+RUST_LOG=WARN reflection
+
+# Launch two instances with logging. We can set the environment variable for
+# the current runtime, all instances will have logging enabled
+RUST_LOG=p2panda_net=DEBUG,iroh=WARN
+reflection & dbus-run-session reflection
+```
+
+Make sure you've compiled the `reflection` binary already once (step 5. in
+"Getting Started"), to be able to execute the program in the "runtime
+terminal".
 
 ## License
 
