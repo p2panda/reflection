@@ -19,7 +19,7 @@ use tokio::{
     task::{AbortHandle, spawn},
 };
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 
 use crate::author_tracker::{AuthorMessage, AuthorTracker};
 use crate::document::{DocumentError, SubscribableDocument};
@@ -291,7 +291,7 @@ async fn setup_network<T: SubscribableDocument + 'static>(
                     }
                 }
                 _ => {
-                    println!("Got sync event: {event:?}");
+                    trace!("Got sync event: {event:?}");
                 }
             }
         }
