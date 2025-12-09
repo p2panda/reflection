@@ -10,11 +10,8 @@ use crate::node_inner::NodeInner;
 use chrono::Utc;
 use p2panda_core::cbor::{DecodeError, decode_cbor, encode_cbor};
 use p2panda_core::{PrivateKey, PublicKey};
-use p2panda_net::ToNetwork;
-use tokio::{
-    sync::mpsc,
-    sync::{Mutex, RwLock},
-};
+use p2panda_net::streams::EphemeralStream;
+use tokio::sync::{Mutex, RwLock};
 use tracing::error;
 
 const OFFLINE_TIMEOUT: Duration = Duration::from_secs(60);
@@ -50,7 +47,7 @@ pub struct AuthorTracker<T> {
     last_ping: Mutex<HashMap<PublicKey, Instant>>,
     document: Arc<T>,
     node: Arc<NodeInner>,
-    tx: RwLock<Option<mpsc::Sender<ToNetwork>>>,
+    tx: RwLock<Option<EphemeralStream>>,
 }
 
 impl<T: SubscribableDocument> AuthorTracker<T> {
@@ -63,7 +60,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
         })
     }
 
-    pub async fn set_document_tx(&self, tx: Option<mpsc::Sender<ToNetwork>>) {
+    pub async fn set_document_tx(&self, tx: Option<EphemeralStream>) {
         let mut tx_guard = self.tx.write().await;
         // Send good bye message to the network
         if let Some(tx) = tx_guard.as_ref() {
@@ -177,11 +174,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
     }
 }
 
-async fn send_message(
-    private_key: &PrivateKey,
-    tx: &mpsc::Sender<ToNetwork>,
-    message: AuthorMessage,
-) {
+async fn send_message(private_key: &PrivateKey, tx: &EphemeralStream, message: AuthorMessage) {
     // FIXME: We need to add the current time to the message,
     // because iroh doesn't broadcast twice the same message message.
     let author_message = match encode_cbor(&(&message, SystemTime::now())) {
@@ -199,7 +192,7 @@ async fn send_message(
             return;
         }
     };
-    if let Err(error) = tx.send(ToNetwork::Message { bytes }).await {
+    if let Err(error) = tx.publish(bytes).await {
         error!("Failed to sent {message} to the network: {error}");
     }
 }
