@@ -1,53 +1,18 @@
-use std::fmt;
-use std::hash::Hash;
 use std::sync::Arc;
 
+use crate::operation::ReflectionExtensions;
 use crate::operation_store::CreationError;
 use crate::subscription_inner::SubscriptionInner;
 
-use p2panda_core::PublicKey;
-use p2panda_net::{ToNetwork, TopicId};
-use p2panda_sync::TopicQuery;
-use serde::{Deserialize, Serialize};
+use p2panda_core::{Operation, PublicKey};
+use p2panda_net::streams::StreamError;
 use thiserror::Error;
-use tokio::{
-    sync::mpsc,
-    task::{AbortHandle, JoinError},
-};
+use tokio::task::{AbortHandle, JoinError};
 use tracing::info;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub(crate) struct DocumentId(#[serde(with = "serde_bytes")] [u8; 32]);
-
-impl DocumentId {
-    pub const fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
-    }
-}
-
-impl TopicQuery for DocumentId {}
-
-impl TopicId for DocumentId {
-    fn id(&self) -> [u8; 32] {
-        self.0
-    }
-}
-
-impl From<[u8; 32]> for DocumentId {
-    fn from(bytes: [u8; 32]) -> Self {
-        Self(bytes)
-    }
-}
-
-impl From<DocumentId> for [u8; 32] {
-    fn from(id: DocumentId) -> Self {
-        id.0
-    }
-}
-
-impl fmt::Display for DocumentId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&hex::encode(self.0))
+impl From<StreamError<Operation<ReflectionExtensions>>> for DocumentError {
+    fn from(value: StreamError<Operation<ReflectionExtensions>>) -> Self {
+        DocumentError::Publish(Box::new(value))
     }
 }
 
@@ -60,7 +25,10 @@ pub enum DocumentError {
     #[error(transparent)]
     Encode(#[from] p2panda_core::cbor::EncodeError),
     #[error(transparent)]
-    Send(#[from] mpsc::error::SendError<ToNetwork>),
+    // FIXME: The error is huge so but it into a Box
+    Publish(Box<StreamError<Operation<ReflectionExtensions>>>),
+    #[error(transparent)]
+    PublishEphemeral(#[from] StreamError<Vec<u8>>),
     #[error(transparent)]
     Runtime(#[from] JoinError),
 }
@@ -132,7 +100,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
             .spawn(async move { inner.unsubscribe().await })
             .await??;
 
-        info!("Unsubscribed from document {}", document_id);
+        info!("Unsubscribed from document {}", hex::encode(document_id));
 
         Ok(())
     }
