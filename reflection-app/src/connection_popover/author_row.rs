@@ -67,12 +67,10 @@ mod imp {
                 } else {
                     Some(format_datetime(&gettext("Last seen"), &last_seen))
                 }
+            } else if author.is_this_device() {
+                Some(gettext("Offline"))
             } else {
-                if author.is_this_device() {
-                    Some(gettext("Offline"))
-                } else {
-                    Some(gettext("Never seen"))
-                }
+                Some(gettext("Never seen"))
             }
         }
     }
