@@ -11,9 +11,11 @@ template $ReflectionAuthorRow: ListBoxRow {
     styles [
       "header"
     ]
-
-    $Avatar avatar {
-      author: bind template.author;
+    $ReflectionIndicatorBin avatar_bin {
+      child: $Avatar avatar {
+          author: bind template.author;
+      };
+      show-indicator: bind template.author as <$Author>.is-online;
     }
 
     Box vertical_box {
