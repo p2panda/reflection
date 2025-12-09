@@ -71,6 +71,23 @@
   font-size: 32px;
 }
 
+indicatorbin .indicator, indicatorbin .mask {
+  min-width: 10px;
+  min-height: 10px;
+  border-radius: 100px;
+}
+
+indicatorbin .indicator {
+  background-color: #33d17aff;
+  margin: 3px;
+}
+
+indicatorbin .mask {
+  background-color: black;
+  margin: 1px;
+  border: transparent 2px solid;
+}
+
 .this-device-pill {
   border-radius: 9px;
 	padding: 3px 6px;
