@@ -6,7 +6,6 @@ pub mod node;
 mod node_inner;
 mod operation;
 mod operation_store;
-mod persistent_operation;
 mod subscription_inner;
 mod utils;
 

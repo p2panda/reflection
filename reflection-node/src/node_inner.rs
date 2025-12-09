@@ -1,21 +1,21 @@
-use std::ops::DerefMut;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
-use crate::document_store::DocumentStore;
+use crate::document::{DocumentError, SubscribableDocument, Subscription};
+use crate::document_store::{DocumentStore, LogId};
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node::{ConnectionMode, NodeError};
+use crate::operation::ReflectionExtensions;
 use crate::operation_store::OperationStore;
-use crate::persistent_operation::PersistentOperation;
 use crate::utils::CombinedMigrationSource;
 
 use p2panda_core::{Hash, PrivateKey};
-use p2panda_discovery::mdns::LocalDiscovery;
-use p2panda_net::config::GossipConfig;
-use p2panda_net::{Network, NetworkBuilder, SyncConfiguration};
+use p2panda_discovery::address_book::memory::MemoryStore as MemoryAddressBook;
+use p2panda_net::{MdnsDiscoveryMode, TopicId};
+use p2panda_net::{Network, NetworkBuilder};
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
-use p2panda_sync::log_sync::LogSyncProtocol;
+use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
+use rand_chacha::rand_core::SeedableRng;
 use sqlx::{migrate::Migrator, sqlite};
 use tokio::{
     runtime::{Builder, Runtime},
@@ -23,9 +23,16 @@ use tokio::{
 };
 use tracing::{info, warn};
 
+pub type TopicSyncManager = p2panda_sync::managers::topic_sync_manager::TopicSyncManager<
+    TopicId,
+    p2panda_store::SqliteStore<LogId, ReflectionExtensions>,
+    DocumentStore,
+    LogId,
+    ReflectionExtensions,
+>;
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) enum MessageType {
-    Persistent(PersistentOperation),
     Ephemeral(EphemerialOperation),
     AuthorEphemeral(EphemerialOperation),
 }
@@ -37,12 +44,9 @@ pub struct NodeInner {
     pub(crate) document_store: DocumentStore,
     pub(crate) private_key: PrivateKey,
     pub(crate) network_id: Hash,
-    pub(crate) network: RwLock<Option<Network<DocumentId>>>,
+    pub(crate) network: RwLock<Option<Network<TopicSyncManager>>>,
     pub(crate) network_notifier: Notify,
 }
-
-//const RELAY_URL: &str = "https://staging-euw1-1.relay.iroh.network/";
-//const BOOTSTRAP_NODE_ID: &str = "d825a2f929f935efcd6889bed5c3f5510b40f014969a729033d3fb7e33b97dbe";
 
 impl NodeInner {
     pub async fn new(
@@ -131,30 +135,18 @@ impl NodeInner {
             }
         };
 
-        let old_network = std::mem::replace(network_guard.deref_mut(), network);
-
-        if let Some(old_network) = old_network {
-            // FIXME: For some reason we shutdown before the bye message is actually send
-            // This doesn't happen when shutting down the entire node, maybe because tokio is more busy here?
-            if let Err(error) = old_network.shutdown().await {
-                warn!("Failed to shutdown network: {error}");
-            }
-        }
+        *network_guard = network;
     }
 
     pub async fn shutdown(&self) {
         // Wake up all subscriptions that may still exist
         self.network_notifier.notify_waiters();
-        if let Some(network) = self.network.write().await.take()
-            && let Err(error) = network.shutdown().await
-        {
-            warn!("Failed to shutdown network: {error}");
-        }
+        self.network.write().await.take();
     }
 
     pub async fn subscribe<T: SubscribableDocument + 'static>(
         self: Arc<Self>,
-        document_id: DocumentId,
+        document_id: TopicId,
         document: Arc<T>,
     ) -> Result<Subscription<T>, DocumentError> {
         self.document_store.add_document(&document_id).await?;
@@ -180,7 +172,7 @@ impl NodeInner {
 
     pub async fn delete_document(
         self: Arc<Self>,
-        document_id: DocumentId,
+        document_id: TopicId,
     ) -> Result<(), DocumentError> {
         self.document_store.delete_document(&document_id).await?;
         Ok(())
@@ -192,33 +184,16 @@ async fn setup_network(
     network_id: &Hash,
     document_store: &DocumentStore,
     operation_store: &OperationStore,
-) -> Option<Network<DocumentId>> {
-    let sync_config = {
-        let sync = LogSyncProtocol::new(document_store.clone(), operation_store.clone_inner());
-        SyncConfiguration::<DocumentId>::new(sync)
+) -> Option<Network<TopicSyncManager>> {
+    let address_book = MemoryAddressBook::new(rand_chacha::ChaCha20Rng::from_os_rng());
+    let sync_conf = TopicSyncManagerConfig {
+        store: operation_store.clone_inner(),
+        topic_map: document_store.clone(),
     };
-
     let network = NetworkBuilder::new(network_id.into())
         .private_key(private_key.clone())
-        .discovery(LocalDiscovery::new())
-        // NOTE(glyph): Internet networking is disabled until we can fix the
-        // more-than-two-peers gossip issue.
-        //
-        //.relay(RELAY_URL.parse().expect("valid relay URL"), false, 0)
-        //.direct_address(
-        //    BOOTSTRAP_NODE_ID.parse().expect("valid node ID"),
-        //    vec![],
-        //    None,
-        //)
-        .gossip(GossipConfig {
-            // FIXME: This is a temporary workaround to account for larger delta patches (for
-            // example when the user Copy & Pastes a big chunk of text).
-            //
-            // Related issue: https://github.com/p2panda/reflection/issues/24
-            max_message_size: 512_000,
-        })
-        .sync(sync_config)
-        .build()
+        .mdns(MdnsDiscoveryMode::Active)
+        .build(address_book, sync_conf)
         .await;
 
     if let Err(error) = network {

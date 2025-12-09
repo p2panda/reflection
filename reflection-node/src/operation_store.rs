@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::{SystemTime, SystemTimeError};
 
-use crate::document::DocumentId;
 use crate::document_store::LogId;
 use p2panda_core::{Body, Header, Operation, PrivateKey, PruneFlag};
+use p2panda_net::TopicId;
 use p2panda_store::{
     LogStore, OperationStore as TraitOperationStore, SqliteStore, SqliteStoreError,
 };
@@ -52,7 +52,7 @@ impl OperationStore {
         &self,
         private_key: &PrivateKey,
         log_type: LogType,
-        document: DocumentId,
+        document: TopicId,
         body: Option<&[u8]>,
         prune_flag: bool,
     ) -> Result<Operation<ReflectionExtensions>, CreationError> {
