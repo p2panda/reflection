@@ -164,6 +164,36 @@ mod imp {
                     }
                 ),
             );
+
+            self.obj().set_has_tooltip(true);
+            self.obj().connect_query_tooltip(move |view, x, y , keyboard_mode, tooltip| {
+                if keyboard_mode {
+                    println!("test keyboard");
+                    return false;
+                }
+                let buffer: ReflectionTextBuffer = view
+                    .buffer()
+                    .downcast()
+                    .expect("ReflectionTextView needs to have a ReflectionTextBuffer");
+                let (x, y) = view.window_to_buffer_coords(gtk::TextWindowType::Widget, x, y);
+                let Some(iter) = view.iter_at_location(x, y) else {
+                    return false;
+                };
+                let marks = iter.marks();
+
+                let remote_cursors = buffer.remote_cursors();
+                let mut authors_at_pos = Vec::new();
+                for (author, (mark, selection_mark)) in remote_cursors.iter() {
+                    for iter_mark in &marks {
+                        if iter_mark == mark || iter_mark == selection_mark {
+                            tooltip.set_text(Some(&author.name()));
+                            authors_at_pos.push(author);
+                        }
+                    }
+                }
+
+                !authors_at_pos.is_empty()
+            });
         }
     }
     impl WidgetImpl for TextView {}
