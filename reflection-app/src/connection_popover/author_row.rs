@@ -23,6 +23,7 @@ use gettextrs::gettext;
 use gtk::glib;
 use gtk::prelude::*;
 
+use crate::components::IndicatorBin;
 use crate::utils::format_datetime;
 use reflection_doc::author::Author;
 
@@ -44,6 +45,7 @@ mod imp {
         type ParentType = gtk::ListBoxRow;
 
         fn class_init(klass: &mut Self::Class) {
+            IndicatorBin::static_type();
             klass.bind_template();
             klass.bind_template_callbacks();
         }
