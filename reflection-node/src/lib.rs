@@ -1,20 +1,20 @@
 mod author_tracker;
-pub mod document;
-mod document_store;
 mod ephemerial_operation;
 pub mod node;
 mod node_inner;
 mod operation;
 mod operation_store;
 mod subscription_inner;
+pub mod topic;
+mod topic_store;
 mod utils;
 
-pub use document::SubscribableDocument;
 pub use p2panda_core;
+pub use topic::SubscribableTopic;
 
 #[cfg(test)]
 mod tests {
-    use crate::SubscribableDocument;
+    use crate::SubscribableTopic;
     use crate::node::{ConnectionMode, Node};
     use p2panda_core::Hash;
     use p2panda_core::PrivateKey;
@@ -24,7 +24,7 @@ mod tests {
     use tokio::sync::{Mutex, mpsc};
 
     #[test]
-    fn create_document() {
+    fn create_topic() {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .build()
@@ -38,11 +38,11 @@ mod tests {
                 .unwrap();
 
             let id: [u8; 32] = [0; 32];
-            let _sub = node.subscribe(id, TestDocument::new()).await;
-            let documents = node.documents::<[u8; 32]>().await.unwrap();
+            let _sub = node.subscribe(id, TestTopic::new()).await;
+            let topics = node.topics::<[u8; 32]>().await.unwrap();
 
-            assert_eq!(documents.len(), 1);
-            assert_eq!(documents.first().unwrap().id, id);
+            assert_eq!(topics.len(), 1);
+            assert_eq!(topics.first().unwrap().id, id);
 
             node.shutdown().await.unwrap();
             node
@@ -53,15 +53,15 @@ mod tests {
     }
 
     #[derive(Clone)]
-    struct TestDocument {
+    struct TestTopic {
         tx: mpsc::UnboundedSender<Vec<u8>>,
         rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
     }
 
-    impl TestDocument {
+    impl TestTopic {
         fn new() -> Self {
             let (tx, rx) = mpsc::unbounded_channel::<Vec<u8>>();
-            TestDocument {
+            TestTopic {
                 tx,
                 rx: Arc::new(Mutex::new(rx)),
             }
@@ -72,7 +72,7 @@ mod tests {
         }
     }
 
-    impl SubscribableDocument for TestDocument {
+    impl SubscribableTopic for TestTopic {
         fn bytes_received(&self, _author: PublicKey, data: Vec<u8>) {
             self.tx.send(data).unwrap();
         }
@@ -83,7 +83,7 @@ mod tests {
     }
 
     #[test]
-    fn subscribe_document() {
+    fn subscribe_topic() {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
             .build()
@@ -96,14 +96,14 @@ mod tests {
                 .await
                 .unwrap();
 
-            let test_document = TestDocument::new();
+            let test_topic = TestTopic::new();
 
             let id: [u8; 32] = [0; 32];
-            let subscription = node.subscribe(id, test_document).await.unwrap();
+            let subscription = node.subscribe(id, test_topic).await.unwrap();
 
-            let documents = node.documents::<[u8; 32]>().await.unwrap();
-            assert_eq!(documents.len(), 1);
-            assert_eq!(documents.first().unwrap().id, id);
+            let topics = node.topics::<[u8; 32]>().await.unwrap();
+            assert_eq!(topics.len(), 1);
+            assert_eq!(topics.first().unwrap().id, id);
 
             let private_key2 = PrivateKey::new();
             let network_id2 = Hash::new(b"reflection");
@@ -111,13 +111,13 @@ mod tests {
                 .await
                 .unwrap();
 
-            let test_document2 = TestDocument::new();
+            let test_topic2 = TestTopic::new();
 
-            let _subscription2 = node2.subscribe(id, test_document2.clone()).await.unwrap();
+            let _subscription2 = node2.subscribe(id, test_topic2.clone()).await.unwrap();
 
-            let documents2 = node2.documents::<[u8; 32]>().await.unwrap();
-            assert_eq!(documents2.len(), 1);
-            assert_eq!(documents2.first().unwrap().id, id);
+            let topics2 = node2.topics::<[u8; 32]>().await.unwrap();
+            assert_eq!(topics2.len(), 1);
+            assert_eq!(topics2.first().unwrap().id, id);
 
             let test_snapshot = "test".as_bytes().to_vec();
             subscription
@@ -125,7 +125,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            assert_eq!(test_document2.wait_for_bytes().await, test_snapshot);
+            assert_eq!(test_topic2.wait_for_bytes().await, test_snapshot);
 
             node.shutdown().await.unwrap();
             node2.shutdown().await.unwrap();

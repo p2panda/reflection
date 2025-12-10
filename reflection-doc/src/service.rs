@@ -13,9 +13,9 @@ use crate::{
     documents::Documents,
 };
 use reflection_node::{
-    document::DocumentError,
     node,
     node::{Node, NodeError},
+    topic::TopicError,
 };
 
 #[derive(Error, Debug)]
@@ -23,7 +23,7 @@ pub enum StartupError {
     #[error(transparent)]
     Node(#[from] NodeError),
     #[error(transparent)]
-    Document(#[from] DocumentError),
+    Topic(#[from] TopicError),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, glib::Enum, Default)]

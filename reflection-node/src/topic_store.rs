@@ -14,8 +14,8 @@ use crate::operation::{LogType, ReflectionExtensions};
 use crate::operation_store::OperationStore;
 
 #[derive(Debug, FromRow)]
-pub struct StoreDocument {
-    #[sqlx(try_from = "Vec<u8>", rename = "document_id")]
+pub struct StoreTopic {
+    #[sqlx(try_from = "Vec<u8>")]
     pub id: TopicId,
     #[sqlx(default)]
     pub name: Option<String>,
@@ -31,11 +31,11 @@ pub struct Author {
 }
 
 #[derive(Clone, Debug)]
-pub struct DocumentStore {
+pub struct TopicStore {
     pool: sqlx::SqlitePool,
 }
 
-impl DocumentStore {
+impl TopicStore {
     pub fn new(pool: sqlx::SqlitePool) -> Self {
         Self { pool }
     }
@@ -52,16 +52,16 @@ impl DocumentStore {
             .collect())
     }
 
-    pub async fn documents(&self) -> sqlx::Result<Vec<StoreDocument>> {
-        let mut documents: Vec<StoreDocument> =
-            sqlx::query_as("SELECT id, name, last_accessed FROM documents")
+    pub async fn topics(&self) -> sqlx::Result<Vec<StoreTopic>> {
+        let mut topics: Vec<StoreTopic> =
+            sqlx::query_as("SELECT id, name, last_accessed FROM topics")
                 .fetch_all(&self.pool)
                 .await?;
         let authors = sqlx::query("SELECT public_key, topic_id, last_seen FROM authors")
             .fetch_all(&self.pool)
             .await?;
 
-        let mut authors_per_document = authors.iter().fold(HashMap::new(), |mut acc, row| {
+        let mut authors_per_topic = authors.iter().fold(HashMap::new(), |mut acc, row| {
             let Ok(id) = TopicId::try_from(row.get::<&[u8], _>("topic_id")) else {
                 return acc;
             };
@@ -78,20 +78,20 @@ impl DocumentStore {
             acc
         });
 
-        for document in &mut documents {
-            if let Some(authors) = authors_per_document.remove(&document.id) {
-                document.authors = authors;
+        for topic in &mut topics {
+            if let Some(authors) = authors_per_topic.remove(&topic.id) {
+                topic.authors = authors;
             }
         }
 
-        Ok(documents)
+        Ok(topics)
     }
 
-    pub async fn add_document(&self, id: &TopicId) -> sqlx::Result<()> {
-        // The id is the primary key in the table therefore ignore insertion when the document exists already
+    pub async fn add_topic(&self, id: &TopicId) -> sqlx::Result<()> {
+        // The id is the primary key in the table therefore ignore insertion when the topic exists already
         sqlx::query(
             "
-            INSERT OR IGNORE INTO documents ( id )
+            INSERT OR IGNORE INTO topics ( id )
             VALUES ( ? )
             ",
         )
@@ -102,8 +102,8 @@ impl DocumentStore {
         Ok(())
     }
 
-    pub async fn delete_document(&self, id: &TopicId) -> sqlx::Result<()> {
-        sqlx::query("DELETE FROM documents WHERE id = ?")
+    pub async fn delete_topic(&self, id: &TopicId) -> sqlx::Result<()> {
+        sqlx::query("DELETE FROM topics WHERE id = ?")
             .bind(id.as_slice())
             .execute(&self.pool)
             .await?;
@@ -147,14 +147,10 @@ impl DocumentStore {
         Ok(())
     }
 
-    pub async fn set_name_for_document(
-        &self,
-        id: &TopicId,
-        name: Option<String>,
-    ) -> sqlx::Result<()> {
+    pub async fn set_name_for_topic(&self, id: &TopicId, name: Option<String>) -> sqlx::Result<()> {
         sqlx::query(
             "
-            UPDATE documents
+            UPDATE topics
             SET name = ?
             WHERE id = ?
             ",
@@ -167,14 +163,14 @@ impl DocumentStore {
         Ok(())
     }
 
-    pub async fn set_last_accessed_for_document(
+    pub async fn set_last_accessed_for_topic(
         &self,
         id: &TopicId,
         last_accessed: Option<DateTime<Utc>>,
     ) -> sqlx::Result<()> {
         sqlx::query(
             "
-            UPDATE documents
+            UPDATE topics
             SET last_accessed = ?
             WHERE id = ?
             ",
@@ -187,7 +183,7 @@ impl DocumentStore {
         Ok(())
     }
 
-    pub async fn operations_for_document(
+    pub async fn operations_for_topic(
         &self,
         operation_store: &OperationStore,
         id: &TopicId,
@@ -237,12 +233,12 @@ impl DocumentStore {
 pub struct LogId(LogType, TopicId);
 
 impl LogId {
-    pub fn new(log_type: LogType, document: &TopicId) -> Self {
-        Self(log_type, *document)
+    pub fn new(log_type: LogType, topic: &TopicId) -> Self {
+        Self(log_type, *topic)
     }
 }
 
-impl TopicLogMap<TopicId, LogId> for DocumentStore {
+impl TopicLogMap<TopicId, LogId> for TopicStore {
     type Error = sqlx::Error;
 
     async fn get(&self, topic: &TopicId) -> Result<Logs<LogId>, Self::Error> {
