@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
-use crate::document::{DocumentError, SubscribableDocument};
-use crate::document_store::{DocumentStore, LogId};
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node::{ConnectionMode, NodeError};
 use crate::operation::ReflectionExtensions;
 use crate::operation_store::OperationStore;
 use crate::subscription_inner::SubscriptionInner;
+use crate::topic::{SubscribableTopic, TopicError};
+use crate::topic_store::{LogId, TopicStore};
 use crate::utils::CombinedMigrationSource;
 
 use p2panda_core::{Hash, PrivateKey};
@@ -25,7 +25,7 @@ use tracing::{error, info, warn};
 pub type TopicSyncManager = p2panda_sync::managers::topic_sync_manager::TopicSyncManager<
     TopicId,
     p2panda_store::SqliteStore<LogId, ReflectionExtensions>,
-    DocumentStore,
+    TopicStore,
     LogId,
     ReflectionExtensions,
 >;
@@ -39,7 +39,7 @@ pub(crate) enum MessageType {
 #[derive(Debug)]
 pub struct NodeInner {
     pub(crate) operation_store: OperationStore,
-    pub(crate) document_store: DocumentStore,
+    pub(crate) topic_store: TopicStore,
     pub(crate) private_key: PrivateKey,
     pub(crate) network_id: Hash,
     pub(crate) network: RwLock<Option<Network<TopicSyncManager>>>,
@@ -84,7 +84,7 @@ impl NodeInner {
             pool_options.connect_with(connection_options).await?
         };
 
-        // Run migration for p2panda OperationStore and for the our DocumentStore
+        // Run migration for p2panda OperationStore and for the our TopicStore
         Migrator::new(CombinedMigrationSource::new(vec![
             operation_store_migrations(),
             sqlx::migrate!(),
@@ -94,7 +94,7 @@ impl NodeInner {
         .await?;
 
         let operation_store = OperationStore::new(pool.clone());
-        let document_store = DocumentStore::new(pool);
+        let topic_store = TopicStore::new(pool);
 
         let network = match connection_mode {
             ConnectionMode::None => None,
@@ -102,13 +102,13 @@ impl NodeInner {
                 unimplemented!("Bluetooth is currently not implemented")
             }
             ConnectionMode::Network => {
-                setup_network(&private_key, &network_id, &document_store, &operation_store).await
+                setup_network(&private_key, &network_id, &topic_store, &operation_store).await
             }
         };
 
         Ok(Self {
             operation_store,
-            document_store,
+            topic_store,
             private_key,
             network_id,
             network: RwLock::new(network),
@@ -132,7 +132,7 @@ impl NodeInner {
                 setup_network(
                     &self.private_key,
                     &self.network_id,
-                    &self.document_store,
+                    &self.topic_store,
                     &self.operation_store,
                 )
                 .await
@@ -148,34 +148,34 @@ impl NodeInner {
         self.network.write().await.take();
     }
 
-    pub async fn subscribe<T: SubscribableDocument + 'static>(
+    pub async fn subscribe<T: SubscribableTopic + 'static>(
         self: Arc<Self>,
         id: TopicId,
-        document: Arc<T>,
-    ) -> Result<SubscriptionInner<T>, DocumentError> {
-        self.document_store.add_document(&id).await?;
-        // Add ourselves as an author to the document store.
-        self.document_store
+        subscribable_topic: Arc<T>,
+    ) -> Result<SubscriptionInner<T>, TopicError> {
+        self.topic_store.add_topic(&id).await?;
+        // Add ourselves as an author to the topic store.
+        self.topic_store
             .add_author(&id, &self.private_key.public_key())
             .await?;
         let stored_operations = self
-            .document_store
-            .operations_for_document(&self.operation_store, &id)
+            .topic_store
+            .operations_for_topic(&self.operation_store, &id)
             .await?;
 
         for operation in stored_operations {
             // Send all stored operation bytes to the app,
             // it doesn't matter if the app already knows some or all of them
             if let Some(body) = operation.body {
-                document.bytes_received(operation.header.public_key, body.to_bytes());
+                subscribable_topic.bytes_received(operation.header.public_key, body.to_bytes());
             }
         }
 
-        Ok(SubscriptionInner::new(self.clone(), id, document))
+        Ok(SubscriptionInner::new(self.clone(), id, subscribable_topic))
     }
 
-    pub async fn delete_document(self: Arc<Self>, id: TopicId) -> Result<(), DocumentError> {
-        self.document_store.delete_document(&id).await?;
+    pub async fn delete_topic(self: Arc<Self>, id: TopicId) -> Result<(), TopicError> {
+        self.topic_store.delete_topic(&id).await?;
         Ok(())
     }
 }
@@ -183,7 +183,7 @@ impl NodeInner {
 async fn setup_network(
     private_key: &PrivateKey,
     network_id: &Hash,
-    document_store: &DocumentStore,
+    topic_store: &TopicStore,
     operation_store: &OperationStore,
 ) -> Option<Network<TopicSyncManager>> {
     let address_book = MemoryAddressBook::new(rand_chacha::ChaCha20Rng::from_os_rng());
@@ -194,7 +194,7 @@ async fn setup_network(
 
     let sync_conf = TopicSyncManagerConfig {
         store: operation_store.clone_inner(),
-        topic_map: document_store.clone(),
+        topic_map: topic_store.clone(),
     };
     let network = NetworkBuilder::new(network_id.into())
         .private_key(private_key.clone())

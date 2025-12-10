@@ -4,7 +4,7 @@ use p2panda_core::{
 };
 use thiserror::Error;
 
-use crate::document::DocumentId;
+use crate::topic::TopicId;
 use crate::operation::ReflectionExtensions;
 
 type OperationWithRawHeader = (Header<ReflectionExtensions>, Option<Body>, Vec<u8>);
@@ -13,8 +13,8 @@ type OperationWithRawHeader = (Header<ReflectionExtensions>, Option<Body>, Vec<u
 pub enum UnpackError {
     #[error(transparent)]
     Cbor(#[from] DecodeError),
-    #[error("Operation with invalid document id")]
-    InvalidDocumentId,
+    #[error("Operation with invalid topic id")]
+    InvalidTopicId,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -42,7 +42,7 @@ impl PersistentOperation {
     /// Validates and unpacks the operation
     pub fn validate_and_unpack(
         self,
-        id: DocumentId,
+        id: TopicId,
     ) -> Result<OperationWithRawHeader, UnpackError> {
         let PersistentOperation { header, body } = self;
 
@@ -50,13 +50,13 @@ impl PersistentOperation {
         let header_deserialized: Header<ReflectionExtensions> = decode_cbor(&header[..])?;
         let body_deserialized = body.map(|body| Body::from(body.into_vec()));
 
-        let Some(operation_id): Option<DocumentId> = header_deserialized.extension()
+        let Some(operation_id): Option<TopicId> = header_deserialized.extension()
         else {
-            return Err(UnpackError::InvalidDocumentId);
+            return Err(UnpackError::InvalidTopicId);
         };
 
         if operation_id != id {
-            return Err(UnpackError::InvalidDocumentId);
+            return Err(UnpackError::InvalidTopicId);
         }
 
         Ok((header_deserialized, body_deserialized, header))
