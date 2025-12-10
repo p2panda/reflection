@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS authors (
     document_id 	TEXT NOT NULL,
     last_seen		INTEGER,
     UNIQUE(public_key, document_id),
-    FOREIGN KEY(document_id) REFERENCES documents(document_id)
+    FOREIGN KEY(document_id) REFERENCES documents(document_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS documents (
