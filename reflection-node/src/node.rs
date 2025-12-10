@@ -7,10 +7,10 @@ use p2panda_net::TopicId;
 use thiserror::Error;
 use tracing::info;
 
-use crate::document::{DocumentError, SubscribableDocument, Subscription};
-pub use crate::document_store::Author;
-use crate::document_store::StoreDocument;
 use crate::node_inner::NodeInner;
+use crate::topic::{SubscribableTopic, Subscription, TopicError};
+pub use crate::topic_store::Author;
+use crate::topic_store::StoreTopic;
 
 #[derive(Debug, Error)]
 pub enum NodeError {
@@ -33,7 +33,7 @@ pub enum ConnectionMode {
 }
 
 #[derive(Clone, Debug)]
-pub struct Document<ID> {
+pub struct Topic<ID> {
     pub id: ID,
     pub name: Option<String>,
     pub last_accessed: Option<DateTime<Utc>>,
@@ -118,23 +118,23 @@ impl Node {
         Ok(())
     }
 
-    pub async fn documents<ID: From<[u8; 32]>>(&self) -> Result<Vec<Document<ID>>, DocumentError> {
+    pub async fn topics<ID: From<[u8; 32]>>(&self) -> Result<Vec<Topic<ID>>, TopicError> {
         let inner_clone = self.inner.clone();
-        let documents = self
+        let topics = self
             .runtime
-            .spawn(async move { inner_clone.document_store.documents().await })
+            .spawn(async move { inner_clone.topic_store.topics().await })
             .await??;
 
-        let documents = documents
+        let topics = topics
             .into_iter()
-            .map(|document| {
-                let StoreDocument {
+            .map(|topic| {
+                let StoreTopic {
                     id,
                     name,
                     last_accessed,
                     authors,
-                } = document;
-                Document {
+                } = topic;
+                Topic {
                     id: id.into(),
                     name,
                     last_accessed,
@@ -143,20 +143,20 @@ impl Node {
             })
             .collect();
 
-        Ok(documents)
+        Ok(topics)
     }
 
-    pub async fn subscribe<ID: Into<[u8; 32]>, T: SubscribableDocument + 'static>(
+    pub async fn subscribe<ID: Into<[u8; 32]>, T: SubscribableTopic + 'static>(
         &self,
         id: ID,
-        document_handle: T,
-    ) -> Result<Subscription<T>, DocumentError> {
+        topic_handle: T,
+    ) -> Result<Subscription<T>, TopicError> {
         let id: TopicId = id.into();
-        let document_handle = Arc::new(document_handle);
+        let topic_handle = Arc::new(topic_handle);
         let inner_clone = self.inner.clone();
         let inner_subscription = self
             .runtime
-            .spawn(async move { inner_clone.subscribe(id, document_handle).await })
+            .spawn(async move { inner_clone.subscribe(id, topic_handle).await })
             .await??;
 
         let subscription = Subscription::new(self.runtime.clone(), inner_subscription).await;
@@ -165,11 +165,11 @@ impl Node {
         Ok(subscription)
     }
 
-    pub async fn delete_document<ID: Into<[u8; 32]>>(&self, id: ID) -> Result<(), DocumentError> {
+    pub async fn delete_topic<ID: Into<[u8; 32]>>(&self, id: ID) -> Result<(), TopicError> {
         let id: TopicId = id.into();
         let inner_clone = self.inner.clone();
         self.runtime
-            .spawn(async move { inner_clone.delete_document(id).await })
+            .spawn(async move { inner_clone.delete_topic(id).await })
             .await?
     }
 }

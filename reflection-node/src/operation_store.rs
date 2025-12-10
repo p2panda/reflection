@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{SystemTime, SystemTimeError};
 
-use crate::document_store::LogId;
+use crate::topic_store::LogId;
 use p2panda_core::{Body, Header, Operation, PrivateKey, PruneFlag};
 use p2panda_net::TopicId;
 use p2panda_store::{
@@ -46,13 +46,13 @@ impl OperationStore {
 
     /// Creates, signs and stores new operation in the author's append-only log.
     ///
-    /// If no document is specified we create a new operation in a new log. The resulting hash of the
-    /// header can be used to identify that new document.
+    /// If no topic is specified we create a new operation in a new log. The resulting hash of the
+    /// header can be used to identify that new topic.
     pub async fn create_operation(
         &self,
         private_key: &PrivateKey,
         log_type: LogType,
-        document: TopicId,
+        topic: TopicId,
         body: Option<&[u8]>,
         prune_flag: bool,
     ) -> Result<Operation<ReflectionExtensions>, CreationError> {
@@ -65,7 +65,7 @@ impl OperationStore {
         let body = body.map(Body::new);
         let public_key = private_key.public_key();
 
-        let log_id = LogId::new(log_type, &document);
+        let log_id = LogId::new(log_type, &topic);
         let latest_operation = self.inner.latest_operation(&public_key, &log_id).await?;
 
         let (seq_num, backlink) = match latest_operation {
@@ -80,7 +80,7 @@ impl OperationStore {
         let extensions = ReflectionExtensions {
             prune_flag: PruneFlag::new(prune_flag),
             log_type,
-            document,
+            topic,
         };
 
         let mut header = Header {

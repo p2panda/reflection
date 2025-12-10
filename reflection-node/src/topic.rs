@@ -10,16 +10,16 @@ use thiserror::Error;
 use tokio::task::{AbortHandle, JoinError};
 use tracing::info;
 
-impl From<StreamError<Operation<ReflectionExtensions>>> for DocumentError {
+impl From<StreamError<Operation<ReflectionExtensions>>> for TopicError {
     fn from(value: StreamError<Operation<ReflectionExtensions>>) -> Self {
-        DocumentError::Publish(Box::new(value))
+        TopicError::Publish(Box::new(value))
     }
 }
 
 #[derive(Debug, Error)]
-pub enum DocumentError {
+pub enum TopicError {
     #[error(transparent)]
-    DocumentStore(#[from] sqlx::Error),
+    TopicStore(#[from] sqlx::Error),
     #[error(transparent)]
     OperationStore(#[from] CreationError),
     #[error(transparent)]
@@ -33,7 +33,7 @@ pub enum DocumentError {
     Runtime(#[from] JoinError),
 }
 
-pub trait SubscribableDocument: Sync + Send {
+pub trait SubscribableTopic: Sync + Send {
     fn bytes_received(&self, author: PublicKey, data: Vec<u8>);
     fn author_joined(&self, author: PublicKey);
     fn author_left(&self, author: PublicKey);
@@ -52,7 +52,7 @@ impl<T> Drop for Subscription<T> {
     }
 }
 
-impl<T: SubscribableDocument + 'static> Subscription<T> {
+impl<T: SubscribableTopic + 'static> Subscription<T> {
     pub(crate) async fn new(runtime: tokio::runtime::Handle, inner: SubscriptionInner<T>) -> Self {
         let inner = Arc::new(inner);
 
@@ -70,28 +70,28 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
         }
     }
 
-    pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), DocumentError> {
+    pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), TopicError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.send_delta(data).await })
             .await?
     }
 
-    pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), DocumentError> {
+    pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), TopicError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.send_snapshot(data).await })
             .await?
     }
 
-    pub async fn send_ephemeral(&self, data: Vec<u8>) -> Result<(), DocumentError> {
+    pub async fn send_ephemeral(&self, data: Vec<u8>) -> Result<(), TopicError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.send_ephemeral(data).await })
             .await?
     }
 
-    pub async fn unsubscribe(self) -> Result<(), DocumentError> {
+    pub async fn unsubscribe(self) -> Result<(), TopicError> {
         let id = self.inner.id;
 
         self.network_monitor_task.abort();
@@ -100,15 +100,15 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
             .spawn(async move { inner.unsubscribe().await })
             .await??;
 
-        info!("Unsubscribed from document {}", hex::encode(id));
+        info!("Unsubscribed from topic {}", hex::encode(id));
 
         Ok(())
     }
 
-    /// Set the name for a given document
+    /// Set the name for a given topic
     ///
     /// This information will be written to the database
-    pub async fn set_name(&self, name: Option<String>) -> Result<(), DocumentError> {
+    pub async fn set_name(&self, name: Option<String>) -> Result<(), TopicError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.set_name(name).await })
