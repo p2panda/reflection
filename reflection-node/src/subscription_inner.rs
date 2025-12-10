@@ -250,7 +250,7 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
 async fn setup_network<T: SubscribableDocument + 'static>(
     node: &Arc<NodeInner>,
     network: &Network<TopicSyncManager>,
-    document_id: TopicId,
+    id: TopicId,
     document: &Arc<T>,
     author_tracker: &Arc<AuthorTracker<T>>,
 ) -> (
@@ -260,12 +260,12 @@ async fn setup_network<T: SubscribableDocument + 'static>(
 ) {
     let mut abort_handles = Vec::with_capacity(3);
 
-    let stream = match network.stream(document_id, true).await {
+    let stream = match network.stream(id, true).await {
         Ok(result) => result,
         Err(error) => {
             warn!(
                 "Failed to setup network for subscription to document {}: {error}",
-                hex::encode(document_id)
+                hex::encode(id)
             );
             return (None, None, abort_handles);
         }
@@ -281,7 +281,7 @@ async fn setup_network<T: SubscribableDocument + 'static>(
         while let Ok(event) = document_rx.recv().await {
             match event.event() {
                 TopicLogSyncEvent::Operation(operation) => {
-                    match validate_and_unpack(operation.as_ref().to_owned(), document_id) {
+                    match validate_and_unpack(operation.as_ref().to_owned(), id) {
                         Ok(data) => {
                             persistent_tx.send(data).await.unwrap();
                         }
@@ -304,7 +304,7 @@ async fn setup_network<T: SubscribableDocument + 'static>(
     //
     // @TODO(adz): We want to throw an error if users try to subscribe with the same topic across
     // different streams.
-    let topic = Hash::new(document_id);
+    let topic = Hash::new(id);
     let ephemeral_stream = network.ephemeral_stream(topic.into()).await.unwrap();
     let mut ephemeral_rx = ephemeral_stream.subscribe().await.unwrap();
     let ephemeral_tx = ephemeral_stream;
@@ -377,7 +377,7 @@ async fn setup_network<T: SubscribableDocument + 'static>(
             // When we discover a new author we need to add them to our document store.
             if let Err(error) = node
                 .document_store
-                .add_author(&document_id, &operation.header.public_key)
+                .add_author(&id, &operation.header.public_key)
                 .await
             {
                 error!("Can't store author to database: {error}");
@@ -402,17 +402,17 @@ async fn setup_network<T: SubscribableDocument + 'static>(
 
     info!(
         "Network subscription set up for document {}",
-        hex::encode(document_id)
+        hex::encode(id)
     );
 
-    let topic = Hash::new(document_id);
+    let topic = Hash::new(id);
     let ephemeral_tx = network.ephemeral_stream(topic.into()).await.unwrap();
 
     (Some(document_tx), Some(ephemeral_tx), abort_handles)
 }
 
 async fn teardown_network<T: SubscribableDocument + 'static>(
-    document_id: &TopicId,
+    id: &TopicId,
     author_tracker: &Arc<AuthorTracker<T>>,
     tx: Option<EventuallyConsistentStream<TopicSyncManager>>,
     ephemeral_tx: Option<EphemeralStream>,
@@ -429,7 +429,7 @@ async fn teardown_network<T: SubscribableDocument + 'static>(
     {
         error!(
             "Failed to tear down ephemeral channel for document {}: {error}",
-            hex::encode(document_id)
+            hex::encode(id)
         );
     }
 
@@ -437,12 +437,12 @@ async fn teardown_network<T: SubscribableDocument + 'static>(
         if let Err(error) = tx.close() {
             error!(
                 "Failed to tear down persistent channel for document {}: {error}",
-                hex::encode(document_id)
+                hex::encode(id)
             );
         }
         info!(
             "Network subscription torn down for document {}",
-            hex::encode(document_id)
+            hex::encode(id)
         );
     }
 }
@@ -459,15 +459,15 @@ pub enum UnpackError {
 
 fn validate_and_unpack(
     operation: p2panda_core::Operation<ReflectionExtensions>,
-    document_id: TopicId,
+    id: TopicId,
 ) -> Result<OperationWithRawHeader, UnpackError> {
     let p2panda_core::Operation::<ReflectionExtensions> { header, body, .. } = operation;
 
-    let Some(operation_document_id): Option<TopicId> = header.extension() else {
+    let Some(operation_id): Option<TopicId> = header.extension() else {
         return Err(UnpackError::InvalidDocumentId);
     };
 
-    if operation_document_id != document_id {
+    if operation_id != id {
         return Err(UnpackError::InvalidDocumentId);
     }
 

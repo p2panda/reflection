@@ -42,7 +42,7 @@ impl PersistentOperation {
     /// Validates and unpacks the operation
     pub fn validate_and_unpack(
         self,
-        document_id: DocumentId,
+        id: DocumentId,
     ) -> Result<OperationWithRawHeader, UnpackError> {
         let PersistentOperation { header, body } = self;
 
@@ -50,12 +50,12 @@ impl PersistentOperation {
         let header_deserialized: Header<ReflectionExtensions> = decode_cbor(&header[..])?;
         let body_deserialized = body.map(|body| Body::from(body.into_vec()));
 
-        let Some(operation_document_id): Option<DocumentId> = header_deserialized.extension()
+        let Some(operation_id): Option<DocumentId> = header_deserialized.extension()
         else {
             return Err(UnpackError::InvalidDocumentId);
         };
 
-        if operation_document_id != document_id {
+        if operation_id != id {
             return Err(UnpackError::InvalidDocumentId);
         }
 
