@@ -40,9 +40,9 @@ impl DocumentStore {
         Self { pool }
     }
 
-    async fn authors(&self, document_id: &TopicId) -> sqlx::Result<Vec<PublicKey>> {
-        let list = sqlx::query("SELECT public_key FROM authors WHERE document_id = ?")
-            .bind(document_id.as_slice())
+    async fn authors(&self, id: &TopicId) -> sqlx::Result<Vec<PublicKey>> {
+        let list = sqlx::query("SELECT public_key FROM authors WHERE topic_id = ?")
+            .bind(id.as_slice())
             .fetch_all(&self.pool)
             .await?;
 
@@ -54,15 +54,15 @@ impl DocumentStore {
 
     pub async fn documents(&self) -> sqlx::Result<Vec<StoreDocument>> {
         let mut documents: Vec<StoreDocument> =
-            sqlx::query_as("SELECT document_id, name, last_accessed FROM documents")
+            sqlx::query_as("SELECT id, name, last_accessed FROM documents")
                 .fetch_all(&self.pool)
                 .await?;
-        let authors = sqlx::query("SELECT public_key, document_id, last_seen FROM authors")
+        let authors = sqlx::query("SELECT public_key, topic_id, last_seen FROM authors")
             .fetch_all(&self.pool)
             .await?;
 
         let mut authors_per_document = authors.iter().fold(HashMap::new(), |mut acc, row| {
-            let Ok(document_id) = TopicId::try_from(row.get::<&[u8], _>("document_id")) else {
+            let Ok(id) = TopicId::try_from(row.get::<&[u8], _>("topic_id")) else {
                 return acc;
             };
             let Ok(public_key) = PublicKey::try_from(row.get::<&[u8], _>("public_key")) else {
@@ -71,12 +71,10 @@ impl DocumentStore {
             let Ok(last_seen) = row.try_get::<Option<DateTime<Utc>>, _>("last_seen") else {
                 return acc;
             };
-            acc.entry(document_id)
-                .or_insert_with(Vec::new)
-                .push(Author {
-                    public_key,
-                    last_seen,
-                });
+            acc.entry(id).or_insert_with(Vec::new).push(Author {
+                public_key,
+                last_seen,
+            });
             acc
         });
 
@@ -89,44 +87,40 @@ impl DocumentStore {
         Ok(documents)
     }
 
-    pub async fn add_document(&self, document_id: &TopicId) -> sqlx::Result<()> {
-        // The document_id is the primary key in the table therefore ignore insertion when the document exists already
+    pub async fn add_document(&self, id: &TopicId) -> sqlx::Result<()> {
+        // The id is the primary key in the table therefore ignore insertion when the document exists already
         sqlx::query(
             "
-            INSERT OR IGNORE INTO documents ( document_id )
+            INSERT OR IGNORE INTO documents ( id )
             VALUES ( ? )
             ",
         )
-        .bind(document_id.as_slice())
+        .bind(id.as_slice())
         .execute(&self.pool)
         .await?;
 
         Ok(())
     }
 
-    pub async fn delete_document(&self, document_id: &TopicId) -> sqlx::Result<()> {
-        sqlx::query("DELETE FROM documents WHERE document_id = ?")
-            .bind(document_id.as_slice())
+    pub async fn delete_document(&self, id: &TopicId) -> sqlx::Result<()> {
+        sqlx::query("DELETE FROM documents WHERE id = ?")
+            .bind(id.as_slice())
             .execute(&self.pool)
             .await?;
 
         Ok(())
     }
 
-    pub async fn add_author(
-        &self,
-        document_id: &TopicId,
-        public_key: &PublicKey,
-    ) -> sqlx::Result<()> {
-        // The author/document_id pair is required to be unique therefore ignore if the insertion fails
+    pub async fn add_author(&self, id: &TopicId, public_key: &PublicKey) -> sqlx::Result<()> {
+        // The author/id pair is required to be unique therefore ignore if the insertion fails
         sqlx::query(
             "
-            INSERT OR IGNORE INTO authors ( public_key, document_id )
+            INSERT OR IGNORE INTO authors ( public_key, topic_id )
             VALUES ( ?, ? )
             ",
         )
         .bind(public_key.as_bytes().as_slice())
-        .bind(document_id.as_slice())
+        .bind(id.as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -155,18 +149,18 @@ impl DocumentStore {
 
     pub async fn set_name_for_document(
         &self,
-        document_id: &TopicId,
+        id: &TopicId,
         name: Option<String>,
     ) -> sqlx::Result<()> {
         sqlx::query(
             "
             UPDATE documents
             SET name = ?
-            WHERE document_id = ?
+            WHERE id = ?
             ",
         )
         .bind(name)
-        .bind(document_id.as_slice())
+        .bind(id.as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -175,18 +169,18 @@ impl DocumentStore {
 
     pub async fn set_last_accessed_for_document(
         &self,
-        document_id: &TopicId,
+        id: &TopicId,
         last_accessed: Option<DateTime<Utc>>,
     ) -> sqlx::Result<()> {
         sqlx::query(
             "
             UPDATE documents
             SET last_accessed = ?
-            WHERE document_id = ?
+            WHERE id = ?
             ",
         )
         .bind(last_accessed)
-        .bind(document_id.as_slice())
+        .bind(id.as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -196,14 +190,14 @@ impl DocumentStore {
     pub async fn operations_for_document(
         &self,
         operation_store: &OperationStore,
-        document_id: &TopicId,
+        id: &TopicId,
     ) -> sqlx::Result<Vec<p2panda_core::Operation<ReflectionExtensions>>> {
         let operation_store = operation_store.inner();
-        let authors = self.authors(document_id).await?;
+        let authors = self.authors(id).await?;
 
         let log_ids = [
-            LogId::new(LogType::Delta, document_id),
-            LogId::new(LogType::Snapshot, document_id),
+            LogId::new(LogType::Delta, id),
+            LogId::new(LogType::Snapshot, id),
         ];
 
         let mut result = Vec::new();

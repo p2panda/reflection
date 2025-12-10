@@ -101,7 +101,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
     }
 
     pub async fn unsubscribe(self) -> Result<(), DocumentError> {
-        let document_id = self.inner.id;
+        let id = self.inner.id;
 
         self.network_monitor_task.abort();
         let inner = self.inner.clone();
@@ -112,7 +112,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
             .spawn(async move { inner.unsubscribe().await })
             .await??;
 
-        info!("Unsubscribed from document {}", hex::encode(document_id));
+        info!("Unsubscribed from document {}", hex::encode(id));
 
         Ok(())
     }
