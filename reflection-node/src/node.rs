@@ -148,31 +148,28 @@ impl Node {
 
     pub async fn subscribe<ID: Into<[u8; 32]>, T: SubscribableDocument + 'static>(
         &self,
-        document_id: ID,
+        id: ID,
         document_handle: T,
     ) -> Result<Subscription<T>, DocumentError> {
-        let document_id: TopicId = document_id.into();
+        let id: TopicId = id.into();
         let document_handle = Arc::new(document_handle);
         let inner_clone = self.inner.clone();
         let inner_subscription = self
             .runtime
-            .spawn(async move { inner_clone.subscribe(document_id, document_handle).await })
+            .spawn(async move { inner_clone.subscribe(id, document_handle).await })
             .await??;
 
         let subscription = Subscription::new(self.runtime.clone(), inner_subscription).await;
-        info!("Subscribed to topic {}", hex::encode(document_id));
+        info!("Subscribed to topic {}", hex::encode(id));
 
         Ok(subscription)
     }
 
-    pub async fn delete_document<ID: Into<[u8; 32]>>(
-        &self,
-        document_id: ID,
-    ) -> Result<(), DocumentError> {
-        let document_id: TopicId = document_id.into();
+    pub async fn delete_document<ID: Into<[u8; 32]>>(&self, id: ID) -> Result<(), DocumentError> {
+        let id: TopicId = id.into();
         let inner_clone = self.inner.clone();
         self.runtime
-            .spawn(async move { inner_clone.delete_document(document_id).await })
+            .spawn(async move { inner_clone.delete_document(id).await })
             .await?
     }
 }

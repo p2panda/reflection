@@ -31,12 +31,12 @@ mod tests {
             .await
             .unwrap();
 
-        let document_id: [u8; 32] = [0; 32];
-        let _sub = node.subscribe(document_id, TestDocument::new()).await;
+        let id: [u8; 32] = [0; 32];
+        let _sub = node.subscribe(id, TestDocument::new()).await;
         let documents = node.documents::<[u8; 32]>().await.unwrap();
 
         assert_eq!(documents.len(), 1);
-        assert_eq!(documents.first().unwrap().id, document_id);
+        assert_eq!(documents.first().unwrap().id, id);
 
         node.shutdown().await.unwrap();
     }
@@ -82,12 +82,12 @@ mod tests {
 
         let test_document = TestDocument::new();
 
-        let document_id: [u8; 32] = [0; 32];
-        let subscription = node.subscribe(document_id, test_document).await.unwrap();
+        let id: [u8; 32] = [0; 32];
+        let subscription = node.subscribe(id, test_document).await.unwrap();
 
         let documents = node.documents::<[u8; 32]>().await.unwrap();
         assert_eq!(documents.len(), 1);
-        assert_eq!(documents.first().unwrap().id, document_id);
+        assert_eq!(documents.first().unwrap().id, id);
 
         let private_key2 = PrivateKey::new();
         let network_id2 = Hash::new(b"reflection");
@@ -98,13 +98,13 @@ mod tests {
         let test_document2 = TestDocument::new();
 
         let _subscription2 = node2
-            .subscribe(document_id, test_document2.clone())
+            .subscribe(id, test_document2.clone())
             .await
             .unwrap();
 
         let documents2 = node2.documents::<[u8; 32]>().await.unwrap();
         assert_eq!(documents2.len(), 1);
-        assert_eq!(documents2.first().unwrap().id, document_id);
+        assert_eq!(documents2.first().unwrap().id, id);
 
         let test_snapshot = "test".as_bytes().to_vec();
         subscription
