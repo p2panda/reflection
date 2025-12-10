@@ -66,7 +66,7 @@ fn main() -> glib::ExitCode {
     // Create a new GtkApplication. The application manages our main loop,
     // application windows, integration with the window manager/compositor, and
     // desktop features such as file opening and single-instance applications.
-    let app = ReflectionApplication::new("org.p2panda.reflection", &gio::ApplicationFlags::empty());
+    let app = ReflectionApplication::new("cx.modal.reflection", &gio::ApplicationFlags::empty());
 
     info!("Reflection ({})", APP_ID);
     info!("Version: {}", VERSION);

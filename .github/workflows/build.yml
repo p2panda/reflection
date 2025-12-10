@@ -26,7 +26,7 @@ jobs:
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           bundle: reflection.flatpak
-          manifest-path: org.p2panda.reflection.json
+          manifest-path: cx.modal.reflection.json
           cache-key: flatpak-builder-${{ github.sha }}
           arch: ${{ matrix.variant.arch }}
           run-tests: true
@@ -36,7 +36,7 @@ jobs:
   # the zip artifact, extract it, install the flatpak and run it.
   # unzip reflection-x86_64.zip
   # flatpak --user install reflection.flatpak
-  # flatpak run org.p2panda.reflection
+  # flatpak run cx.modal.reflection
 
   macos:
     if: false  # This disable macos for now.
@@ -187,7 +187,7 @@ jobs:
               <key>CFBundleExecutable</key>
               <string>reflection</string>
               <key>CFBundleIdentifier</key>
-              <string>org.p2panda.reflection</string>
+              <string>cx.modal.reflection</string>
               <key>CFBundleName</key>
               <string>Reflection</string>
               <key>CFBundlePackageType</key>
