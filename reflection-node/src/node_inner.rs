@@ -150,17 +150,17 @@ impl NodeInner {
 
     pub async fn subscribe<T: SubscribableDocument + 'static>(
         self: Arc<Self>,
-        document_id: TopicId,
+        id: TopicId,
         document: Arc<T>,
     ) -> Result<SubscriptionInner<T>, DocumentError> {
-        self.document_store.add_document(&document_id).await?;
+        self.document_store.add_document(&id).await?;
         // Add ourselves as an author to the document store.
         self.document_store
-            .add_author(&document_id, &self.private_key.public_key())
+            .add_author(&id, &self.private_key.public_key())
             .await?;
         let stored_operations = self
             .document_store
-            .operations_for_document(&self.operation_store, &document_id)
+            .operations_for_document(&self.operation_store, &id)
             .await?;
 
         for operation in stored_operations {
@@ -171,14 +171,11 @@ impl NodeInner {
             }
         }
 
-        Ok(SubscriptionInner::new(self.clone(), document_id, document))
+        Ok(SubscriptionInner::new(self.clone(), id, document))
     }
 
-    pub async fn delete_document(
-        self: Arc<Self>,
-        document_id: TopicId,
-    ) -> Result<(), DocumentError> {
-        self.document_store.delete_document(&document_id).await?;
+    pub async fn delete_document(self: Arc<Self>, id: TopicId) -> Result<(), DocumentError> {
+        self.document_store.delete_document(&id).await?;
         Ok(())
     }
 }

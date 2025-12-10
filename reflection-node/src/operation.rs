@@ -65,8 +65,8 @@ impl Extension<TopicId> for ReflectionExtensions {
 impl Extension<LogId> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<LogId> {
         let log_type: LogType = header.extension()?;
-        let document_id: TopicId = header.extension()?;
+        let id: TopicId = header.extension()?;
 
-        Some(LogId::new(log_type, &document_id))
+        Some(LogId::new(log_type, &id))
     }
 }

@@ -1,13 +1,13 @@
 CREATE TABLE IF NOT EXISTS authors (
     public_key          TEXT NOT NULL,
-    document_id 	TEXT NOT NULL,
+    topic_id          	TEXT NOT NULL,
     last_seen		INTEGER,
-    UNIQUE(public_key, document_id),
-    FOREIGN KEY(document_id) REFERENCES documents(document_id) ON DELETE CASCADE
+    UNIQUE(public_key, topic_id),
+    FOREIGN KEY(topic_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS documents (
-    document_id 	TEXT NOT NULL PRIMARY KEY,
+    id	 	        TEXT NOT NULL PRIMARY KEY,
     name		TEXT,
     last_accessed	INTEGER
 );
