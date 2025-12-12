@@ -1,5 +1,5 @@
 {
-    "id" : "org.p2panda.reflection",
+    "id" : "cx.modal.reflection",
     "runtime" : "org.gnome.Platform",
     "runtime-version" : "49",
     "sdk" : "org.gnome.Sdk",

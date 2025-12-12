@@ -3,18 +3,15 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-use crate::document::SubscribableDocument;
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node_inner::MessageType;
 use crate::node_inner::NodeInner;
+use crate::topic::SubscribableTopic;
 use chrono::Utc;
 use p2panda_core::cbor::{DecodeError, decode_cbor, encode_cbor};
 use p2panda_core::{PrivateKey, PublicKey};
-use p2panda_net::ToNetwork;
-use tokio::{
-    sync::mpsc,
-    sync::{Mutex, RwLock},
-};
+use p2panda_net::streams::EphemeralStream;
+use tokio::sync::{Mutex, RwLock};
 use tracing::error;
 
 const OFFLINE_TIMEOUT: Duration = Duration::from_secs(60);
@@ -48,22 +45,22 @@ impl TryFrom<&[u8]> for AuthorMessage {
 
 pub struct AuthorTracker<T> {
     last_ping: Mutex<HashMap<PublicKey, Instant>>,
-    document: Arc<T>,
+    subscribable_topic: Arc<T>,
     node: Arc<NodeInner>,
-    tx: RwLock<Option<mpsc::Sender<ToNetwork>>>,
+    tx: RwLock<Option<EphemeralStream>>,
 }
 
-impl<T: SubscribableDocument> AuthorTracker<T> {
-    pub fn new(node: Arc<NodeInner>, document: Arc<T>) -> Arc<Self> {
+impl<T: SubscribableTopic> AuthorTracker<T> {
+    pub fn new(node: Arc<NodeInner>, subscribable_topic: Arc<T>) -> Arc<Self> {
         Arc::new(Self {
             last_ping: Mutex::new(HashMap::new()),
-            document,
+            subscribable_topic,
             node,
             tx: RwLock::new(None),
         })
     }
 
-    pub async fn set_document_tx(&self, tx: Option<mpsc::Sender<ToNetwork>>) {
+    pub async fn set_topic_tx(&self, tx: Option<EphemeralStream>) {
         let mut tx_guard = self.tx.write().await;
         // Send good bye message to the network
         if let Some(tx) = tx_guard.as_ref() {
@@ -73,15 +70,15 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
         // Set all authors that the tracker has seen to offline, authors the tracker hasn't seen are already offline
         let old_authors = std::mem::take(self.last_ping.lock().await.deref_mut());
         for author in old_authors.into_keys() {
-            self.document.author_left(author);
+            self.subscribable_topic.author_left(author);
             self.set_last_seen(author).await;
         }
 
         let this_author = self.node.private_key.public_key();
         if tx.is_some() {
-            self.document.author_joined(this_author);
+            self.subscribable_topic.author_joined(this_author);
         } else {
-            self.document.author_left(this_author);
+            self.subscribable_topic.author_left(this_author);
             self.set_last_seen(this_author).await;
         }
 
@@ -110,7 +107,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
 
     async fn join(&self, author: PublicKey) {
         self.last_ping.lock().await.insert(author, Instant::now());
-        self.document.author_joined(author);
+        self.subscribable_topic.author_joined(author);
         self.set_last_seen(author).await;
 
         // Send a ping to the network to ensure that the new author knows we exist
@@ -123,19 +120,19 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
 
         // If this is a new author emit author join
         if old.is_none() {
-            self.document.author_joined(author);
+            self.subscribable_topic.author_joined(author);
         }
         self.set_last_seen(author).await;
     }
 
     async fn left(&self, author: PublicKey) {
         self.last_ping.lock().await.remove(&author);
-        self.document.author_left(author);
+        self.subscribable_topic.author_left(author);
         self.set_last_seen(author).await;
     }
 
     pub async fn spawn(&self) {
-        // Send a hello to the network so other authors know we joined the document
+        // Send a hello to the network so other authors know we joined the topic
         self.send(AuthorMessage::Hello).await;
 
         let mut interval = tokio::time::interval(OFFLINE_TIMEOUT / 2);
@@ -159,7 +156,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
             });
 
             for author in expired {
-                self.document.author_left(author);
+                self.subscribable_topic.author_left(author);
                 self.set_last_seen(author).await;
             }
         }
@@ -168,7 +165,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
     async fn set_last_seen(&self, author: PublicKey) {
         if let Err(error) = self
             .node
-            .document_store
+            .topic_store
             .set_last_seen_for_author(author, Some(Utc::now()))
             .await
         {
@@ -177,11 +174,7 @@ impl<T: SubscribableDocument> AuthorTracker<T> {
     }
 }
 
-async fn send_message(
-    private_key: &PrivateKey,
-    tx: &mpsc::Sender<ToNetwork>,
-    message: AuthorMessage,
-) {
+async fn send_message(private_key: &PrivateKey, tx: &EphemeralStream, message: AuthorMessage) {
     // FIXME: We need to add the current time to the message,
     // because iroh doesn't broadcast twice the same message message.
     let author_message = match encode_cbor(&(&message, SystemTime::now())) {
@@ -199,7 +192,7 @@ async fn send_message(
             return;
         }
     };
-    if let Err(error) = tx.send(ToNetwork::Message { bytes }).await {
+    if let Err(error) = tx.publish(bytes).await {
         error!("Failed to sent {message} to the network: {error}");
     }
 }

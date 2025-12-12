@@ -1,72 +1,40 @@
-use std::fmt;
-use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::node_inner::NodeInner;
+use crate::operation::ReflectionExtensions;
 use crate::operation_store::CreationError;
 use crate::subscription_inner::SubscriptionInner;
 
-use p2panda_core::PublicKey;
-use p2panda_net::{ToNetwork, TopicId};
-use p2panda_sync::TopicQuery;
-use serde::{Deserialize, Serialize};
+use p2panda_core::{Operation, PublicKey};
+use p2panda_net::{TopicId, streams::StreamError};
 use thiserror::Error;
-use tokio::{
-    sync::mpsc,
-    task::{AbortHandle, JoinError},
-};
+use tokio::task::{AbortHandle, JoinError};
 use tracing::info;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub(crate) struct DocumentId(#[serde(with = "serde_bytes")] [u8; 32]);
-
-impl DocumentId {
-    pub const fn as_slice(&self) -> &[u8] {
-        self.0.as_slice()
-    }
-}
-
-impl TopicQuery for DocumentId {}
-
-impl TopicId for DocumentId {
-    fn id(&self) -> [u8; 32] {
-        self.0
-    }
-}
-
-impl From<[u8; 32]> for DocumentId {
-    fn from(bytes: [u8; 32]) -> Self {
-        Self(bytes)
-    }
-}
-
-impl From<DocumentId> for [u8; 32] {
-    fn from(id: DocumentId) -> Self {
-        id.0
-    }
-}
-
-impl fmt::Display for DocumentId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&hex::encode(self.0))
+impl From<StreamError<Operation<ReflectionExtensions>>> for TopicError {
+    fn from(value: StreamError<Operation<ReflectionExtensions>>) -> Self {
+        TopicError::Publish(Box::new(value))
     }
 }
 
 #[derive(Debug, Error)]
-pub enum DocumentError {
+pub enum TopicError {
     #[error(transparent)]
-    DocumentStore(#[from] sqlx::Error),
+    TopicStore(#[from] sqlx::Error),
     #[error(transparent)]
     OperationStore(#[from] CreationError),
     #[error(transparent)]
     Encode(#[from] p2panda_core::cbor::EncodeError),
     #[error(transparent)]
-    Send(#[from] mpsc::error::SendError<ToNetwork>),
+    // FIXME: The error is huge so but it into a Box
+    Publish(Box<StreamError<Operation<ReflectionExtensions>>>),
+    #[error(transparent)]
+    PublishEphemeral(#[from] StreamError<Vec<u8>>),
     #[error(transparent)]
     Runtime(#[from] JoinError),
 }
 
-pub trait SubscribableDocument: Sync + Send {
+pub trait SubscribableTopic: Sync + Send {
     fn bytes_received(&self, author: PublicKey, data: Vec<u8>);
     fn author_joined(&self, author: PublicKey);
     fn author_left(&self, author: PublicKey);
@@ -84,9 +52,9 @@ impl<T> Drop for Subscription<T> {
     }
 }
 
-impl<T: SubscribableDocument + 'static> Subscription<T> {
-    pub(crate) async fn new(node: Arc<NodeInner>, id: DocumentId, document: Arc<T>) -> Self {
-        let inner = SubscriptionInner::new(node, id, document);
+impl<T: SubscribableTopic + 'static> Subscription<T> {
+    pub(crate) async fn new(node: Arc<NodeInner>, id: TopicId, subscribable_topic: Arc<T>) -> Self {
+        let inner = SubscriptionInner::new(node, id, subscribable_topic);
 
         let inner_clone = inner.clone();
         let network_monitor_task = inner
@@ -97,7 +65,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
             })
             .abort_handle();
 
-        info!("Subscribed to document {}", id);
+        info!("Subscribed to topic {}", hex::encode(id));
 
         Subscription {
             inner,
@@ -105,7 +73,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
         }
     }
 
-    pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), DocumentError> {
+    pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), TopicError> {
         let inner = self.inner.clone();
         self.inner
             .node
@@ -114,7 +82,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
             .await?
     }
 
-    pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), DocumentError> {
+    pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), TopicError> {
         let inner = self.inner.clone();
         self.inner
             .node
@@ -123,7 +91,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
             .await?
     }
 
-    pub async fn send_ephemeral(&self, data: Vec<u8>) -> Result<(), DocumentError> {
+    pub async fn send_ephemeral(&self, data: Vec<u8>) -> Result<(), TopicError> {
         let inner = self.inner.clone();
         self.inner
             .node
@@ -132,8 +100,8 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
             .await?
     }
 
-    pub async fn unsubscribe(self) -> Result<(), DocumentError> {
-        let document_id = self.inner.id;
+    pub async fn unsubscribe(self) -> Result<(), TopicError> {
+        let id = self.inner.id;
 
         self.network_monitor_task.abort();
         let inner = self.inner.clone();
@@ -144,15 +112,15 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
             .spawn(async move { inner.unsubscribe().await })
             .await??;
 
-        info!("Unsubscribed from document {}", document_id);
+        info!("Unsubscribed from topic {}", hex::encode(id));
 
         Ok(())
     }
 
-    /// Set the name for a given document
+    /// Set the name for a given topic
     ///
     /// This information will be written to the database
-    pub async fn set_name(&self, name: Option<String>) -> Result<(), DocumentError> {
+    pub async fn set_name(&self, name: Option<String>) -> Result<(), TopicError> {
         let inner = self.inner.clone();
         self.inner
             .node

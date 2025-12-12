@@ -9,8 +9,8 @@ use glib::{Properties, clone};
 pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use reflection_node::document::{SubscribableDocument, Subscription as DocumentSubscription};
 use reflection_node::p2panda_core;
+use reflection_node::topic::{SubscribableTopic, Subscription as TopicSubscription};
 use tracing::error;
 
 use crate::author::Author;
@@ -127,7 +127,7 @@ mod imp {
         #[property(get, construct_only)]
         id: OnceCell<DocumentId>,
         #[property(name = "subscribed", get = Self::subscribed, type = bool)]
-        pub(super) subscription: RwLock<Option<Arc<DocumentSubscription<DocumentHandle>>>>,
+        pub(super) subscription: RwLock<Option<Arc<TopicSubscription<DocumentHandle>>>>,
         #[property(get = Self::service, set = Self::set_service, construct_only, type = Service)]
         service: glib::WeakRef<Service>,
         #[property(get)]
@@ -639,7 +639,7 @@ mod imp {
             }
         }
 
-        pub(super) fn subscription(&self) -> Option<Arc<DocumentSubscription<DocumentHandle>>> {
+        pub(super) fn subscription(&self) -> Option<Arc<TopicSubscription<DocumentHandle>>> {
             self.subscription.read().unwrap().clone()
         }
     }
@@ -879,7 +879,7 @@ impl Document {
     }
 
     pub async fn delete(&self) {
-        if let Err(error) = self.service().node().delete_document(self.id()).await {
+        if let Err(error) = self.service().node().delete_topic(self.id()).await {
             error!("Failed to delete document from document store: {}", error);
             return;
         }
@@ -893,7 +893,7 @@ unsafe impl Sync for Document {}
 
 struct DocumentHandle(glib::WeakRef<Document>);
 
-impl SubscribableDocument for DocumentHandle {
+impl SubscribableTopic for DocumentHandle {
     fn bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {

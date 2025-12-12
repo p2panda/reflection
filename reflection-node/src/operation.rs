@@ -1,10 +1,10 @@
 use std::hash::Hash as StdHash;
 
 use p2panda_core::{Extension, Header, PruneFlag};
+use p2panda_net::TopicId;
 use serde::{Deserialize, Serialize};
 
-use crate::document::DocumentId;
-use crate::document_store::LogId;
+use crate::topic_store::LogId;
 
 /// Custom extensions for p2panda header.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -13,7 +13,7 @@ pub struct ReflectionExtensions {
     ///
     /// This usually indicates that a "snapshot" has been inserted into the body of this operation,
     /// containing all required state to reconstruct the full version including all previous edits
-    /// of this document.
+    /// of this topic.
     ///
     /// In our case of a text-editor, this would be the encoded payload of a state-based CRDT.
     #[serde(
@@ -26,15 +26,15 @@ pub struct ReflectionExtensions {
     /// Operations can be organised in separate logs. With a "log id" we can declare where this
     /// operation belongs to.
     ///
-    /// We organise two logs per author per document, one for "short lived" / ephemeral deltas
-    /// (small text changes) and one for persisted snapshots (full document history). These are two
+    /// We organise two logs per author per topic, one for "short lived" / ephemeral deltas
+    /// (small text changes) and one for persisted snapshots (full topic history). These are two
     /// distinct "log types".
     #[serde(rename = "t")]
     pub log_type: LogType,
 
-    /// Identifier of the document this operation relates to.
+    /// Identifier of the topic this operation relates to.
     #[serde(rename = "d")]
-    pub document: DocumentId,
+    pub topic: TopicId,
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
@@ -56,17 +56,17 @@ impl Extension<LogType> for ReflectionExtensions {
     }
 }
 
-impl Extension<DocumentId> for ReflectionExtensions {
-    fn extract(header: &Header<Self>) -> Option<DocumentId> {
-        Some(header.extensions.document)
+impl Extension<TopicId> for ReflectionExtensions {
+    fn extract(header: &Header<Self>) -> Option<TopicId> {
+        Some(header.extensions.topic)
     }
 }
 
 impl Extension<LogId> for ReflectionExtensions {
     fn extract(header: &Header<Self>) -> Option<LogId> {
         let log_type: LogType = header.extension()?;
-        let document_id: DocumentId = header.extension()?;
+        let id: TopicId = header.extension()?;
 
-        Some(LogId::new(log_type, &document_id))
+        Some(LogId::new(log_type, &id))
     }
 }
