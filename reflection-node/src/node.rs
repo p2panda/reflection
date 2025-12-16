@@ -4,6 +4,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use p2panda_core::{Hash, PrivateKey};
 use thiserror::Error;
+use tracing::info;
 
 use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
 pub use crate::document_store::Author;
@@ -39,8 +40,26 @@ pub struct Document<ID> {
 }
 
 #[derive(Debug)]
+enum OwnedRuntimeOrHandle {
+    Handle(tokio::runtime::Handle),
+    OwnedRuntime(tokio::runtime::Runtime),
+}
+
+impl std::ops::Deref for OwnedRuntimeOrHandle {
+    type Target = tokio::runtime::Handle;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            OwnedRuntimeOrHandle::Handle(handle) => handle,
+            OwnedRuntimeOrHandle::OwnedRuntime(runtime) => runtime.handle(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Node {
     inner: Arc<NodeInner>,
+    runtime: OwnedRuntimeOrHandle,
 }
 
 impl Node {
@@ -50,10 +69,26 @@ impl Node {
         db_location: Option<&Path>,
         connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
+        let runtime = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            OwnedRuntimeOrHandle::Handle(handle)
+        } else {
+            OwnedRuntimeOrHandle::OwnedRuntime(
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()?,
+            )
+        };
+
+        let db_file = db_location.map(|location| location.join("database.sqlite"));
+        let inner = runtime
+            .spawn(async move {
+                NodeInner::new(network_id, private_key, db_file, connection_mode).await
+            })
+            .await??;
+
         Ok(Self {
-            inner: Arc::new(
-                NodeInner::new(network_id, private_key, db_location, connection_mode).await?,
-            ),
+            inner: Arc::new(inner),
+            runtime,
         })
     }
 
@@ -62,8 +97,7 @@ impl Node {
         connection_mode: ConnectionMode,
     ) -> Result<(), NodeError> {
         let inner_clone = self.inner.clone();
-        self.inner
-            .runtime
+        self.runtime
             .spawn(async move {
                 inner_clone.set_connection_mode(connection_mode).await;
             })
@@ -74,8 +108,7 @@ impl Node {
 
     pub async fn shutdown(&self) -> Result<(), NodeError> {
         let inner_clone = self.inner.clone();
-        self.inner
-            .runtime
+        self.runtime
             .spawn(async move {
                 inner_clone.shutdown().await;
             })
@@ -87,7 +120,6 @@ impl Node {
     pub async fn documents<ID: From<[u8; 32]>>(&self) -> Result<Vec<Document<ID>>, DocumentError> {
         let inner_clone = self.inner.clone();
         let documents = self
-            .inner
             .runtime
             .spawn(async move { inner_clone.document_store.documents().await })
             .await??;
@@ -121,10 +153,15 @@ impl Node {
         let document_id: DocumentId = DocumentId::from(document_id.into());
         let document_handle = Arc::new(document_handle);
         let inner_clone = self.inner.clone();
-        self.inner
+        let inner_subscription = self
             .runtime
             .spawn(async move { inner_clone.subscribe(document_id, document_handle).await })
-            .await?
+            .await??;
+
+        let subscription = Subscription::new(self.runtime.clone(), inner_subscription).await;
+        info!("Subscribed to topic {}", document_id);
+
+        Ok(subscription)
     }
 
     pub async fn delete_document<ID: Into<[u8; 32]>>(
@@ -133,8 +170,7 @@ impl Node {
     ) -> Result<(), DocumentError> {
         let document_id: DocumentId = DocumentId::from(document_id.into());
         let inner_clone = self.inner.clone();
-        self.inner
-            .runtime
+        self.runtime
             .spawn(async move { inner_clone.delete_document(document_id).await })
             .await?
     }

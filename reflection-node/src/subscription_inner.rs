@@ -42,16 +42,16 @@ impl<T> Drop for SubscriptionInner<T> {
 }
 
 impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
-    pub fn new(node: Arc<NodeInner>, id: DocumentId, document: Arc<T>) -> Arc<Self> {
+    pub fn new(node: Arc<NodeInner>, id: DocumentId, document: Arc<T>) -> Self {
         let author_tracker = AuthorTracker::new(node.clone(), document.clone());
-        Arc::new(SubscriptionInner {
+        SubscriptionInner {
             tx: RwLock::new(None),
             node,
             id,
             abort_handles: RwLock::new(Vec::new()),
             document,
             author_tracker,
-        })
+        }
     }
 
     pub async fn spawn_network_monitor(&self) {

@@ -2,7 +2,6 @@ use std::fmt;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use crate::node_inner::NodeInner;
 use crate::operation_store::CreationError;
 use crate::subscription_inner::SubscriptionInner;
 
@@ -75,6 +74,7 @@ pub trait SubscribableDocument: Sync + Send {
 
 pub struct Subscription<T> {
     pub(crate) inner: Arc<SubscriptionInner<T>>,
+    pub(crate) runtime: tokio::runtime::Handle,
     network_monitor_task: AbortHandle,
 }
 
@@ -85,49 +85,40 @@ impl<T> Drop for Subscription<T> {
 }
 
 impl<T: SubscribableDocument + 'static> Subscription<T> {
-    pub(crate) async fn new(node: Arc<NodeInner>, id: DocumentId, document: Arc<T>) -> Self {
-        let inner = SubscriptionInner::new(node, id, document);
+    pub(crate) async fn new(runtime: tokio::runtime::Handle, inner: SubscriptionInner<T>) -> Self {
+        let inner = Arc::new(inner);
 
         let inner_clone = inner.clone();
-        let network_monitor_task = inner
-            .node
-            .runtime
+        let network_monitor_task = runtime
             .spawn(async move {
                 inner_clone.spawn_network_monitor().await;
             })
             .abort_handle();
 
-        info!("Subscribed to document {}", id);
-
         Subscription {
             inner,
+            runtime,
             network_monitor_task,
         }
     }
 
     pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), DocumentError> {
         let inner = self.inner.clone();
-        self.inner
-            .node
-            .runtime
+        self.runtime
             .spawn(async move { inner.send_delta(data).await })
             .await?
     }
 
     pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), DocumentError> {
         let inner = self.inner.clone();
-        self.inner
-            .node
-            .runtime
+        self.runtime
             .spawn(async move { inner.send_snapshot(data).await })
             .await?
     }
 
     pub async fn send_ephemeral(&self, data: Vec<u8>) -> Result<(), DocumentError> {
         let inner = self.inner.clone();
-        self.inner
-            .node
-            .runtime
+        self.runtime
             .spawn(async move { inner.send_ephemeral(data).await })
             .await?
     }
@@ -137,10 +128,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
 
         self.network_monitor_task.abort();
         let inner = self.inner.clone();
-        inner
-            .node
-            .clone()
-            .runtime
+        self.runtime
             .spawn(async move { inner.unsubscribe().await })
             .await??;
 
@@ -154,9 +142,7 @@ impl<T: SubscribableDocument + 'static> Subscription<T> {
     /// This information will be written to the database
     pub async fn set_name(&self, name: Option<String>) -> Result<(), DocumentError> {
         let inner = self.inner.clone();
-        self.inner
-            .node
-            .runtime
+        self.runtime
             .spawn(async move { inner.set_name(name).await })
             .await?
     }
