@@ -1,13 +1,14 @@
 use std::ops::DerefMut;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
+use crate::document::{DocumentError, DocumentId, SubscribableDocument};
 use crate::document_store::DocumentStore;
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node::{ConnectionMode, NodeError};
 use crate::operation_store::OperationStore;
 use crate::persistent_operation::PersistentOperation;
+use crate::subscription_inner::SubscriptionInner;
 use crate::utils::CombinedMigrationSource;
 
 use p2panda_core::{Hash, PrivateKey};
@@ -17,10 +18,7 @@ use p2panda_net::{Network, NetworkBuilder, SyncConfiguration};
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use p2panda_sync::log_sync::LogSyncProtocol;
 use sqlx::{migrate::Migrator, sqlite};
-use tokio::{
-    runtime::{Builder, Runtime},
-    sync::{Notify, RwLock},
-};
+use tokio::sync::{Notify, RwLock};
 use tracing::{info, warn};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -32,7 +30,6 @@ pub(crate) enum MessageType {
 
 #[derive(Debug)]
 pub struct NodeInner {
-    pub(crate) runtime: Runtime,
     pub(crate) operation_store: OperationStore,
     pub(crate) document_store: DocumentStore,
     pub(crate) private_key: PrivateKey,
@@ -48,27 +45,18 @@ impl NodeInner {
     pub async fn new(
         network_id: Hash,
         private_key: PrivateKey,
-        db_location: Option<&Path>,
+        db_file: Option<PathBuf>,
         connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
-        let runtime = Builder::new_multi_thread().enable_all().build()?;
-
-        let _guard = runtime.enter();
-
         let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
             .shared_cache(true)
             .create_if_missing(true);
-        let connection_options = if let Some(db_location) = db_location {
-            let db_file = db_location.join("database.sqlite");
+        let pool = if let Some(db_file) = db_file {
             info!("Database file location: {db_file:?}");
-            connection_options.filename(db_file)
-        } else {
-            connection_options.in_memory(true)
-        };
-
-        let pool = if db_location.is_some() {
+            let connection_options = connection_options.filename(db_file);
             sqlx::sqlite::SqlitePool::connect_with(connection_options).await?
         } else {
+            let connection_options = connection_options.in_memory(true);
             // FIXME: we need to set max connection to 1 for in memory sqlite DB.
             // Probably has to do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
             let pool_options = sqlite::SqlitePoolOptions::new().max_connections(1);
@@ -98,7 +86,6 @@ impl NodeInner {
         };
 
         Ok(Self {
-            runtime,
             operation_store,
             document_store,
             private_key,
@@ -156,7 +143,7 @@ impl NodeInner {
         self: Arc<Self>,
         document_id: DocumentId,
         document: Arc<T>,
-    ) -> Result<Subscription<T>, DocumentError> {
+    ) -> Result<SubscriptionInner<T>, DocumentError> {
         self.document_store.add_document(&document_id).await?;
         // Add ourselves as an author to the document store.
         self.document_store
@@ -175,7 +162,7 @@ impl NodeInner {
             }
         }
 
-        Ok(Subscription::new(self, document_id, document).await)
+        Ok(SubscriptionInner::new(self.clone(), document_id, document))
     }
 
     pub async fn delete_document(
