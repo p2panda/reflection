@@ -98,11 +98,11 @@ impl Node {
         connection_mode: ConnectionMode,
     ) -> Result<(), NodeError> {
         let inner_clone = self.inner.clone();
-        self.runtime
-            .spawn(async move {
-                inner_clone.set_connection_mode(connection_mode).await;
-            })
-            .await?;
+        // self.runtime
+        //     .spawn(async move {
+        //         inner_clone.set_connection_mode(connection_mode).await;
+        //     })
+        //     .await?;
 
         Ok(())
     }
