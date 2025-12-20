@@ -178,9 +178,9 @@ impl Service {
             private_key,
             network_id,
             path.as_deref(),
-            // gio::NetworkManager is slow to initialize the `network-available` property,
-            // so it might be incorrect therefore always start with no connection.
-            node::ConnectionMode::None,
+            // gio::NetworkManager is slow to initialize the `network-available` property, so it
+            // might be incorrect therefore always start with no connection.
+            node::ConnectionMode::Network,
         )
         .await?;
 
