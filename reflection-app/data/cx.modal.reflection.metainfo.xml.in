@@ -57,12 +57,8 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://example.org/example1.png</image>
-      <caption>A caption</caption>
-    </screenshot>
-    <screenshot>
-      <image>https://example.org/example2.png</image>
-      <caption>A caption</caption>
+      <image>https://raw.githubusercontent.com/p2panda/reflection/refs/heads/main/reflection-app/data/screenshots/screenshot.png</image>
+      <caption>Edit collaboratively in real time</caption>
     </screenshot>
   </screenshots>
 
