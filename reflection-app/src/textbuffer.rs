@@ -96,6 +96,7 @@ mod imp {
                 self.changed_handler.replace(Some(handle));
             }
 
+            self.remote_cursors.take();
             self.document_handlers.get().unwrap().set_target(document);
             self.document.replace(document.cloned());
         }
