@@ -80,142 +80,101 @@ pub mod identity {
 
 #[cfg(test)]
 mod tests {
-    use glib::clone;
-    use test_log::test;
-
     use crate::document::DocumentId;
     use crate::identity::PrivateKey;
     use crate::service::Service;
 
-    #[test]
-    fn create_document() {
+    #[test_log::test(glib::async_test)]
+    async fn create_document() {
         let test_string = "Hello World";
 
-        let context = glib::MainContext::new();
-        let main_loop = glib::MainLoop::new(Some(&context), false);
+        let context = glib::MainContext::ref_thread_default();
+        println!("Context: {context:?}");
 
-        context.spawn_local(clone!(
-            #[strong]
-            context,
-            #[strong]
-            main_loop,
-            async move {
-                let private_key = PrivateKey::new();
-                let service = Service::new(&private_key, None);
-                service.startup().await.unwrap();
+        let private_key = PrivateKey::new();
+        let service = Service::new(&private_key, None);
+        service.startup().await.unwrap();
 
-                let document =
-                    service.join_document_with_main_context(&DocumentId::new(), &context);
-                document.subscribe().await;
+        let document = service.join_document_with_main_context(&DocumentId::new(), &context);
+        document.subscribe().await;
 
-                assert!(document.insert_text(0, test_string).is_ok());
-                assert_eq!(document.text(), test_string);
+        assert!(document.insert_text(0, test_string).is_ok());
+        assert_eq!(document.text(), test_string);
 
-                service.shutdown().await;
-                main_loop.quit();
-            }
-        ));
-
-        main_loop.run();
+        service.shutdown().await;
     }
 
-    #[test]
-    fn basic_sync() {
+    #[test_log::test(glib::async_test)]
+    async fn basic_sync() {
         let test_string = "Hello World";
 
-        let context = glib::MainContext::new();
-        let main_loop = glib::MainLoop::new(Some(&context), false);
+        let context = glib::MainContext::ref_thread_default();
+        println!("Context: {context:?}");
 
-        context.spawn_local(clone!(
-            #[strong]
-            context,
-            #[strong]
-            main_loop,
-            async move {
-                let private_key = PrivateKey::new();
-                let service = Service::new(&private_key, None);
-                service.startup().await.unwrap();
+        let private_key = PrivateKey::new();
+        let service = Service::new(&private_key, None);
+        service.startup().await.unwrap();
 
-                let document =
-                    service.join_document_with_main_context(&DocumentId::new(), &context);
-                document.subscribe().await;
-                let id = document.id();
+        let document = service.join_document_with_main_context(&DocumentId::new(), &context);
+        document.subscribe().await;
+        let id = document.id();
 
-                let private_key2 = PrivateKey::new();
-                let service2 = Service::new(&private_key2, None);
-                service2.startup().await.unwrap();
+        let private_key2 = PrivateKey::new();
+        let service2 = Service::new(&private_key2, None);
+        service2.startup().await.unwrap();
 
-                let document2 = service2.join_document_with_main_context(&id, &context);
-                document2.subscribe().await;
+        let document2 = service2.join_document_with_main_context(&id, &context);
+        document2.subscribe().await;
 
-                assert_eq!(document.id(), document2.id());
+        assert_eq!(document.id(), document2.id());
 
-                assert!(document.insert_text(0, test_string).is_ok());
-                assert_eq!(document.text(), test_string);
+        assert!(document.insert_text(0, test_string).is_ok());
+        assert_eq!(document.text(), test_string);
 
-                service.shutdown().await;
-                service2.shutdown().await;
+        service.shutdown().await;
+        service2.shutdown().await;
 
-                assert_eq!(document2.text(), test_string);
-
-                main_loop.quit();
-            }
-        ));
-
-        main_loop.run();
+        assert_eq!(document2.text(), test_string);
     }
 
-    #[test]
-    fn sync_multiple_changes() {
+    #[test_log::test(glib::async_test)]
+    async fn sync_multiple_changes() {
         let expected_string = "Hello, World!";
 
-        let context = glib::MainContext::new();
-        let main_loop = glib::MainLoop::new(Some(&context), false);
+        let context = glib::MainContext::ref_thread_default();
+        println!("Context: {context:?}");
 
-        context.spawn_local(clone!(
-            #[strong]
-            context,
-            #[strong]
-            main_loop,
-            async move {
-                let private_key = PrivateKey::new();
-                let service = Service::new(&private_key, None);
-                service.startup().await.unwrap();
+        let private_key = PrivateKey::new();
+        let service = Service::new(&private_key, None);
+        service.startup().await.unwrap();
 
-                let document =
-                    service.join_document_with_main_context(&DocumentId::new(), &context);
-                document.subscribe().await;
-                let id = document.id();
+        let document = service.join_document_with_main_context(&DocumentId::new(), &context);
+        document.subscribe().await;
+        let id = document.id();
 
-                let private_key2 = PrivateKey::new();
-                let service2 = Service::new(&private_key2, None);
-                service2.startup().await.unwrap();
+        let private_key2 = PrivateKey::new();
+        let service2 = Service::new(&private_key2, None);
+        service2.startup().await.unwrap();
 
-                let document2 = service2.join_document_with_main_context(&id, &context);
-                document2.subscribe().await;
+        let document2 = service2.join_document_with_main_context(&id, &context);
+        document2.subscribe().await;
 
-                assert_eq!(document.id(), document2.id());
+        assert_eq!(document.id(), document2.id());
 
-                assert!(document.insert_text(0, "Hello,").is_ok());
-                assert!(document.insert_text(6, " World!").is_ok());
-                assert!(document.delete_range(7, 8).is_ok());
-                assert!(document.insert_text(7, "W").is_ok());
-                assert_eq!(document.text(), expected_string);
+        assert!(document.insert_text(0, "Hello,").is_ok());
+        assert!(document.insert_text(6, " World!").is_ok());
+        assert!(document.delete_range(7, 8).is_ok());
+        assert!(document.insert_text(7, "W").is_ok());
+        assert_eq!(document.text(), expected_string);
 
-                service.shutdown().await;
-                service2.shutdown().await;
+        service.shutdown().await;
+        service2.shutdown().await;
 
-                assert_eq!(document2.text(), expected_string);
-
-                main_loop.quit();
-            }
-        ));
-
-        main_loop.run();
+        assert_eq!(document2.text(), expected_string);
     }
 
-    #[test]
-    fn sync_longer_text() {
+    #[test_log::test(glib::async_test)]
+    async fn sync_longer_text() {
         let test_string = "Et aut omnis eos corporis ut. Qui est blanditiis blanditiis.
         Sit quia nam maxime accusantium ut voluptatem. Fuga consequuntur animi et et est.
         Unde voluptas consequatur mollitia id odit optio harum sint. Fugit quo aut et laborum aut cupiditate.";
@@ -224,48 +183,35 @@ mod tests {
             test_string, test_string, test_string, test_string
         );
 
-        let context = glib::MainContext::new();
-        let main_loop = glib::MainLoop::new(Some(&context), false);
+        let context = glib::MainContext::ref_thread_default();
+        println!("Context: {context:?}");
 
-        context.spawn_local(clone!(
-            #[strong]
-            context,
-            #[strong]
-            main_loop,
-            async move {
-                let private_key = PrivateKey::new();
-                let service = Service::new(&private_key, None);
-                service.startup().await.unwrap();
+        let private_key = PrivateKey::new();
+        let service = Service::new(&private_key, None);
+        service.startup().await.unwrap();
 
-                let document =
-                    service.join_document_with_main_context(&DocumentId::new(), &context);
-                let id = document.id();
+        let document = service.join_document_with_main_context(&DocumentId::new(), &context);
+        let id = document.id();
 
-                document.subscribe().await;
+        document.subscribe().await;
 
-                let private_key2 = PrivateKey::new();
-                let service2 = Service::new(&private_key2, None);
-                service2.startup().await.unwrap();
+        let private_key2 = PrivateKey::new();
+        let service2 = Service::new(&private_key2, None);
+        service2.startup().await.unwrap();
 
-                let document2 = service2.join_document_with_main_context(&id, &context);
-                document2.subscribe().await;
+        let document2 = service2.join_document_with_main_context(&id, &context);
+        document2.subscribe().await;
 
-                assert_eq!(document.id(), document2.id());
+        assert_eq!(document.id(), document2.id());
 
-                assert!(document.insert_text(0, test_string).is_ok());
-                assert!(document.insert_text(0, test_string).is_ok());
-                assert!(document.insert_text(0, test_string).is_ok());
-                assert!(document.insert_text(0, test_string).is_ok());
+        assert!(document.insert_text(0, test_string).is_ok());
+        assert!(document.insert_text(0, test_string).is_ok());
+        assert!(document.insert_text(0, test_string).is_ok());
+        assert!(document.insert_text(0, test_string).is_ok());
 
-                service.shutdown().await;
-                service2.shutdown().await;
+        service.shutdown().await;
+        service2.shutdown().await;
 
-                assert_eq!(document2.text(), expected_string);
-
-                main_loop.quit();
-            }
-        ));
-
-        main_loop.run();
+        assert_eq!(document2.text(), expected_string);
     }
 }
