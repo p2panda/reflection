@@ -105,7 +105,7 @@ mod imp {
     /// Loro documents can contain multiple different CRDT types in one document.
     static TEXT_CONTAINER_ID: LazyLock<loro::ContainerID> =
         LazyLock::new(|| loro::ContainerID::new_root("document", loro::ContainerType::Text));
-    const DOCUMENT_NAME_LENGTH: usize = 32;
+    const DOCUMENT_NAME_LENGTH: usize = 124;
     const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
 
     #[derive(Properties, Default)]
@@ -155,10 +155,10 @@ mod imp {
         let mut name = String::with_capacity(DOCUMENT_NAME_LENGTH);
         crdt_text.iter(|slice| {
             for char in slice.chars() {
-                if char == '\n' {
+                if char == '\n' || name.len() > DOCUMENT_NAME_LENGTH {
                     // Only use the first line as name for the document
                     return false;
-                } else if char.is_whitespace() || char.is_alphanumeric() {
+                } else if (!name.is_empty() && char.is_whitespace()) || char.is_alphanumeric() {
                     name.push(char);
                 }
             }
