@@ -16,14 +16,14 @@ pub fn format_datetime(last_string: &str, datetime: &glib::DateTime) -> String {
 
     // This was ported from Nautilus and simplified for our use case.
     // See: https://gitlab.gnome.org/GNOME/nautilus/-/blob/1c5bd3614a35cfbb49de087bc10381cdef5a218f/src/nautilus-file.c#L5001
-    let now = glib::DateTime::now_local().unwrap();
+    let now = glib::DateTime::now_utc().unwrap();
     let format;
     let days_ago = {
         let today_midnight =
-            glib::DateTime::from_local(now.year(), now.month(), now.day_of_month(), 0, 0, 0f64)
+            glib::DateTime::from_utc(now.year(), now.month(), now.day_of_month(), 0, 0, 0f64)
                 .expect("constructing GDateTime works");
 
-        let date = glib::DateTime::from_local(
+        let date = glib::DateTime::from_utc(
             datetime.year(),
             datetime.month(),
             datetime.day_of_month(),
@@ -159,6 +159,8 @@ pub fn format_datetime(last_string: &str, datetime: &glib::DateTime) -> String {
     }
 
     datetime
+        .to_local()
+        .expect("constructing local GDateTime works")
         .format(&format)
         .expect("formatting GDateTime works")
         .into()

@@ -82,7 +82,7 @@ impl Authors {
 
     pub(crate) fn add_this_device(&self, author_key: PublicKey) {
         let mut list = self.imp().list.write().unwrap();
-        let now = glib::DateTime::now_local().ok();
+        let now = glib::DateTime::now_utc().ok();
 
         assert!(list.is_empty());
 

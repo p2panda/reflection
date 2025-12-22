@@ -172,7 +172,7 @@ impl Author {
         let was_online = self.imp().is_online.get();
         self.imp().is_online.set(is_online);
         if !is_online && was_online {
-            *self.imp().last_seen.lock().unwrap() = glib::DateTime::now_local().ok();
+            *self.imp().last_seen.lock().unwrap() = glib::DateTime::now_utc().ok();
             self.notify_last_seen();
         }
         self.notify_is_online();
