@@ -1,3 +1,3 @@
 [D-BUS Service]
-Name=org.p2panda.reflection
+Name=cx.modal.reflection
 Exec=@bindir@/reflection --gapplication-service

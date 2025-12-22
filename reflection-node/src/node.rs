@@ -3,12 +3,14 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use p2panda_core::{Hash, PrivateKey};
+use p2panda_net::TopicId;
 use thiserror::Error;
+use tracing::info;
 
-use crate::document::{DocumentError, DocumentId, SubscribableDocument, Subscription};
-pub use crate::document_store::Author;
-use crate::document_store::StoreDocument;
 use crate::node_inner::NodeInner;
+use crate::topic::{SubscribableTopic, Subscription, TopicError};
+pub use crate::topic_store::Author;
+use crate::topic_store::StoreTopic;
 
 #[derive(Debug, Error)]
 pub enum NodeError {
@@ -31,7 +33,7 @@ pub enum ConnectionMode {
 }
 
 #[derive(Clone, Debug)]
-pub struct Document<ID> {
+pub struct Topic<ID> {
     pub id: ID,
     pub name: Option<String>,
     pub last_accessed: Option<DateTime<Utc>>,
@@ -39,8 +41,26 @@ pub struct Document<ID> {
 }
 
 #[derive(Debug)]
+enum OwnedRuntimeOrHandle {
+    Handle(tokio::runtime::Handle),
+    OwnedRuntime(tokio::runtime::Runtime),
+}
+
+impl std::ops::Deref for OwnedRuntimeOrHandle {
+    type Target = tokio::runtime::Handle;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            OwnedRuntimeOrHandle::Handle(handle) => handle,
+            OwnedRuntimeOrHandle::OwnedRuntime(runtime) => runtime.handle(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Node {
     inner: Arc<NodeInner>,
+    runtime: OwnedRuntimeOrHandle,
 }
 
 impl Node {
@@ -50,10 +70,26 @@ impl Node {
         db_location: Option<&Path>,
         connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
+        let runtime = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            OwnedRuntimeOrHandle::Handle(handle)
+        } else {
+            OwnedRuntimeOrHandle::OwnedRuntime(
+                tokio::runtime::Builder::new_multi_thread()
+                    .enable_all()
+                    .build()?,
+            )
+        };
+
+        let db_file = db_location.map(|location| location.join("database.sqlite"));
+        let inner = runtime
+            .spawn(async move {
+                NodeInner::new(network_id, private_key, db_file, connection_mode).await
+            })
+            .await??;
+
         Ok(Self {
-            inner: Arc::new(
-                NodeInner::new(network_id, private_key, db_location, connection_mode).await?,
-            ),
+            inner: Arc::new(inner),
+            runtime,
         })
     }
 
@@ -62,8 +98,7 @@ impl Node {
         connection_mode: ConnectionMode,
     ) -> Result<(), NodeError> {
         let inner_clone = self.inner.clone();
-        self.inner
-            .runtime
+        self.runtime
             .spawn(async move {
                 inner_clone.set_connection_mode(connection_mode).await;
             })
@@ -74,8 +109,7 @@ impl Node {
 
     pub async fn shutdown(&self) -> Result<(), NodeError> {
         let inner_clone = self.inner.clone();
-        self.inner
-            .runtime
+        self.runtime
             .spawn(async move {
                 inner_clone.shutdown().await;
             })
@@ -84,25 +118,24 @@ impl Node {
         Ok(())
     }
 
-    pub async fn documents<ID: From<[u8; 32]>>(&self) -> Result<Vec<Document<ID>>, DocumentError> {
+    pub async fn topics<ID: From<[u8; 32]>>(&self) -> Result<Vec<Topic<ID>>, TopicError> {
         let inner_clone = self.inner.clone();
-        let documents = self
-            .inner
+        let topics = self
             .runtime
-            .spawn(async move { inner_clone.document_store.documents().await })
+            .spawn(async move { inner_clone.topic_store.topics().await })
             .await??;
 
-        let documents = documents
+        let topics = topics
             .into_iter()
-            .map(|document| {
-                let StoreDocument {
+            .map(|topic| {
+                let StoreTopic {
                     id,
                     name,
                     last_accessed,
                     authors,
-                } = document;
-                Document {
-                    id: <[u8; 32]>::from(id).into(),
+                } = topic;
+                Topic {
+                    id: id.into(),
                     name,
                     last_accessed,
                     authors,
@@ -110,32 +143,33 @@ impl Node {
             })
             .collect();
 
-        Ok(documents)
+        Ok(topics)
     }
 
-    pub async fn subscribe<ID: Into<[u8; 32]>, T: SubscribableDocument + 'static>(
+    pub async fn subscribe<ID: Into<[u8; 32]>, T: SubscribableTopic + 'static>(
         &self,
-        document_id: ID,
-        document_handle: T,
-    ) -> Result<Subscription<T>, DocumentError> {
-        let document_id: DocumentId = DocumentId::from(document_id.into());
-        let document_handle = Arc::new(document_handle);
+        id: ID,
+        topic_handle: T,
+    ) -> Result<Subscription<T>, TopicError> {
+        let id: TopicId = id.into();
+        let topic_handle = Arc::new(topic_handle);
         let inner_clone = self.inner.clone();
-        self.inner
+        let inner_subscription = self
             .runtime
-            .spawn(async move { inner_clone.subscribe(document_id, document_handle).await })
-            .await?
+            .spawn(async move { inner_clone.subscribe(id, topic_handle).await })
+            .await??;
+
+        let subscription = Subscription::new(self.runtime.clone(), inner_subscription).await;
+        info!("Subscribed to topic {}", hex::encode(id));
+
+        Ok(subscription)
     }
 
-    pub async fn delete_document<ID: Into<[u8; 32]>>(
-        &self,
-        document_id: ID,
-    ) -> Result<(), DocumentError> {
-        let document_id: DocumentId = DocumentId::from(document_id.into());
+    pub async fn delete_topic<ID: Into<[u8; 32]>>(&self, id: ID) -> Result<(), TopicError> {
+        let id: TopicId = id.into();
         let inner_clone = self.inner.clone();
-        self.inner
-            .runtime
-            .spawn(async move { inner_clone.delete_document(document_id).await })
+        self.runtime
+            .spawn(async move { inner_clone.delete_topic(id).await })
             .await?
     }
 }

@@ -3,12 +3,17 @@ use std::ops::{Deref, DerefMut, Drop};
 use std::sync::Arc;
 
 use chrono::Utc;
+use p2panda_core::Hash;
 use p2panda_core::{
     Body, Header,
     cbor::{decode_cbor, encode_cbor},
 };
-use p2panda_net::{FromNetwork, Network, ToNetwork};
+use p2panda_net::{
+    Network, TopicId,
+    streams::{EphemeralStream, EventuallyConsistentStream},
+};
 use p2panda_stream::IngestExt;
+use p2panda_sync::protocols::topic_log_sync::TopicLogSyncEvent;
 use tokio::{
     sync::{RwLock, mpsc},
     task::{AbortHandle, spawn},
@@ -17,18 +22,18 @@ use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tracing::{error, info, warn};
 
 use crate::author_tracker::{AuthorMessage, AuthorTracker};
-use crate::document::{DocumentError, DocumentId, SubscribableDocument};
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::node_inner::MessageType;
-use crate::node_inner::NodeInner;
+use crate::node_inner::{NodeInner, TopicSyncManager};
 use crate::operation::{LogType, ReflectionExtensions};
-use crate::persistent_operation::PersistentOperation;
+use crate::topic::{SubscribableTopic, TopicError};
 
 pub struct SubscriptionInner<T> {
-    tx: RwLock<Option<mpsc::Sender<ToNetwork>>>,
+    ephemeral_tx: RwLock<Option<EphemeralStream>>,
+    tx: RwLock<Option<EventuallyConsistentStream<TopicSyncManager>>>,
     pub(crate) node: Arc<NodeInner>,
-    pub(crate) id: DocumentId,
-    pub(crate) document: Arc<T>,
+    pub(crate) id: TopicId,
+    pub(crate) subscribable_topic: Arc<T>,
     author_tracker: Arc<AuthorTracker<T>>,
     abort_handles: RwLock<Vec<AbortHandle>>,
 }
@@ -41,17 +46,18 @@ impl<T> Drop for SubscriptionInner<T> {
     }
 }
 
-impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
-    pub fn new(node: Arc<NodeInner>, id: DocumentId, document: Arc<T>) -> Arc<Self> {
-        let author_tracker = AuthorTracker::new(node.clone(), document.clone());
-        Arc::new(SubscriptionInner {
+impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
+    pub fn new(node: Arc<NodeInner>, id: TopicId, subscribable_topic: Arc<T>) -> Self {
+        let author_tracker = AuthorTracker::new(node.clone(), subscribable_topic.clone());
+        SubscriptionInner {
             tx: RwLock::new(None),
+            ephemeral_tx: RwLock::new(None),
             node,
             id,
             abort_handles: RwLock::new(Vec::new()),
-            document,
+            subscribable_topic,
             author_tracker,
-        })
+        }
     }
 
     pub async fn spawn_network_monitor(&self) {
@@ -60,20 +66,22 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
         let mut notify = Some(self.node.network_notifier.notified());
         let mut network_guard = Some(self.node.network.read().await);
 
-        let (tx, abort_handles) = if let Some(network) = network_guard.as_ref().unwrap().deref() {
-            setup_network(
-                &self.node,
-                network,
-                self.id,
-                &self.document,
-                &self.author_tracker,
-            )
-            .await
-        } else {
-            (None, Vec::new())
-        };
+        let (tx, ephemeral_tx, abort_handles) =
+            if let Some(network) = network_guard.as_ref().unwrap().deref() {
+                setup_network(
+                    &self.node,
+                    network,
+                    self.id,
+                    &self.subscribable_topic,
+                    &self.author_tracker,
+                )
+                .await
+            } else {
+                (None, None, Vec::new())
+            };
 
         *self.tx.write().await = tx;
+        *self.ephemeral_tx.write().await = ephemeral_tx;
         *self.abort_handles.write().await = abort_handles;
 
         loop {
@@ -83,53 +91,72 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
 
             let mut abort_handles_guard = self.abort_handles.write().await;
             let mut tx_guard = self.tx.write().await;
+            let mut ephemeral_tx_guard = self.ephemeral_tx.write().await;
 
             let old_tx = take(tx_guard.deref_mut());
+            let old_ephemeral_tx = take(ephemeral_tx_guard.deref_mut());
             let old_abort_handles = take(abort_handles_guard.deref_mut());
 
-            teardown_network(&self.id, &self.author_tracker, old_tx, old_abort_handles).await;
+            teardown_network(
+                &self.id,
+                &self.author_tracker,
+                old_tx,
+                old_ephemeral_tx,
+                old_abort_handles,
+            )
+            .await;
             // Release network lock and get a new one, so that the network can be change between them
             network_guard.take();
             notify = Some(self.node.network_notifier.notified());
             network_guard = Some(self.node.network.read().await);
 
-            let (tx, abort_handles) = if let Some(network) = network_guard.as_ref().unwrap().deref()
-            {
-                setup_network(
-                    &self.node,
-                    network,
-                    self.id,
-                    &self.document,
-                    &self.author_tracker,
-                )
-                .await
-            } else {
-                (None, Vec::new())
-            };
+            let (tx, ephemeral_tx, abort_handles) =
+                if let Some(network) = network_guard.as_ref().unwrap().deref() {
+                    setup_network(
+                        &self.node,
+                        network,
+                        self.id,
+                        &self.subscribable_topic,
+                        &self.author_tracker,
+                    )
+                    .await
+                } else {
+                    (None, None, Vec::new())
+                };
 
             *tx_guard = tx;
+            *ephemeral_tx_guard = ephemeral_tx;
             *abort_handles_guard = abort_handles;
         }
     }
 
-    pub async fn unsubscribe(&self) -> Result<(), DocumentError> {
+    pub async fn unsubscribe(&self) -> Result<(), TopicError> {
         let mut tx_guard = self.tx.write().await;
+        let mut ephemeral_tx_guard = self.ephemeral_tx.write().await;
         let mut abort_handles_guard = self.abort_handles.write().await;
 
         let tx = take(tx_guard.deref_mut());
+        let ephemeral_tx = take(ephemeral_tx_guard.deref_mut());
         let abort_handles = take(abort_handles_guard.deref_mut());
 
         self.node
-            .document_store
-            .set_last_accessed_for_document(&self.id, Some(Utc::now()))
+            .topic_store
+            .set_last_accessed_for_topic(&self.id, Some(Utc::now()))
             .await?;
 
-        teardown_network(&self.id, &self.author_tracker, tx, abort_handles).await;
+        teardown_network(
+            &self.id,
+            &self.author_tracker,
+            tx,
+            ephemeral_tx,
+            abort_handles,
+        )
+        .await;
 
         Ok(())
     }
 
-    pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), DocumentError> {
+    pub async fn send_delta(&self, data: Vec<u8>) -> Result<(), TopicError> {
         let operation =
                 // Append one operation to our "ephemeral" delta log.
                 self.node.operation_store
@@ -142,26 +169,24 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
                     )
                     .await?;
 
-        info!("Delta operation sent for document with id {}", self.id);
+        info!(
+            "Delta operation sent for topic with id {}",
+            hex::encode(self.id)
+        );
 
         if let Some(tx) = self.tx.read().await.as_ref() {
-            let bytes = encode_cbor(&MessageType::Persistent(PersistentOperation::new(
-                operation,
-            )))?;
-
-            // Broadcast operation on gossip overlay.
-            tx.send(ToNetwork::Message { bytes }).await?;
+            tx.publish(operation).await?;
         }
 
         Ok(())
     }
 
-    pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), DocumentError> {
+    pub async fn send_snapshot(&self, data: Vec<u8>) -> Result<(), TopicError> {
         // Append an operation to our "snapshot" log and set the prune flag to
         // true. This will remove previous snapshots.
         //
         // Snapshots are not broadcasted on the gossip overlay as they would be
-        // too large. Peers will sync them up when they join the document.
+        // too large. Peers will sync them up when they join the topic.
         self.node
             .operation_store
             .create_operation(
@@ -186,118 +211,132 @@ impl<T: SubscribableDocument + 'static> SubscriptionInner<T> {
             .create_operation(&self.node.private_key, LogType::Delta, self.id, None, true)
             .await?;
 
-        info!("Snapshot saved for document with id {}", self.id);
+        info!("Snapshot saved for topic with id {}", hex::encode(self.id));
 
         if let Some(tx) = self.tx.read().await.as_ref() {
-            let bytes = encode_cbor(&MessageType::Persistent(PersistentOperation::new(
-                operation,
-            )))?;
-
-            // Broadcast operation on gossip overlay.
-            tx.send(ToNetwork::Message { bytes }).await?;
+            tx.publish(operation).await?;
         }
 
         Ok(())
     }
 
-    pub async fn send_ephemeral(&self, data: Vec<u8>) -> Result<(), DocumentError> {
-        if let Some(tx) = self.tx.read().await.as_ref() {
+    pub async fn send_ephemeral(&self, data: Vec<u8>) -> Result<(), TopicError> {
+        if let Some(ephemeral_tx) = self.ephemeral_tx.read().await.as_ref() {
             let operation = EphemerialOperation::new(data, &self.node.private_key);
             let bytes = encode_cbor(&MessageType::Ephemeral(operation))?;
-            tx.send(ToNetwork::Message { bytes }).await?;
+            ephemeral_tx.publish(bytes).await?;
         }
 
         Ok(())
     }
 
-    /// Set the name for a given document
+    /// Set the name for a given topic
     ///
     /// This information will be written to the database
-    pub async fn set_name(&self, name: Option<String>) -> Result<(), DocumentError> {
+    pub async fn set_name(&self, name: Option<String>) -> Result<(), TopicError> {
         self.node
-            .document_store
-            .set_name_for_document(&self.id, name)
+            .topic_store
+            .set_name_for_topic(&self.id, name)
             .await?;
 
         Ok(())
     }
 }
 
-async fn setup_network<T: SubscribableDocument + 'static>(
+// FIXME: return errors
+async fn setup_network<T: SubscribableTopic + 'static>(
     node: &Arc<NodeInner>,
-    network: &Network<DocumentId>,
-    document_id: DocumentId,
-    document: &Arc<T>,
+    network: &Network<TopicSyncManager>,
+    id: TopicId,
+    subscribable_topic: &Arc<T>,
     author_tracker: &Arc<AuthorTracker<T>>,
-) -> (Option<mpsc::Sender<ToNetwork>>, Vec<AbortHandle>) {
+) -> (
+    Option<EventuallyConsistentStream<TopicSyncManager>>,
+    Option<EphemeralStream>,
+    Vec<AbortHandle>,
+) {
     let mut abort_handles = Vec::with_capacity(3);
 
-    let (document_tx, mut document_rx, gossip_ready) = match network.subscribe(document_id).await {
+    let stream = match network.stream(id, true).await {
         Ok(result) => result,
         Err(error) => {
-            warn!("Failed to setup network for subscription to document {document_id}: {error}");
-            return (None, abort_handles);
+            warn!(
+                "Failed to setup network for subscription to topic {}: {error}",
+                hex::encode(id)
+            );
+            return (None, None, abort_handles);
         }
     };
+
+    let mut topic_rx = stream.subscribe().await.unwrap();
+    let topic_tx = stream;
 
     let (persistent_tx, persistent_rx) =
         mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
 
-    author_tracker
-        .set_document_tx(Some(document_tx.clone()))
-        .await;
+    let abort_handle = spawn(async move {
+        while let Ok(event) = topic_rx.recv().await {
+            match event.event() {
+                TopicLogSyncEvent::Operation(operation) => {
+                    match validate_and_unpack(operation.as_ref().to_owned(), id) {
+                        Ok(data) => {
+                            persistent_tx.send(data).await.unwrap();
+                        }
+                        Err(err) => {
+                            error!("Failed to unpack operation: {err}");
+                        }
+                    }
+                }
+                _ => {
+                    // TODO: Handle sync events
+                }
+            }
+        }
+    })
+    .abort_handle();
+
+    abort_handles.push(abort_handle);
+
+    // Generate a different id than the eventually consistent streams to avoid collisions.
+    //
+    // @TODO(adz): We want to throw an error if users try to subscribe with the same id across
+    // different streams.
+    let ephemeral_id = Hash::new(id);
+    let ephemeral_stream = network.ephemeral_stream(ephemeral_id.into()).await.unwrap();
+    let mut ephemeral_rx = ephemeral_stream.subscribe().await.unwrap();
+    let ephemeral_tx = ephemeral_stream;
+
+    author_tracker.set_topic_tx(Some(ephemeral_tx)).await;
 
     let author_tracker_clone = author_tracker.clone();
-    let document_clone = document.clone();
+    let subscribable_topic_clone = subscribable_topic.clone();
     let abort_handle = spawn(async move {
-        while let Some(event) = document_rx.recv().await {
-            match event {
-                FromNetwork::GossipMessage { bytes, .. } => match decode_cbor(&bytes[..]) {
-                    Ok(MessageType::Ephemeral(operation)) => {
-                        if let Some((author, body)) = operation.validate_and_unpack() {
-                            document_clone.ephemeral_bytes_received(author, body);
-                        } else {
-                            warn!("Got ephemeral operation with a bad signature");
-                        }
+        while let Ok(bytes) = ephemeral_rx.recv().await {
+            match decode_cbor(&bytes[..]) {
+                Ok(MessageType::Ephemeral(operation)) => {
+                    if let Some((author, body)) = operation.validate_and_unpack() {
+                        subscribable_topic_clone.ephemeral_bytes_received(author, body);
+                    } else {
+                        warn!("Got ephemeral operation with a bad signature");
                     }
-                    Ok(MessageType::AuthorEphemeral(operation)) => {
-                        if let Some((author, body)) = operation.validate_and_unpack() {
-                            match AuthorMessage::try_from(&body[..]) {
-                                Ok(message) => {
-                                    author_tracker_clone.received(message, author).await;
-                                }
-                                Err(error) => {
-                                    warn!("Failed to deserialize AuthorMessage: {error}");
-                                }
+                }
+                Ok(MessageType::AuthorEphemeral(operation)) => {
+                    if let Some((author, body)) = operation.validate_and_unpack() {
+                        match AuthorMessage::try_from(&body[..]) {
+                            Ok(message) => {
+                                author_tracker_clone.received(message, author).await;
                             }
-                        } else {
-                            warn!("Got internal ephemeral operation with a bad signature");
-                        }
-                    }
-                    Ok(MessageType::Persistent(operation)) => {
-                        match operation.validate_and_unpack(document_id) {
-                            Ok(data) => {
-                                persistent_tx.send(data).await.unwrap();
-                            }
-                            Err(err) => {
-                                error!("Failed to unpack operation: {err}");
+                            Err(error) => {
+                                warn!("Failed to deserialize AuthorMessage: {error}");
                             }
                         }
+                    } else {
+                        warn!("Got internal ephemeral operation with a bad signature");
                     }
-                    Err(err) => {
-                        error!("Failed to decode gossip message: {err}");
-                    }
-                },
-                FromNetwork::SyncMessage {
-                    header, payload, ..
-                } => match PersistentOperation::from_serialized(header, payload)
-                    .validate_and_unpack(document_id)
-                {
-                    Ok(data) => persistent_tx.send(data).await.unwrap(),
-                    Err(err) => {
-                        error!("Failed to unpack operation: {err}");
-                    }
-                },
+                }
+                Err(err) => {
+                    error!("Failed to decode gossip message: {err}");
+                }
             }
         }
     })
@@ -328,14 +367,14 @@ async fn setup_network<T: SubscribableDocument + 'static>(
         });
 
     let node = node.clone();
-    let document_clone = document.clone();
-    // Send checked and ingested operations for this document to application layer.
+    let subscribable_topic_clone = subscribable_topic.clone();
+    // Send checked and ingested operations for this topic to application layer.
     let abort_handle = spawn(async move {
         while let Some(operation) = stream.next().await {
-            // When we discover a new author we need to add them to our document store.
+            // When we discover a new author we need to add them to our topic store.
             if let Err(error) = node
-                .document_store
-                .add_author(&document_id, &operation.header.public_key)
+                .topic_store
+                .add_author(&id, &operation.header.public_key)
                 .await
             {
                 error!("Can't store author to database: {error}");
@@ -343,7 +382,8 @@ async fn setup_network<T: SubscribableDocument + 'static>(
 
             // Forward the payload up to the app.
             if let Some(body) = operation.body {
-                document_clone.bytes_received(operation.header.public_key, body.to_bytes());
+                subscribable_topic_clone
+                    .bytes_received(operation.header.public_key, body.to_bytes());
             }
         }
     })
@@ -352,35 +392,79 @@ async fn setup_network<T: SubscribableDocument + 'static>(
     abort_handles.push(abort_handle);
     let author_tracker_clone = author_tracker.clone();
     let abort_handle = spawn(async move {
-        // Only start track authors once we have joined the gossip overlay
-        if let Err(error) = gossip_ready.await {
-            error!("Failed to join the gossip overlay: {error}");
-        }
-
         author_tracker_clone.spawn().await;
     })
     .abort_handle();
 
     abort_handles.push(abort_handle);
 
-    info!("Network subscription set up for document {document_id}");
+    info!("Network subscription set up for topic {}", hex::encode(id));
 
-    (Some(document_tx), abort_handles)
+    let ephemeral_id = Hash::new(id);
+    let ephemeral_tx = network.ephemeral_stream(ephemeral_id.into()).await.unwrap();
+
+    (Some(topic_tx), Some(ephemeral_tx), abort_handles)
 }
 
-async fn teardown_network<T: SubscribableDocument + 'static>(
-    document_id: &DocumentId,
+async fn teardown_network<T: SubscribableTopic + 'static>(
+    id: &TopicId,
     author_tracker: &Arc<AuthorTracker<T>>,
-    tx: Option<mpsc::Sender<ToNetwork>>,
+    tx: Option<EventuallyConsistentStream<TopicSyncManager>>,
+    ephemeral_tx: Option<EphemeralStream>,
     abort_handles: Vec<AbortHandle>,
 ) {
     for handle in abort_handles {
         handle.abort();
     }
 
-    author_tracker.set_document_tx(None).await;
+    author_tracker.set_topic_tx(None).await;
 
-    if tx.is_some() {
-        info!("Network subscription torn down for document {document_id}");
+    if let Some(ephemeral_tx) = ephemeral_tx
+        && let Err(error) = ephemeral_tx.close()
+    {
+        error!(
+            "Failed to tear down ephemeral channel for topic {}: {error}",
+            hex::encode(id)
+        );
     }
+
+    if let Some(tx) = tx {
+        if let Err(error) = tx.close() {
+            error!(
+                "Failed to tear down persistent channel for topic {}: {error}",
+                hex::encode(id)
+            );
+        }
+        info!(
+            "Network subscription torn down for topic {}",
+            hex::encode(id)
+        );
+    }
+}
+
+type OperationWithRawHeader = (Header<ReflectionExtensions>, Option<Body>, Vec<u8>);
+
+#[derive(Debug, thiserror::Error)]
+pub enum UnpackError {
+    #[error(transparent)]
+    Cbor(#[from] p2panda_core::cbor::DecodeError),
+    #[error("Operation with invalid topic id")]
+    InvalidTopicId,
+}
+
+fn validate_and_unpack(
+    operation: p2panda_core::Operation<ReflectionExtensions>,
+    id: TopicId,
+) -> Result<OperationWithRawHeader, UnpackError> {
+    let p2panda_core::Operation::<ReflectionExtensions> { header, body, .. } = operation;
+
+    let Some(operation_id): Option<TopicId> = header.extension() else {
+        return Err(UnpackError::InvalidTopicId);
+    };
+
+    if operation_id != id {
+        return Err(UnpackError::InvalidTopicId);
+    }
+
+    Ok((header.clone(), body, header.to_bytes()))
 }
