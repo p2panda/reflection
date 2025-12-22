@@ -1,4 +1,4 @@
-<p align="center"><img src="reflection-app/data/icons/cx.modal.reflection.svg"></p>
+<p align="center"><img src="reflection-app/data/icons/cx.modal.Reflection.svg"></p>
 <h1 align="center">Reflection</h1>
 <p align="center">Collaboratively take meeting notes, even when there's no internet</p>
 

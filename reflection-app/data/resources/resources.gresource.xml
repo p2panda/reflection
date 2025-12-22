@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <gresources>
-  <gresource prefix="/cx/modal/reflection">
+  <gresource prefix="/cx/modal/Reflection">
     <file preprocess="xml-stripblanks">icons/scalable/actions/about-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/actions/bluetooth-symbolic.svg</file>
     <file preprocess="xml-stripblanks">icons/scalable/status/folder-symbolic.svg</file>

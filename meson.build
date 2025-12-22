@@ -7,7 +7,7 @@ project('reflection', 'rust',
 i18n = import('i18n')
 gnome = import('gnome')
 
-application_id = 'cx.modal.reflection'
+application_id = 'cx.modal.Reflection'
 
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 iconsdir = get_option('datadir') / 'icons'
