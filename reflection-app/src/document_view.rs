@@ -30,7 +30,7 @@ use crate::{
     components::{MultilineEntry, ZoomLevelSelector},
 };
 
-const BASE_TEXT_FONT_SIZE: f64 = 24.0;
+const BASE_TEXT_FONT_SIZE: f64 = 11.0;
 
 mod imp {
     use super::*;
@@ -134,7 +134,13 @@ mod imp {
             let buffer = ReflectionTextBuffer::new();
             self.text_view.set_buffer(Some(&buffer));
 
-            self.font_size.set(BASE_TEXT_FONT_SIZE);
+            let size = ReflectionApplication::default()
+                .system_settings()
+                .monospace_font_name()
+                .map_or(BASE_TEXT_FONT_SIZE, |font| {
+                    font.size() as f64 / gtk::pango::SCALE as f64
+                });
+            self.font_size.set(size);
             self.obj().set_font_scale(0.0);
             gtk::style_context_add_provider_for_display(
                 &gtk::Widget::display(self.obj().upcast_ref()),
@@ -215,7 +221,7 @@ mod imp {
             self.zoom_level.set(size / font_size);
             self.obj().notify_zoom_level();
             self.css_provider
-                .load_from_string(&format!(".sourceview {{ font-size: {size}px; }}"));
+                .load_from_string(&format!(".sourceview {{ font-size: {size}pt; }}"));
             self.obj().action_set_enabled("window.zoom-out", size > 1.0);
         }
 
