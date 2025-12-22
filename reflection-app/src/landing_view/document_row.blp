@@ -9,6 +9,7 @@ template $ReflectionDocumentRow: Adw.ActionRow {
   action-target: bind $transform_action_target(template.document as <$Document>.id) as <$GVariant>;
 
   title: bind $transform_name(template.document as <$Document>.name) as <string>;
+  title-lines: 2;
   subtitle: bind $transform_last_accessed(template.document as <$Document>.last_accessed, template.document  as <$Document>.subscribed) as <string>;
 
   $ReflectionAuthorsStack {
