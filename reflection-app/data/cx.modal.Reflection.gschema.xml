@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="reflection">
-	<schema id="cx.modal.reflection" path="/cx/modal/reflection/">
+	<schema id="cx.modal.Reflection" path="/cx/modal/Reflection/">
 	</schema>
 </schemalist>

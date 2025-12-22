@@ -1,8 +1,8 @@
 # List of source files containing translatable strings.
 # Please keep this file sorted alphabetically.
-data/cx.modal.reflection.desktop.in
-data/cx.modal.reflection.metainfo.xml.in
-data/cx.modal.reflection.gschema.xml
+data/cx.modal.Reflection.desktop.in
+data/cx.modal.Reflection.metainfo.xml.in
+data/cx.modal.Reflection.gschema.xml
 src/application.rs
 src/components/zoom_level_selector.blp
 src/connection_popover/author_list.rs

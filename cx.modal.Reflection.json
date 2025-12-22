@@ -1,5 +1,5 @@
 {
-    "id" : "cx.modal.reflection",
+    "id" : "cx.modal.Reflection",
     "runtime" : "org.gnome.Platform",
     "runtime-version" : "49",
     "sdk" : "org.gnome.Sdk",
