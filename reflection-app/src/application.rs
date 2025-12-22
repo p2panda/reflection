@@ -156,7 +156,9 @@ impl ReflectionApplication {
             .activate(move |app: &Self, _, _| app.show_about())
             .build();
         let new_window_action = gio::ActionEntry::builder("new-window")
-            .activate(move |app: &Self, _, _| app.new_window())
+            .activate(move |app: &Self, _, _| {
+                app.new_window();
+            })
             .build();
         let new_document_action = gio::ActionEntry::builder("new-document")
             .activate(move |app: &Self, _, _| app.new_document())
@@ -169,11 +171,11 @@ impl ReflectionApplication {
                 let parameter = parameter.unwrap();
 
                 if parameter.n_children() == 0 {
-                    app.open_join_document_dialog();
+                    app.open_join_document_dialog(false);
                 } else {
                     for i in 0..parameter.n_children() {
                         if let Some(document_id) = parameter.child_value(i).get() {
-                            app.join_document(&document_id);
+                            app.join_document(&document_id, false);
                             // FIXME: open all documents with it's own window
                             break;
                         } else {
@@ -183,6 +185,31 @@ impl ReflectionApplication {
                 }
             })
             .build();
+
+        let join_document_in_new_window_action =
+            gio::ActionEntry::builder("join-document-in-new-window")
+                .parameter_type(Some(&glib::VariantType::new_array(
+                    &DocumentId::static_variant_type(),
+                )))
+                .activate(move |app: &Self, _, parameter| {
+                    let parameter = parameter.unwrap();
+
+                    if parameter.n_children() == 0 {
+                        app.open_join_document_dialog(true);
+                    } else {
+                        for i in 0..parameter.n_children() {
+                            if let Some(document_id) = parameter.child_value(i).get() {
+                                app.join_document(&document_id, true);
+                                // FIXME: open all documents with it's own window
+                                break;
+                            } else {
+                                error!("Failed to join document: Invalid document id specified");
+                            }
+                        }
+                    }
+                })
+                .build();
+
         let delete_document_action = gio::ActionEntry::builder("delete-document")
             .parameter_type(Some(&glib::VariantType::new_array(
                 &DocumentId::static_variant_type(),
@@ -218,43 +245,56 @@ impl ReflectionApplication {
             new_window_action,
             new_document_action,
             join_document_action,
+            join_document_in_new_window_action,
             delete_document_action,
             temporary_identity_action,
         ]);
     }
 
-    fn new_window(&self) {
+    fn new_window(&self) -> Window {
         let window = Window::new(self);
         window.set_service(self.service());
         if let Some(error) = self.imp().startup_error.borrow().as_ref() {
             window.display_startup_error(error);
         }
         window.present();
+        window
     }
 
     fn new_document(&self) {
-        self.join_document(&DocumentId::new());
+        self.join_document(&DocumentId::new(), false);
     }
 
-    fn open_join_document_dialog(&self) {
-        let active = self.active_window();
+    fn open_join_document_dialog(&self, new_window: bool) {
+        let window = if new_window {
+            self.new_window()
+        } else if let Some(active) = self.active_window().and_downcast::<Window>() {
+            active
+        } else {
+            self.new_window()
+        };
 
         let dialog = OpenDialog::new();
-        adw::prelude::AdwDialogExt::present(&dialog, active.as_ref());
+        adw::prelude::AdwDialogExt::present(&dialog, Some(&window));
     }
 
-    fn join_document(&self, document_id: &DocumentId) {
+    fn join_document(&self, document_id: &DocumentId, new_window: bool) {
         if let Some(window) = self.window_for_document_id(document_id) {
             window.present();
         } else {
             let Some(service) = self.service() else {
                 return;
             };
-            let Some(active) = self.active_window().and_downcast::<Window>() else {
-                return;
+
+            let window = if new_window {
+                self.new_window()
+            } else if let Some(active) = self.active_window().and_downcast::<Window>() {
+                active
+            } else {
+                self.new_window()
             };
             let document = service.join_document(document_id);
-            active.set_document(Some(&document));
+            window.set_document(Some(&document));
             let hold_guard = self.hold();
             glib::spawn_future_local(clone!(
                 #[weak]
