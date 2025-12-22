@@ -34,12 +34,10 @@ menu menu_model {
       action: "app.join-document-in-new-window";
       hidden-when: "action-missing";
     }
-  }
 
-  section {
     item {
-      label: _("_Share Document...");
-      action: "app.share-document";
+      label: _("_Copy Invite Code");
+      action: "app.copy-document-id";
       hidden-when: "action-missing";
     }
 
@@ -48,9 +46,7 @@ menu menu_model {
       action: "app.export-to-file";
       hidden-when: "action-missing";
     }
-  }
 
-  section {
     item {
       label: _("_Delete Document...");
       action: "app.delete-document";

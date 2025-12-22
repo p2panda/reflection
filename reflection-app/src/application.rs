@@ -21,7 +21,7 @@
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
-use gtk::{gio, glib, glib::Properties, glib::clone};
+use gtk::{gdk, gio, glib, glib::Properties, glib::clone};
 use reflection_doc::{document::DocumentId, identity::PrivateKey, service::Service};
 use std::{cell::RefCell, fs};
 use thiserror::Error;
@@ -227,6 +227,25 @@ impl ReflectionApplication {
                 }
             })
             .build();
+
+        let copy_document_id_action = gio::ActionEntry::builder("copy-document-id")
+            .parameter_type(Some(&glib::VariantType::new_array(
+                &DocumentId::static_variant_type(),
+            )))
+            .activate(move |app: &Self, _, parameter| {
+                let parameter = parameter.unwrap();
+
+                for i in 0..parameter.n_children() {
+                    if let Some(document_id) = parameter.child_value(i).get() {
+                        app.copy_document_id(&document_id);
+                        break;
+                    } else {
+                        error!("Failed to copy document id: Invalid document id specified");
+                    }
+                }
+            })
+            .build();
+
         let temporary_identity_action = gio::ActionEntry::builder("new-temporary-identity")
             .activate(move |app: &Self, _, _| {
                 glib::spawn_future_local(clone!(
@@ -247,6 +266,7 @@ impl ReflectionApplication {
             join_document_action,
             join_document_in_new_window_action,
             delete_document_action,
+            copy_document_id_action,
             temporary_identity_action,
         ]);
     }
@@ -338,6 +358,13 @@ impl ReflectionApplication {
                 }
             ));
         }
+    }
+
+    fn copy_document_id(&self, document_id: &DocumentId) {
+        let Some(display) = gdk::Display::default() else {
+            return;
+        };
+        display.clipboard().set_text(&document_id.to_string());
     }
 
     async fn new_temporary_identity(&self) {
