@@ -69,8 +69,7 @@
   </recommends>
 
   <releases>
-    <release version="0.1" date="2025-11-22">
-      <url type="details">https://example.org/changelog.html#version_1.0.1</url>
+    <release version="0.1" date="2025-11-23">
       <description translate="no">
         <p>Initial preview release.</p>
         <ul>
