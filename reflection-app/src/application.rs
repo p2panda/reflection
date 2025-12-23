@@ -134,10 +134,10 @@ glib::wrapper! {
 }
 
 impl ReflectionApplication {
-    pub fn new(application_id: &str, flags: &gio::ApplicationFlags) -> Self {
+    pub fn new() -> Self {
         glib::Object::builder()
-            .property("application-id", application_id)
-            .property("flags", flags)
+            .property("application-id", config::APP_ID)
+            .property("flags", gio::ApplicationFlags::empty())
             .build()
     }
 
