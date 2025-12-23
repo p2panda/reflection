@@ -56,9 +56,6 @@
                     "url" : "./",
                     "branch" : "HEAD"
                 }
-            ],
-            "config-opts" : [
-                "--libdir=lib"
             ]
         }
     ]
