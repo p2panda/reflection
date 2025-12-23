@@ -52,6 +52,7 @@ mod imp {
         #[property(get, nullable)]
         pub service: RefCell<Option<Service>>,
         pub startup_error: RefCell<Option<Error>>,
+        pub service_startup_task: RefCell<Option<glib::JoinHandle<()>>>,
         #[property(get)]
         pub system_settings: SystemSettings,
     }
@@ -77,31 +78,6 @@ mod imp {
 
     impl ApplicationImpl for ReflectionApplication {
         fn startup(&self) {
-            let service: Result<Service, Error> =
-                glib::MainContext::default().block_on(async move {
-                    let private_key = secret::get_or_create_identity().await?;
-
-                    let mut data_path = glib::user_data_dir();
-                    data_path.push("Reflection");
-                    data_path.push(private_key.public_key().to_string());
-                    fs::create_dir_all(&data_path)?;
-                    let data_dir = gio::File::for_path(data_path);
-
-                    let service = Service::new(&private_key, Some(&data_dir));
-                    service.startup().await?;
-                    Ok(service)
-                });
-
-            match service {
-                Ok(service) => {
-                    self.service.replace(Some(service));
-                }
-                Err(error) => {
-                    error!("Failed to start service: {error}");
-                    self.startup_error.replace(Some(error));
-                }
-            }
-
             self.parent_startup();
 
             gtk::Window::set_default_icon_name(config::APP_ID);
@@ -109,6 +85,12 @@ mod imp {
 
         fn shutdown(&self) {
             glib::MainContext::default().block_on(async move {
+                // Make sure service startup finished
+                if let Some(handle) = self.service_startup_task.take() {
+                    handle
+                        .await
+                        .expect("Service startup to complete on shutdown");
+                }
                 if let Some(service) = self.obj().service() {
                     service.shutdown().await;
                 }
@@ -275,12 +257,62 @@ impl ReflectionApplication {
         ]);
     }
 
+    async fn create_service(&self) -> Result<Service, Error> {
+        let private_key = secret::get_or_create_identity().await?;
+
+        let mut data_path = glib::user_data_dir();
+        data_path.push("Reflection");
+        data_path.push(private_key.public_key().to_string());
+        fs::create_dir_all(&data_path)?;
+        let data_dir = gio::File::for_path(data_path);
+
+        let service = Service::new(&private_key, Some(&data_dir));
+        service.startup().await?;
+
+        Ok(service)
+    }
+
     fn new_window(&self) -> Window {
         let window = Window::new(self);
-        window.set_service(self.service());
+
         if let Some(error) = self.imp().startup_error.borrow().as_ref() {
             window.display_startup_error(error);
         }
+
+        if let Some(service) = self.service() {
+            window.set_service(Some(service));
+        } else if self.imp().service_startup_task.borrow().is_none() {
+            let handle = glib::spawn_future_local(clone!(
+                #[weak(rename_to = obj)]
+                self,
+                async move {
+                    let service = obj.create_service().await;
+
+                    match service {
+                        Ok(service) => {
+                            for window in obj.windows() {
+                                if let Ok(window) = window.downcast::<Window>() {
+                                    window.set_service(Some(&service));
+                                }
+                            }
+                            obj.imp().service.replace(Some(service));
+                        }
+                        Err(error) => {
+                            error!("Failed to start service: {error}");
+                            for window in obj.windows() {
+                                if let Ok(window) = window.downcast::<Window>() {
+                                    window.display_startup_error(&error);
+                                }
+                            }
+                            obj.imp().startup_error.replace(Some(error));
+                        }
+                    }
+                }
+            ));
+
+            self.imp().service_startup_task.replace(Some(handle));
+        }
+
         window.present();
         window
     }
