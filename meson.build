@@ -9,12 +9,16 @@ gnome = import('gnome')
 
 application_id = 'cx.modal.Reflection'
 
-pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
-iconsdir = get_option('datadir') / 'icons'
+prefix = get_option('prefix')
+bindir = prefix / get_option('bindir')
+localedir = prefix / get_option('localedir')
 
-subdir('reflection-app/data')
-subdir('reflection-app/src')
-subdir('reflection-app/po')
+datadir = prefix / get_option('datadir')
+pkgdatadir = datadir / meson.project_name()
+iconsdir = datadir / 'icons'
+podir = meson.project_source_root() / 'po'
+
+subdir('reflection-app')
 
 gnome.post_install(
      glib_compile_schemas: true,

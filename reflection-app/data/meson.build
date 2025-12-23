@@ -1,10 +1,17 @@
+# Desktop file
+desktop_conf = configuration_data()
+desktop_conf.set('icon', application_id)
 desktop_file = i18n.merge_file(
-        input: 'cx.modal.Reflection.desktop.in',
-       output: 'cx.modal.Reflection.desktop',
-         type: 'desktop',
-       po_dir: '../po',
-      install: true,
-  install_dir: get_option('datadir') / 'applications'
+    type: 'desktop',
+    input: configure_file(
+        input: '@0@.desktop.in.in'.format(application_id),
+        output: '@BASENAME@',
+        configuration: desktop_conf,
+    ),
+    output: '@0@.desktop'.format(application_id),
+    po_dir: podir,
+    install: true,
+    install_dir: datadir / 'applications',
 )
 
 desktop_utils = find_program('desktop-file-validate', required: false)
@@ -13,11 +20,11 @@ if desktop_utils.found()
 endif
 
 appstream_file = i18n.merge_file(
-        input: 'cx.modal.Reflection.metainfo.xml.in',
-       output: 'cx.modal.Reflection.metainfo.xml',
-       po_dir: '../po',
-      install: true,
-  install_dir: get_option('datadir') / 'metainfo'
+     input: 'cx.modal.Reflection.metainfo.xml.in',
+     output: '@0@.metainfo.xml'.format(application_id),
+     po_dir: podir,
+     install: true,
+     install_dir: datadir / 'metainfo',
 )
 
 appstreamcli = find_program('appstreamcli', required: false, disabler: true)
@@ -34,13 +41,16 @@ test('Validate schema file',
      args: ['--strict', '--dry-run', meson.current_source_dir()])
 
 
+# D-Bus service file
 service_conf = configuration_data()
-service_conf.set('bindir', get_option('prefix') / get_option('bindir'))
+service_conf.set('application_id', application_id)
+service_conf.set('bindir', bindir)
 configure_file(
-  input: 'cx.modal.Reflection.service.in',
-  output: 'cx.modal.Reflection.service',
-  configuration: service_conf,
-  install_dir: get_option('datadir') / 'dbus-1' / 'services'
+    input: 'cx.modal.Reflection.service.in',
+    output: '@0@.service'.format(application_id),
+    configuration: service_conf,
+    install: true,
+    install_dir: datadir / 'dbus-1/services',
 )
 
 subdir('icons')

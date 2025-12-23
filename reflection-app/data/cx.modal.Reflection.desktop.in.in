@@ -2,7 +2,7 @@
 Name=Reflection
 Comment=Collaboratively take meeting notes, even when there's no internet
 Exec=reflection
-Icon=cx.modal.Reflection
+Icon=@icon@
 Terminal=false
 Type=Application
 Categories=GNOME;GTK;Utility;Network;Office;
