@@ -57,25 +57,19 @@ fn main() -> glib::ExitCode {
         .expect("Unable to set the text domain encoding");
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
-    // Load resources
     let res = gio::Resource::load(RESOURCES_FILE).expect("Could not load gresource file");
     gio::resources_register(&res);
     let ui_res = gio::Resource::load(UI_RESOURCES_FILE).expect("Could not load UI gresource file");
     gio::resources_register(&ui_res);
 
-    // Create a new GtkApplication. The application manages our main loop,
-    // application windows, integration with the window manager/compositor, and
-    // desktop features such as file opening and single-instance applications.
-    let app = ReflectionApplication::new("cx.modal.Reflection", &gio::ApplicationFlags::empty());
+    gtk::glib::set_application_name("Reflection");
+    gtk::init().expect("Could not start GTK4");
 
     info!("Reflection ({})", APP_ID);
     info!("Version: {}", VERSION);
     info!("Datadir: {}", PKGDATADIR);
 
-    // Run the application. This function will block until the application
-    // exits. Upon return, we have our exit code to return to the shell. (This
-    // is the code you see when you do `echo $?` after running a command in a
-    // terminal.
+    let app = ReflectionApplication::new();
     app.run()
 }
 
