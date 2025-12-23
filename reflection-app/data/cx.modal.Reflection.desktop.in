@@ -1,5 +1,6 @@
 [Desktop Entry]
 Name=Reflection
+Comment=Collaboratively take meeting notes, even when there's no internet
 Exec=reflection
 Icon=cx.modal.Reflection
 Terminal=false
