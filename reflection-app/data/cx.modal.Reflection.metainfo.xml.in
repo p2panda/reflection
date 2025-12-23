@@ -69,7 +69,7 @@
   </recommends>
 
   <releases>
-    <release version="0.1" date="2025-11-23">
+    <release version="0.1" date="2025-12-23">
       <description translate="no">
         <p>Initial preview release.</p>
         <ul>
