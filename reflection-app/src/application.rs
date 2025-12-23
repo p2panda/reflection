@@ -117,6 +117,8 @@ mod imp {
         }
 
         fn activate(&self) {
+            self.parent_activate();
+
             self.obj().new_window();
         }
     }
