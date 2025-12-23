@@ -103,6 +103,8 @@ mod imp {
             }
 
             self.parent_startup();
+
+            gtk::Window::set_default_icon_name(config::APP_ID);
         }
 
         fn shutdown(&self) {
