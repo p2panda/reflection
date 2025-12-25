@@ -8,6 +8,30 @@
 > The project is under active development and not considered stable yet. It
 > probably won't eat your data, but no guarantees :)
 
+## Installation
+
+You can get the Reflection preview release from Flathub Beta now.
+
+Add the Flatpak Beta remote on your system:
+
+```bash
+flatpak remote-add --if-not-exists flathub-beta https://flathub.org/beta-repo/flathub-beta.flatpakrepo
+```
+
+Install the app:
+
+```bash
+flatpak install flathub-beta cx.modal.Reflection
+```
+
+When [filing bugs](https://github.com/p2panda/reflection/issues) it may be
+helpful run the app with logging enabled so you can include logs in your issue
+report:
+
+```bash
+RUST_LOG=p2panda_net_next=DEBUG,iroh=WARN flatpak run cx.modal.Reflection
+```
+
 ## Development
 
 ### Getting Started
@@ -44,7 +68,7 @@ terminal".
 
 Set the `RUST_LOG` environment variable to your verbosity setting and filter to
 enable log-based diagnostics with [tracing](https://docs.rs/tracing). Example:
-`RUST_LOG=DEBUG` or `RUST_LOG=p2panda_net=INFO` etc.
+`RUST_LOG=DEBUG` or `RUST_LOG=p2panda_net_next=INFO` etc.
 
 Use the "runtime terminal" in Builder and set the environment variable like
 that:
@@ -55,7 +79,7 @@ RUST_LOG=WARN reflection
 
 # Launch two instances with logging. We can set the environment variable for
 # the current runtime, all instances will have logging enabled
-RUST_LOG=p2panda_net=DEBUG,iroh=WARN
+RUST_LOG=p2panda_net_next=DEBUG,iroh=WARN
 reflection & dbus-run-session reflection
 ```
 
@@ -69,12 +93,12 @@ terminal".
 
 ## Supported By
 
-Thanks to [NLNet](https://nlnet.nl) (via [NGI0
+Thanks to [NLnet](https://nlnet.nl) (via [NGI0
 ENTRUST](https://nlnet.nl/project/P2Panda-groups/)) under grant agreement No
 101069594, the [Prototype Fund](https://www.prototypefund.de/), and the
 [Federal Ministry of Research, Technology and Space](https://www.bmbf.de/EN/)
 for funding this project.
 
-![Nlnet Logo](assets/logo-nlnet.jpg)
+![NLnet Logo](assets/logo-nlnet.jpg)
 ![Ministry Logo](assets/logo-bmftr.jpg)
 ![Prototype Fund Logo](assets/logo-prototypefund.jpg)
