@@ -1,3 +1,12 @@
 [workspace]
 resolver = "2"
 members = ["reflection-app", "reflection-doc", "reflection-node"]
+
+[patch.crates-io]
+# TODO: https://github.com/n0-computer/iroh/issues/3241
+iroh = { git = "https://github.com/n0-computer/iroh", branch = "main" }
+iroh-base = { git = "https://github.com/n0-computer/iroh", branch = "main" }
+iroh-quinn = { git = "https://github.com/n0-computer/quinn", branch = "main" }
+iroh-quinn-proto = { git = "https://github.com/n0-computer/quinn", branch = "main" }
+iroh-quinn-udp = { git = "https://github.com/n0-computer/quinn", branch = "main" }
+netwatch = { git = "https://github.com/n0-computer/net-tools", branch = "main" }
