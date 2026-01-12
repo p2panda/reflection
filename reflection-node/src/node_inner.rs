@@ -54,7 +54,8 @@ static RELAY_URL: LazyLock<iroh::RelayUrl> = LazyLock::new(|| {
 
 static BOOTSTRAP_NODE: LazyLock<NodeInfo> = LazyLock::new(|| {
     let endpoint_addr = iroh::EndpointAddr::new(
-        "7ccdbeed587a8ec8c71cdc9b98e941ac597e11b0216aac1387ef81089a4930b2"
+        // NOTE: Bootstrap node with temporary v0.96 iroh patch. Don't use for production.
+        "eefb6e6b03440b159b43bc1af0bdc55292ed9f06e8e89ef2d9be170454f37880"
             .parse()
             .expect("valid bootstrap node id"),
     )
