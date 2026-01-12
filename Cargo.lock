@@ -2491,7 +2491,7 @@ dependencies = [
 [[package]]
 name = "iroh"
 version = "0.95.1"
-source = "git+https://github.com/n0-computer/iroh?branch=main#ff24cfce2a632ee8f830952a96f69a4620537707"
+source = "git+https://github.com/n0-computer/iroh?rev=e0fcf7dba99a96566523756be08508390965cda3#e0fcf7dba99a96566523756be08508390965cda3"
 dependencies = [
  "backon",
  "bytes",
@@ -2505,7 +2505,7 @@ dependencies = [
  "http",
  "igd-next",
  "iroh-base",
- "iroh-metrics",
+ "iroh-metrics 0.38.1",
  "iroh-quinn",
  "iroh-quinn-proto",
  "iroh-quinn-udp",
@@ -2545,7 +2545,7 @@ dependencies = [
 [[package]]
 name = "iroh-base"
 version = "0.95.1"
-source = "git+https://github.com/n0-computer/iroh?branch=main#ff24cfce2a632ee8f830952a96f69a4620537707"
+source = "git+https://github.com/n0-computer/iroh?rev=e0fcf7dba99a96566523756be08508390965cda3#e0fcf7dba99a96566523756be08508390965cda3"
 dependencies = [
  "curve25519-dalek 5.0.0-pre.1",
  "data-encoding",
@@ -2576,7 +2576,7 @@ dependencies = [
  "indexmap",
  "iroh",
  "iroh-base",
- "iroh-metrics",
+ "iroh-metrics 0.37.0",
  "irpc",
  "n0-error",
  "n0-future",
@@ -2604,6 +2604,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "iroh-metrics"
+version = "0.38.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5828152c482cf9d95f3039848ac2be5e6e47c41dbf3695a453e6c02739c50d2c"
+dependencies = [
+ "iroh-metrics-derive",
+ "itoa",
+ "n0-error",
+ "postcard",
+ "ryu",
+ "serde",
+ "tracing",
+]
+
+[[package]]
 name = "iroh-metrics-derive"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2617,8 +2632,8 @@ dependencies = [
 
 [[package]]
 name = "iroh-quinn"
-version = "0.14.0"
-source = "git+https://github.com/n0-computer/quinn?branch=main#7ce0396198789ff7b66b5d71bfc12fbd162589df"
+version = "0.15.0"
+source = "git+https://github.com/n0-computer/quinn?rev=43a7a7c089088472298380d97497043a2967dee3#43a7a7c089088472298380d97497043a2967dee3"
 dependencies = [
  "bytes",
  "cfg_aliases",
@@ -2637,8 +2652,8 @@ dependencies = [
 
 [[package]]
 name = "iroh-quinn-proto"
-version = "0.13.0"
-source = "git+https://github.com/n0-computer/quinn?branch=main#7ce0396198789ff7b66b5d71bfc12fbd162589df"
+version = "0.14.0"
+source = "git+https://github.com/n0-computer/quinn?rev=43a7a7c089088472298380d97497043a2967dee3#43a7a7c089088472298380d97497043a2967dee3"
 dependencies = [
  "bytes",
  "derive_more 2.1.0",
@@ -2662,8 +2677,8 @@ dependencies = [
 
 [[package]]
 name = "iroh-quinn-udp"
-version = "0.6.0"
-source = "git+https://github.com/n0-computer/quinn?branch=main#7ce0396198789ff7b66b5d71bfc12fbd162589df"
+version = "0.7.0"
+source = "git+https://github.com/n0-computer/quinn?rev=43a7a7c089088472298380d97497043a2967dee3#43a7a7c089088472298380d97497043a2967dee3"
 dependencies = [
  "cfg_aliases",
  "libc",
@@ -2675,7 +2690,7 @@ dependencies = [
 [[package]]
 name = "iroh-relay"
 version = "0.95.1"
-source = "git+https://github.com/n0-computer/iroh?branch=main#ff24cfce2a632ee8f830952a96f69a4620537707"
+source = "git+https://github.com/n0-computer/iroh?rev=e0fcf7dba99a96566523756be08508390965cda3#e0fcf7dba99a96566523756be08508390965cda3"
 dependencies = [
  "blake3",
  "bytes",
@@ -2689,7 +2704,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "iroh-base",
- "iroh-metrics",
+ "iroh-metrics 0.38.1",
  "iroh-quinn",
  "iroh-quinn-proto",
  "lru 0.16.3",
@@ -3287,7 +3302,7 @@ dependencies = [
  "libc",
  "mac-addr",
  "netlink-packet-core",
- "netlink-packet-route",
+ "netlink-packet-route 0.25.1",
  "netlink-sys",
  "objc2-core-foundation",
  "objc2-system-configuration",
@@ -3310,6 +3325,18 @@ name = "netlink-packet-route"
 version = "0.25.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ec2f5b6839be2a19d7fa5aab5bc444380f6311c2b693551cb80f45caaa7b5ef"
+dependencies = [
+ "bitflags",
+ "libc",
+ "log",
+ "netlink-packet-core",
+]
+
+[[package]]
+name = "netlink-packet-route"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ce3636fa715e988114552619582b530481fd5ef176a1e5c1bf024077c2c9445"
 dependencies = [
  "bitflags",
  "libc",
@@ -3346,8 +3373,8 @@ dependencies = [
 
 [[package]]
 name = "netwatch"
-version = "0.12.0"
-source = "git+https://github.com/n0-computer/net-tools?branch=main#5906f20f80bf0eaa4681b1f2471e08256d76eb04"
+version = "0.13.0"
+source = "git+https://github.com/n0-computer/net-tools?rev=9af33c3ae16ae96e7b1b56289e783e3329b408dc#9af33c3ae16ae96e7b1b56289e783e3329b408dc"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -3361,7 +3388,7 @@ dependencies = [
  "n0-watcher",
  "netdev",
  "netlink-packet-core",
- "netlink-packet-route",
+ "netlink-packet-route 0.28.0",
  "netlink-proto",
  "netlink-sys",
  "objc2-core-foundation",
@@ -3732,7 +3759,7 @@ dependencies = [
 [[package]]
 name = "p2panda-core"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=37e2ce6e89c23549c1d9632a92235963740180ce#37e2ce6e89c23549c1d9632a92235963740180ce"
+source = "git+https://github.com/p2panda/p2panda?rev=917d7ec248c6ed4c0be82947e8b9bafcb0997b8c#917d7ec248c6ed4c0be82947e8b9bafcb0997b8c"
 dependencies = [
  "blake3",
  "ciborium",
@@ -3747,7 +3774,7 @@ dependencies = [
 [[package]]
 name = "p2panda-discovery-next"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=37e2ce6e89c23549c1d9632a92235963740180ce#37e2ce6e89c23549c1d9632a92235963740180ce"
+source = "git+https://github.com/p2panda/p2panda?rev=917d7ec248c6ed4c0be82947e8b9bafcb0997b8c#917d7ec248c6ed4c0be82947e8b9bafcb0997b8c"
 dependencies = [
  "blake3",
  "futures-util",
@@ -3761,7 +3788,7 @@ dependencies = [
 [[package]]
 name = "p2panda-net-next"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=37e2ce6e89c23549c1d9632a92235963740180ce#37e2ce6e89c23549c1d9632a92235963740180ce"
+source = "git+https://github.com/p2panda/p2panda?rev=917d7ec248c6ed4c0be82947e8b9bafcb0997b8c#917d7ec248c6ed4c0be82947e8b9bafcb0997b8c"
 dependencies = [
  "ciborium",
  "futures-channel",
@@ -3787,7 +3814,7 @@ dependencies = [
 [[package]]
 name = "p2panda-store"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=37e2ce6e89c23549c1d9632a92235963740180ce#37e2ce6e89c23549c1d9632a92235963740180ce"
+source = "git+https://github.com/p2panda/p2panda?rev=917d7ec248c6ed4c0be82947e8b9bafcb0997b8c#917d7ec248c6ed4c0be82947e8b9bafcb0997b8c"
 dependencies = [
  "ciborium",
  "hex",
@@ -3800,7 +3827,7 @@ dependencies = [
 [[package]]
 name = "p2panda-stream"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=37e2ce6e89c23549c1d9632a92235963740180ce#37e2ce6e89c23549c1d9632a92235963740180ce"
+source = "git+https://github.com/p2panda/p2panda?rev=917d7ec248c6ed4c0be82947e8b9bafcb0997b8c#917d7ec248c6ed4c0be82947e8b9bafcb0997b8c"
 dependencies = [
  "ciborium",
  "futures-channel",
@@ -3815,7 +3842,7 @@ dependencies = [
 [[package]]
 name = "p2panda-sync-next"
 version = "0.4.0"
-source = "git+https://github.com/p2panda/p2panda?rev=37e2ce6e89c23549c1d9632a92235963740180ce#37e2ce6e89c23549c1d9632a92235963740180ce"
+source = "git+https://github.com/p2panda/p2panda?rev=917d7ec248c6ed4c0be82947e8b9bafcb0997b8c#917d7ec248c6ed4c0be82947e8b9bafcb0997b8c"
 dependencies = [
  "futures",
  "futures-util",
@@ -4067,9 +4094,9 @@ checksum = "f84267b20a16ea918e43c6a88433c2d54fa145c92a811b5b047ccbe153674483"
 
 [[package]]
 name = "portmapper"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b575f975dcf03e258b0c7ab3f81497d7124f508884c37da66a7314aa2a8d467"
+checksum = "f29fb522a166045a35b507dea30e3eb69bca1c5a53669d252744d5a0d8474ffa"
 dependencies = [
  "base64",
  "bytes",
@@ -4078,7 +4105,7 @@ dependencies = [
  "futures-util",
  "hyper-util",
  "igd-next",
- "iroh-metrics",
+ "iroh-metrics 0.38.1",
  "libc",
  "n0-error",
  "netwatch",
@@ -6747,9 +6774,9 @@ checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
 name = "wmi"
-version = "0.17.3"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "120d8c2b6a7c96c27bf4a7947fd7f02d73ca7f5958b8bd72a696e46cb5521ee6"
+checksum = "d71d1d435f7745ba9ed55c43049d47b5fbd1104449beaa2afbc80a1e10a4a018"
 dependencies = [
  "chrono",
  "futures",
