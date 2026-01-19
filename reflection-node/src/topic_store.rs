@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use p2panda_core::PublicKey;
 use p2panda_net::TopicId;
 use p2panda_store::LogStore;
-use p2panda_sync::{log_sync::Logs, topic_log_sync::TopicLogMap};
+use p2panda_sync::{Logs, traits::TopicLogMap};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use tracing::error;

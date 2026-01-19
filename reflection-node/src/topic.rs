@@ -1,20 +1,14 @@
 use std::sync::Arc;
 
-use crate::operation::ReflectionExtensions;
+use crate::network::SyncHandleError;
 use crate::operation_store::CreationError;
 use crate::subscription_inner::SubscriptionInner;
 
-use p2panda_core::{Operation, PublicKey};
-use p2panda_net::streams::StreamError;
+use p2panda_core::PublicKey;
+use p2panda_net::gossip::GossipHandleError;
 use thiserror::Error;
 use tokio::task::{AbortHandle, JoinError};
 use tracing::info;
-
-impl From<StreamError<Operation<ReflectionExtensions>>> for TopicError {
-    fn from(value: StreamError<Operation<ReflectionExtensions>>) -> Self {
-        TopicError::Publish(Box::new(value))
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum TopicError {
@@ -25,10 +19,9 @@ pub enum TopicError {
     #[error(transparent)]
     Encode(#[from] p2panda_core::cbor::EncodeError),
     #[error(transparent)]
-    // FIXME: The error is huge so but it into a Box
-    Publish(Box<StreamError<Operation<ReflectionExtensions>>>),
+    Publish(#[from] SyncHandleError),
     #[error(transparent)]
-    PublishEphemeral(#[from] StreamError<Vec<u8>>),
+    PublishEphemeral(#[from] GossipHandleError),
     #[error(transparent)]
     Runtime(#[from] JoinError),
 }
