@@ -5,7 +5,8 @@ use chrono::{DateTime, Utc};
 use p2panda_core::PublicKey;
 use p2panda_net::TopicId;
 use p2panda_store::LogStore;
-use p2panda_sync::{log_sync::Logs, topic_log_sync::TopicLogMap};
+use p2panda_sync::protocols::Logs;
+use p2panda_sync::traits::TopicMap;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Row};
 use tracing::error;
@@ -238,7 +239,7 @@ impl LogId {
     }
 }
 
-impl TopicLogMap<TopicId, LogId> for TopicStore {
+impl TopicMap<TopicId, Logs<LogId>> for TopicStore {
     type Error = sqlx::Error;
 
     async fn get(&self, topic: &TopicId) -> Result<Logs<LogId>, Self::Error> {
