@@ -18,8 +18,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use std::cell::RefCell;
-
 use adw::subclass::prelude::*;
 use gtk::glib;
 use gtk::prelude::*;
@@ -35,8 +33,9 @@ mod imp {
     #[properties(wrapper_type = super::AuthorList)]
     pub struct AuthorList {
         list_box: gtk::ListBox,
-        #[property(get, set = Self::set_model, nullable)]
-        model: RefCell<Option<Authors>>,
+        #[property(get = Self::model, set = Self::set_model, nullable, type = Option<Authors>)]
+        model: gtk::SortListModel,
+        sorter: gtk::CustomSorter,
     }
 
     #[glib::object_subclass]
@@ -65,22 +64,55 @@ mod imp {
                 &css_provider,
                 gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
             );
-        }
-    }
 
-    impl AuthorList {
-        fn set_model(&self, model: Option<Authors>) {
-            self.list_box.bind_model(model.as_ref(), |author| {
+            self.sorter.set_sort_func(|a, b| {
+                let author_a = a.downcast_ref::<Author>().unwrap();
+                let author_b = b.downcast_ref::<Author>().unwrap();
+
+                if author_a.is_this_device() {
+                    return gtk::Ordering::Smaller;
+                } else if author_b.is_this_device() {
+                    return gtk::Ordering::Larger;
+                }
+
+                if author_a.is_online() && author_b.is_online() {
+                    return gtk::Ordering::Equal;
+                } else if author_a.is_online() {
+                    return gtk::Ordering::Smaller;
+                } else if author_b.is_online() {
+                    return gtk::Ordering::Larger;
+                }
+
+                author_b.last_seen().cmp(&author_a.last_seen()).into()
+            });
+
+            self.model.set_sorter(Some(&self.sorter));
+
+            self.list_box.bind_model(Some(&self.model), |author| {
                 let author = author.downcast_ref::<Author>().unwrap();
                 let row = AuthorRow::new(Some(author));
                 row.upcast()
             });
-
-            self.model.replace(model);
         }
     }
 
-    impl WidgetImpl for AuthorList {}
+    impl AuthorList {
+        fn model(&self) -> Option<Authors> {
+            self.model.model().and_downcast()
+        }
+
+        fn set_model(&self, model: Option<Authors>) {
+            self.model.set_model(model.as_ref());
+        }
+    }
+
+    impl WidgetImpl for AuthorList {
+        fn map(&self) {
+            self.parent_map();
+            // Resort every time before the popover is shown
+            self.sorter.changed(gtk::SorterChange::Different);
+        }
+    }
     impl BinImpl for AuthorList {}
 }
 
