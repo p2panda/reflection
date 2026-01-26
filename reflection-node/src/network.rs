@@ -6,10 +6,10 @@ use tracing::error;
 use p2panda_core::Hash;
 use p2panda_core::PrivateKey;
 use p2panda_net::address_book::{AddressBook, AddressBookError};
+use p2panda_net::addrs::NodeInfo;
 use p2panda_net::gossip::{Gossip, GossipError};
 use p2panda_net::iroh_endpoint::{Endpoint, EndpointError};
 use p2panda_net::iroh_mdns::{MdnsDiscovery, MdnsDiscoveryError, MdnsDiscoveryMode};
-use p2panda_net::{TopicId, addrs::NodeInfo};
 
 use crate::operation::ReflectionExtensions;
 use crate::operation_store::OperationStore;
@@ -31,22 +31,13 @@ static BOOTSTRAP_NODE: LazyLock<NodeInfo> = LazyLock::new(|| {
     NodeInfo::from(endpoint_addr).bootstrap()
 });
 
-type TopicSyncManager = p2panda_sync::manager::TopicSyncManager<
-    TopicId,
-    p2panda_store::SqliteStore<LogId, ReflectionExtensions>,
-    TopicStore,
-    LogId,
-    ReflectionExtensions,
->;
 pub type LogSync = p2panda_net::sync::LogSync<
     p2panda_store::SqliteStore<LogId, ReflectionExtensions>,
     LogId,
     ReflectionExtensions,
     TopicStore,
 >;
-pub type LogSyncError = p2panda_net::sync::LogSyncError<TopicSyncManager>;
-pub type SyncHandle = p2panda_net::sync::SyncHandle<TopicSyncManager>;
-pub type SyncHandleError = p2panda_net::sync::SyncHandleError<TopicSyncManager>;
+pub type LogSyncError = p2panda_net::sync::LogSyncError<ReflectionExtensions>;
 
 #[derive(Error, Debug)]
 pub enum NetworkError {
