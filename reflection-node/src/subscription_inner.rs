@@ -3,13 +3,14 @@ use std::ops::{Deref, DerefMut, Drop};
 use std::sync::Arc;
 
 use chrono::Utc;
+use p2panda_core::Operation;
 use p2panda_core::{
     Body, Header,
     cbor::{decode_cbor, encode_cbor},
 };
 use p2panda_net::{TopicId, gossip::GossipHandle};
 use p2panda_stream::IngestExt;
-use p2panda_sync::TopicLogSyncEvent;
+use p2panda_sync::protocols::TopicLogSyncEvent as Event;
 use tokio::{
     sync::{RwLock, mpsc},
     task::{AbortHandle, spawn},
@@ -20,11 +21,13 @@ use tracing::{error, info, warn};
 use crate::author_tracker::{AuthorMessage, AuthorTracker};
 use crate::ephemerial_operation::EphemerialOperation;
 use crate::network::Network;
-use crate::network::SyncHandle;
 use crate::node_inner::MessageType;
 use crate::node_inner::NodeInner;
 use crate::operation::{LogType, ReflectionExtensions};
 use crate::topic::{SubscribableTopic, TopicError};
+
+pub type SyncHandle =
+    p2panda_net::sync::SyncHandle<Operation<ReflectionExtensions>, Event<ReflectionExtensions>>;
 
 pub struct SubscriptionInner<T> {
     ephemeral_tx: RwLock<Option<GossipHandle>>,
@@ -271,7 +274,7 @@ async fn setup_network<T: SubscribableTopic + 'static>(
     let abort_handle = spawn(async move {
         while let Some(Ok(event)) = topic_rx.next().await {
             match event.event() {
-                TopicLogSyncEvent::Operation(operation) => {
+                Event::Operation(operation) => {
                     match validate_and_unpack(operation.as_ref().to_owned(), id) {
                         Ok(data) => {
                             persistent_tx.send(data).await.unwrap();

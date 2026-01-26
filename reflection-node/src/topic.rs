@@ -1,14 +1,20 @@
 use std::sync::Arc;
 
-use crate::network::SyncHandleError;
+use crate::operation::ReflectionExtensions;
 use crate::operation_store::CreationError;
 use crate::subscription_inner::SubscriptionInner;
 
-use p2panda_core::PublicKey;
-use p2panda_net::gossip::GossipHandleError;
+use p2panda_core::{Operation, PublicKey};
+use p2panda_sync::protocols::TopicLogSyncEvent;
 use thiserror::Error;
+use tokio::sync::mpsc;
 use tokio::task::{AbortHandle, JoinError};
 use tracing::info;
+
+pub type SyncHandleError = p2panda_net::sync::SyncHandleError<
+    Operation<ReflectionExtensions>,
+    TopicLogSyncEvent<ReflectionExtensions>,
+>;
 
 #[derive(Debug, Error)]
 pub enum TopicError {
@@ -21,7 +27,7 @@ pub enum TopicError {
     #[error(transparent)]
     Publish(#[from] SyncHandleError),
     #[error(transparent)]
-    PublishEphemeral(#[from] GossipHandleError),
+    PublishEphemeral(#[from] mpsc::error::SendError<Vec<u8>>),
     #[error(transparent)]
     Runtime(#[from] JoinError),
 }
