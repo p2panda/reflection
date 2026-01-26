@@ -886,6 +886,12 @@ impl Document {
 
         self.service().documents().remove(&self.id());
     }
+
+    pub async fn export(&self) -> Vec<u8> {
+        let doc = self.imp().crdt_doc.get().expect("crdt_doc to be set");
+
+        doc.export(ExportMode::Snapshot).unwrap()
+    }
 }
 
 unsafe impl Send for Document {}
