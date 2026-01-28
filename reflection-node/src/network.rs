@@ -1,5 +1,7 @@
 use std::sync::LazyLock;
 
+use p2panda_net::Discovery;
+use p2panda_net::discovery::DiscoveryError;
 use thiserror::Error;
 use tracing::error;
 
@@ -50,12 +52,15 @@ pub enum NetworkError {
     #[error(transparent)]
     MdnsDiscovery(#[from] MdnsDiscoveryError),
     #[error(transparent)]
+    Discovery(#[from] DiscoveryError),
+    #[error(transparent)]
     Endpoint(#[from] EndpointError),
 }
 
 #[allow(dead_code)]
 pub struct Network {
     pub(crate) mdns_discovery: MdnsDiscovery,
+    pub(crate) discovery: Discovery,
     pub(crate) gossip: Gossip,
     pub(crate) log_sync: LogSync,
     pub(crate) endpoint: Endpoint,
@@ -92,9 +97,15 @@ impl Network {
             .mode(MdnsDiscoveryMode::Active)
             .spawn()
             .await?;
+
+        let discovery = Discovery::builder(address_book.clone(), endpoint.clone())
+            .spawn()
+            .await?;
+
         let gossip = Gossip::builder(address_book.clone(), endpoint.clone())
             .spawn()
             .await?;
+
         let log_sync = LogSync::builder(
             operation_store.clone_inner(),
             topic_store.clone(),
@@ -106,6 +117,7 @@ impl Network {
 
         Ok(Network {
             mdns_discovery,
+            discovery,
             gossip,
             log_sync,
             endpoint,
