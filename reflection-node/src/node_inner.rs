@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::ephemerial_operation::EphemerialOperation;
-use crate::network::Network;
+use crate::network::{Network, NetworkError};
 use crate::node::{ConnectionMode, NodeError};
 use crate::operation_store::OperationStore;
 use crate::subscription_inner::SubscriptionInner;
@@ -15,7 +15,7 @@ use p2panda_net::TopicId;
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
 use sqlx::{migrate::Migrator, sqlite};
 use tokio::sync::{Notify, RwLock};
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) enum MessageType {
@@ -38,7 +38,6 @@ impl NodeInner {
         network_id: Hash,
         private_key: PrivateKey,
         db_file: Option<PathBuf>,
-        connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
         let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
             .shared_cache(true)
@@ -67,64 +66,47 @@ impl NodeInner {
         let operation_store = OperationStore::new(pool.clone());
         let topic_store = TopicStore::new(pool);
 
-        let network = match connection_mode {
-            ConnectionMode::None => None,
-            ConnectionMode::Bluetooth => {
-                unimplemented!("Bluetooth is currently not implemented")
-            }
-            ConnectionMode::Network => {
-                match Network::new(&private_key, &network_id, &topic_store, &operation_store).await
-                {
-                    Ok(network) => Some(network),
-                    Err(error) => {
-                        warn!("Failed to startup network: {error}");
-                        None
-                    }
-                }
-            }
-        };
-
         Ok(Self {
             operation_store,
             topic_store,
             private_key,
             network_id,
-            network: RwLock::new(network),
+            network: RwLock::new(None),
             network_notifier: Notify::new(),
         })
     }
 
-    pub async fn set_connection_mode(&self, connection_mode: ConnectionMode) {
+    pub async fn set_connection_mode(
+        &self,
+        connection_mode: ConnectionMode,
+    ) -> Result<(), NetworkError> {
         // Subscriptions will tear down the network subscription and drop the read lock,
         // so that we can acquire the write lock and then shutdown the network.
         self.network_notifier.notify_waiters();
 
         let mut network_guard = self.network.write().await;
 
-        let network = match connection_mode {
-            ConnectionMode::None => None,
+        match connection_mode {
+            ConnectionMode::None => {
+                *network_guard = None;
+            }
             ConnectionMode::Bluetooth => {
                 unimplemented!("Bluetooth is currently not implemented")
             }
             ConnectionMode::Network => {
-                match Network::new(
+                let network = Network::new(
                     &self.private_key,
                     &self.network_id,
                     &self.topic_store,
                     &self.operation_store,
                 )
-                .await
-                {
-                    Ok(network) => Some(network),
-                    Err(error) => {
-                        warn!("Failed to startup network: {error}");
-                        None
-                    }
-                }
-            }
-        };
+                .await?;
 
-        *network_guard = network;
+                *network_guard = Some(network);
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn shutdown(&self) {

@@ -95,9 +95,9 @@ mod imp {
                 connection_mode
             };
 
-            node.set_connection_mode(real_connection_mode)
-                .await
-                .unwrap();
+            if let Err(error) = node.set_connection_mode(real_connection_mode).await {
+                error!("Failed to startup network: {error}");
+            }
         }
     }
 
@@ -174,15 +174,7 @@ impl Service {
         let private_key = self.private_key().0;
         let network_id = Hash::new(b"reflection");
         let path = self.data_dir().and_then(|data_dir| data_dir.path());
-        let node = Node::new(
-            private_key,
-            network_id,
-            path.as_deref(),
-            // gio::NetworkManager is slow to initialize the `network-available` property,
-            // so it might be incorrect therefore always start with no connection.
-            node::ConnectionMode::None,
-        )
-        .await?;
+        let node = Node::new(private_key, network_id, path.as_deref()).await?;
 
         self.imp()
             .node

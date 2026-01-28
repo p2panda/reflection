@@ -10,13 +10,22 @@ pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use reflection_node::p2panda_core;
-use reflection_node::topic::{SubscribableTopic, Subscription as TopicSubscription};
+use reflection_node::topic::{
+    SubscribableTopic, Subscription as TopicSubscription,
+    SubscriptionError as TopicSubscriptionError,
+};
 use tracing::error;
 
 use crate::author::Author;
 use crate::authors::Authors;
 use crate::identity::PublicKey;
 use crate::service::Service;
+
+#[derive(Debug, Copy, Clone, glib::ErrorDomain)]
+#[error_domain(name = "reflection-document")]
+enum DocumentError {
+    Failed,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, glib::Boxed)]
 #[boxed_type(name = "ReflectionDocumentId", nullable)]
@@ -663,6 +672,11 @@ mod imp {
                             glib::types::Type::I32,
                         ])
                         .build(),
+                    Signal::builder("error")
+                        .param_types([
+                            glib::Error::static_type(),
+                        ])
+                        .build(),
                 ]
             })
         }
@@ -931,6 +945,16 @@ impl SubscribableTopic for DocumentHandle {
                 {
                     document.imp().handle_ephemeral_data(author, data);
                 }
+            });
+        }
+    }
+
+    fn error(&self, error: TopicSubscriptionError) {
+        if let Some(document) = self.0.upgrade() {
+            document.main_context().invoke(move || {
+                error!("Network error received: {error}");
+                let glib_error = glib::error::Error::new(DocumentError::Failed, &error.to_string());
+                document.emit_by_name::<()>("error", &[&glib_error]);
             });
         }
     }
