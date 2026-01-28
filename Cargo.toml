@@ -1,3 +1,6 @@
 [workspace]
 resolver = "2"
 members = ["reflection-app", "reflection-doc", "reflection-node"]
+
+[patch.crates-io]
+iroh-gossip = { git = "https://github.com/p2panda/iroh-gossip", rev = "533c34a2758518ece19c1de9f21bc40d61f9b5a5" }
