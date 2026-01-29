@@ -111,8 +111,7 @@ mod imp {
                         this.open_document_button
                             .set_label(&gettext("Switch to Existing Window"));
                     } else {
-                        this.open_document_button
-                            .set_label(&gettext("Open Pad"));
+                        this.open_document_button.set_label(&gettext("Open Pad"));
                     }
                 }
             ));
