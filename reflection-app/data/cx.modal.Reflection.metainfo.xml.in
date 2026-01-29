@@ -8,12 +8,12 @@
   <summary>Take notes collaboratively</summary>
   <description>
     <p>Reflection is a tool for collaborative writing, with a specific focus on taking notes during meetings.</p>
-    <p>Simultaneously contribute to a document from multiple devices at the same time across the internet or the local network. Then continue working on the same documents later, even if you're fully offline. Your changes will sync up with others seamlessly as soon as you're back online.</p>
+    <p>Simultaneously contribute to a pad from multiple devices at the same time across the internet or the local network. Then continue working on the same pads later, even if you're fully offline. Your changes will sync up with others seamlessly as soon as you're back online.</p>
     <p>This is possible thanks to a local-first synchronization system built using p2panda and the Loro CRDT library.</p>
     <p>Note: This is a preview version of Reflection and comes with some important limitations:</p>
     <ul>
       <li>End-to-end encryption and access controls are not available in this version yet. Adding these features in the future will require big changes to the app, so we can't currently promise that all your documents can be migrated across to these future versions. For now, we recommend backing up documents to local files.</li>
-      <li>Currently invite codes give immediate access to the document. Because devices communicate directly via a peer-to-peer network, this means anyone you share the invite code with can join the network and get your IP address. In many cases this can also be used to deduce your approximate physical location. To minimize the risks posed by this, we recommend keeping groups small and not sharing invite codes publicly.</li>
+      <li>Currently invite codes give immediate access to the pad. Because devices communicate directly via a peer-to-peer network, this means anyone you share the invite code with can join the network and get your IP address. In many cases this can also be used to deduce your approximate physical location. To minimize the risks posed by this, we recommend keeping groups small and not sharing invite codes publicly.</li>
     </ul>
   </description>
 

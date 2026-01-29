@@ -156,7 +156,7 @@ mod imp {
                         if let Some(title) = title {
                             Some(title)
                         } else {
-                            Some(gettext("Empty document"))
+                            Some(gettext("Empty Pad"))
                         }
                     })
                     .build();
