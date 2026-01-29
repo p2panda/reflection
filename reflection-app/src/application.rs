@@ -367,7 +367,9 @@ impl ReflectionApplication {
         let dialog = adw::AlertDialog::builder()
             .heading(gettext("Delete Pad?"))
             .body_use_markup(true)
-            .body(gettext("This pad may be stored on other devices, and will only be deleted from this one."))
+            .body(gettext(
+                "This pad may be stored on other devices, and will only be deleted from this one.",
+            ))
             .default_response("confirm")
             .close_response("cancel")
             .build();
