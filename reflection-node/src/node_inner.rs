@@ -1,34 +1,21 @@
 use std::path::PathBuf;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use crate::ephemerial_operation::EphemerialOperation;
+use crate::network::{Network, NetworkError};
 use crate::node::{ConnectionMode, NodeError};
-use crate::operation::ReflectionExtensions;
 use crate::operation_store::OperationStore;
 use crate::subscription_inner::SubscriptionInner;
 use crate::topic::{SubscribableTopic, TopicError};
-use crate::topic_store::{LogId, TopicStore};
+use crate::topic_store::TopicStore;
 use crate::utils::CombinedMigrationSource;
 
 use p2panda_core::{Hash, PrivateKey};
-use p2panda_discovery::address_book::AddressBookStore;
-use p2panda_discovery::address_book::memory::MemoryStore as MemoryAddressBook;
-use p2panda_net::{MdnsDiscoveryMode, NodeInfo, TopicId};
-use p2panda_net::{Network, NetworkBuilder};
+use p2panda_net::TopicId;
 use p2panda_store::sqlite::store::migrations as operation_store_migrations;
-use p2panda_sync::managers::topic_sync_manager::TopicSyncManagerConfig;
-use rand_chacha::rand_core::SeedableRng;
 use sqlx::{migrate::Migrator, sqlite};
 use tokio::sync::{Notify, RwLock};
-use tracing::{error, info, warn};
-
-pub type TopicSyncManager = p2panda_sync::managers::topic_sync_manager::TopicSyncManager<
-    TopicId,
-    p2panda_store::SqliteStore<LogId, ReflectionExtensions>,
-    TopicStore,
-    LogId,
-    ReflectionExtensions,
->;
+use tracing::info;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) enum MessageType {
@@ -42,32 +29,15 @@ pub struct NodeInner {
     pub(crate) topic_store: TopicStore,
     pub(crate) private_key: PrivateKey,
     pub(crate) network_id: Hash,
-    pub(crate) network: RwLock<Option<Network<TopicSyncManager>>>,
+    pub(crate) network: RwLock<Option<Network>>,
     pub(crate) network_notifier: Notify,
 }
-
-static RELAY_URL: LazyLock<iroh::RelayUrl> = LazyLock::new(|| {
-    "https://euc1-1.relay.n0.iroh-canary.iroh.link"
-        .parse()
-        .expect("valid relay URL")
-});
-
-static BOOTSTRAP_NODE: LazyLock<NodeInfo> = LazyLock::new(|| {
-    let endpoint_addr = iroh::EndpointAddr::new(
-        "7ccdbeed587a8ec8c71cdc9b98e941ac597e11b0216aac1387ef81089a4930b2"
-            .parse()
-            .expect("valid bootstrap node id"),
-    )
-    .with_relay_url(RELAY_URL.clone());
-    NodeInfo::from(endpoint_addr).bootstrap()
-});
 
 impl NodeInner {
     pub async fn new(
         network_id: Hash,
         private_key: PrivateKey,
         db_file: Option<PathBuf>,
-        connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
         let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
             .shared_cache(true)
@@ -96,50 +66,47 @@ impl NodeInner {
         let operation_store = OperationStore::new(pool.clone());
         let topic_store = TopicStore::new(pool);
 
-        let network = match connection_mode {
-            ConnectionMode::None => None,
-            ConnectionMode::Bluetooth => {
-                unimplemented!("Bluetooth is currently not implemented")
-            }
-            ConnectionMode::Network => {
-                setup_network(&private_key, &network_id, &topic_store, &operation_store).await
-            }
-        };
-
         Ok(Self {
             operation_store,
             topic_store,
             private_key,
             network_id,
-            network: RwLock::new(network),
+            network: RwLock::new(None),
             network_notifier: Notify::new(),
         })
     }
 
-    pub async fn set_connection_mode(&self, connection_mode: ConnectionMode) {
+    pub async fn set_connection_mode(
+        &self,
+        connection_mode: ConnectionMode,
+    ) -> Result<(), NetworkError> {
         // Subscriptions will tear down the network subscription and drop the read lock,
         // so that we can acquire the write lock and then shutdown the network.
         self.network_notifier.notify_waiters();
 
         let mut network_guard = self.network.write().await;
 
-        let network = match connection_mode {
-            ConnectionMode::None => None,
+        match connection_mode {
+            ConnectionMode::None => {
+                *network_guard = None;
+            }
             ConnectionMode::Bluetooth => {
                 unimplemented!("Bluetooth is currently not implemented")
             }
             ConnectionMode::Network => {
-                setup_network(
+                let network = Network::new(
                     &self.private_key,
                     &self.network_id,
                     &self.topic_store,
                     &self.operation_store,
                 )
-                .await
-            }
-        };
+                .await?;
 
-        *network_guard = network;
+                *network_guard = Some(network);
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn shutdown(&self) {
@@ -177,36 +144,5 @@ impl NodeInner {
     pub async fn delete_topic(self: Arc<Self>, id: TopicId) -> Result<(), TopicError> {
         self.topic_store.delete_topic(&id).await?;
         Ok(())
-    }
-}
-
-async fn setup_network(
-    private_key: &PrivateKey,
-    network_id: &Hash,
-    topic_store: &TopicStore,
-    operation_store: &OperationStore,
-) -> Option<Network<TopicSyncManager>> {
-    let address_book = MemoryAddressBook::new(rand_chacha::ChaCha20Rng::from_os_rng());
-
-    if let Err(error) = address_book.insert_node_info(BOOTSTRAP_NODE.clone()).await {
-        error!("Failed to add bootstrap node to the address book: {error}");
-    }
-
-    let sync_conf = TopicSyncManagerConfig {
-        store: operation_store.clone_inner(),
-        topic_map: topic_store.clone(),
-    };
-    let network = NetworkBuilder::new(network_id.into())
-        .private_key(private_key.clone())
-        .mdns(MdnsDiscoveryMode::Active)
-        .relay(RELAY_URL.clone())
-        .build(address_book, sync_conf)
-        .await;
-
-    if let Err(error) = network {
-        warn!("Failed to startup network: {error}");
-        None
-    } else {
-        network.ok()
     }
 }
