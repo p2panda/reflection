@@ -19,12 +19,12 @@ template $ReflectionLandingView: Adw.NavigationPage {
           child: Adw.Clamp {
             maximum-size: 400;
             child: SearchEntry search_entry {
-              placeholder-text: _("Search Documents...");
+              placeholder-text: _("Search Pads...");
               hexpand: true;
 
               accessibility {
-                label: _("Document Search");
-                description: _("Search for a document");
+                label: _("Pad Search");
+                description: _("Search for a pad");
               }
             };
           };
@@ -60,7 +60,7 @@ template $ReflectionLandingView: Adw.NavigationPage {
                 action-name: "app.new-document";
                 child: Adw.ButtonContent {
                   icon-name: "add-document-symbolic";
-                  label: _("_New Document");
+                  label: _("_New Pad");
                   use-underline: true;
                 };
 
@@ -76,7 +76,7 @@ template $ReflectionLandingView: Adw.NavigationPage {
                 action-target: "@aay []";
                 child: Adw.ButtonContent {
                   icon-name: "join-document-symbolic";
-                  label: _("_Join Document");
+                  label: _("_Join Pad");
                   use-underline: true;
                 };
 
@@ -93,7 +93,7 @@ template $ReflectionLandingView: Adw.NavigationPage {
         name: "no-matching-documents";
         child: Adw.StatusPage no-matching-document-page {
             icon-name: "system-search-symbolic";
-            title: _("No Documents Found");
+            title: _("No Pads Found");
             description: _("Try another search term");
         };
       }
@@ -134,7 +134,7 @@ template $ReflectionLandingView: Adw.NavigationPage {
         action-name: "app.new-document";
         child: Adw.ButtonContent {
           icon-name: "add-document-symbolic";
-          label: _("_New Document");
+          label: _("_New Pad");
           use-underline: true;
         };
 
@@ -150,7 +150,7 @@ template $ReflectionLandingView: Adw.NavigationPage {
         action-target: "@aay []";
         child: Adw.ButtonContent {
           icon-name: "join-document-symbolic";
-          label: _("_Join Document");
+          label: _("_Join Pad");
           use-underline: true;
         };
 

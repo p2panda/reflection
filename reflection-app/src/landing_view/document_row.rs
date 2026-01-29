@@ -92,7 +92,7 @@ mod imp {
             if let Some(name) = name {
                 name.to_string()
             } else {
-                gettext("Empty document")
+                gettext("Empty Pad")
             }
         }
 

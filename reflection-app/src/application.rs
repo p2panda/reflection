@@ -165,7 +165,7 @@ impl ReflectionApplication {
                             // FIXME: open all documents with it's own window
                             break;
                         } else {
-                            error!("Failed to join document: Invalid document id specified");
+                            error!("Failed to join pad: Invalid pad id specified");
                         }
                     }
                 }
@@ -189,7 +189,7 @@ impl ReflectionApplication {
                                 // FIXME: open all documents with it's own window
                                 break;
                             } else {
-                                error!("Failed to join document: Invalid document id specified");
+                                error!("Failed to join pad: Invalid pad id specified");
                             }
                         }
                     }
@@ -208,7 +208,7 @@ impl ReflectionApplication {
                         app.delete_document(&document_id);
                         break;
                     } else {
-                        error!("Failed to delete document: Invalid document id specified");
+                        error!("Failed to delete pad: Invalid pad id specified");
                     }
                 }
             })
@@ -226,7 +226,7 @@ impl ReflectionApplication {
                         app.copy_document_id(&document_id);
                         break;
                     } else {
-                        error!("Failed to copy document id: Invalid document id specified");
+                        error!("Failed to copy pad id: Invalid pad id specified");
                     }
                 }
             })
@@ -365,9 +365,9 @@ impl ReflectionApplication {
 
     fn delete_document(&self, document_id: &DocumentId) {
         let dialog = adw::AlertDialog::builder()
-            .heading(gettext("Delete Document?"))
+            .heading(gettext("Delete Pad?"))
             .body_use_markup(true)
-            .body(gettext("This document may be stored on other devices, and will only be deleted from this one."))
+            .body(gettext("This pad may be stored on other devices, and will only be deleted from this one."))
             .default_response("confirm")
             .close_response("cancel")
             .build();
