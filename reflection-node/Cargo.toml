@@ -12,12 +12,12 @@ authors = [
 thiserror = "2.0.17"
 chrono = "0.4.42"
 ciborium = "0.2.2"
-p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "a83a80b2ce0733c9437ceeaae33503d3b3742436" }
-p2panda-discovery = { git = "https://github.com/p2panda/p2panda", rev = "a83a80b2ce0733c9437ceeaae33503d3b3742436", package = "p2panda-discovery-next" }
-p2panda-net = { git = "https://github.com/p2panda/p2panda", rev = "a83a80b2ce0733c9437ceeaae33503d3b3742436", package = "p2panda-net-next" }
-p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "a83a80b2ce0733c9437ceeaae33503d3b3742436", features = ["sqlite"], default-features = false }
-p2panda-stream = { git = "https://github.com/p2panda/p2panda", rev = "a83a80b2ce0733c9437ceeaae33503d3b3742436" }
-p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "a83a80b2ce0733c9437ceeaae33503d3b3742436", package = "p2panda-sync-next" }
+p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "d9bff24ce2805302fcbc6554fbaba51b278e918c" }
+p2panda-discovery = { git = "https://github.com/p2panda/p2panda", rev = "d9bff24ce2805302fcbc6554fbaba51b278e918c" }
+p2panda-net = { git = "https://github.com/p2panda/p2panda", rev = "d9bff24ce2805302fcbc6554fbaba51b278e918c" }
+p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "d9bff24ce2805302fcbc6554fbaba51b278e918c", features = ["sqlite"], default-features = false }
+p2panda-stream = { git = "https://github.com/p2panda/p2panda", rev = "d9bff24ce2805302fcbc6554fbaba51b278e918c" }
+p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "d9bff24ce2805302fcbc6554fbaba51b278e918c" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_bytes = "0.11.19"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false }

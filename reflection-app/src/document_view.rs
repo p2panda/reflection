@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use reflection_doc::document::{Document, DocumentId};
 
 use adw::{prelude::*, subclass::prelude::*};
-use gtk::{gdk, gio::prelude::ApplicationExtManual, glib, glib::clone};
+use gtk::{gdk, gio::prelude::ApplicationExtManual, glib, glib::clone, gio};
 
 use crate::{
     ConnectionPopover, ReflectionApplication, ReflectionTextBuffer, TextView,
@@ -80,6 +80,9 @@ mod imp {
             });
             klass.install_action("window.zoom-one", None, |window, _, _| {
                 window.set_font_scale(0.0);
+            });
+            klass.install_action_async("document.export", None, |obj, _, _| async move {
+                obj.export_document().await
             });
 
             klass.add_binding_action(
@@ -285,5 +288,25 @@ impl DocumentView {
         glib::Object::builder()
             .property("document", document)
             .build()
+    }
+
+    pub async fn export_document(&self) {
+        let window: Option<gtk::Window> = self.root().and_downcast();
+        let Some(document) = self.document() else {
+            return;
+        };
+        let initial_name = if let Some(mut name) = document.name() {
+            name.push_str(".bin");
+            name
+        } else {
+            "Empty Document.bin".to_string()
+        };
+        let dialog = gtk::FileDialog::builder().modal(true).initial_name(initial_name).build();
+
+        let Ok(file) = dialog.save_future(window.as_ref()).await else {
+            return;
+        };
+        let contents = document.export().await;
+        file.replace_contents_future(contents, None, false, gio::FileCreateFlags::NONE).await.unwrap();
     }
 }
