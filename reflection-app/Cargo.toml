@@ -15,14 +15,8 @@ gtk = { version = "0.10", package = "gtk4", features = ["gnome_48", "v4_20", "bl
 sourceview = { package = "sourceview5", version = "0.10" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-ashpd = { version = "0.12", default-features = false, features = ["tracing", "async-std"] }
 thiserror = { version = "2.0" }
 futures-util = "0.3"
-oo7 = { version = "0.5", default-features = false, features = [
-    "openssl_crypto",
-    "async-std",
-    "tracing",
-] }
 libspelling = "0.4.1"
 formatx = "0.2.4"
 
@@ -30,3 +24,15 @@ formatx = "0.2.4"
 package = "libadwaita"
 version = "0.8"
 features = ["v1_7"]
+
+[target.'cfg(target_os = "linux")'.dependencies]
+oo7 = { version = "0.5", default-features = false, features = [
+    "openssl_crypto",
+    "async-std",
+    "tracing",
+] }
+ashpd = { version = "0.12", default-features = false, features = ["tracing", "async-std"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = "2.0"
+base64 = "0.21"
