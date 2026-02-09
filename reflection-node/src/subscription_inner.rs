@@ -24,7 +24,7 @@ use crate::network::Network;
 use crate::node_inner::MessageType;
 use crate::node_inner::NodeInner;
 use crate::operation::{LogType, ReflectionExtensions};
-use crate::topic::{SubscribableTopic, TopicError};
+use crate::topic::{SubscribableTopic, SubscriptionError, TopicError};
 
 pub type SyncHandle =
     p2panda_net::sync::SyncHandle<Operation<ReflectionExtensions>, Event<ReflectionExtensions>>;
@@ -69,7 +69,7 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
 
         let (tx, ephemeral_tx, abort_handles) =
             if let Some(network) = network_guard.as_ref().unwrap().deref() {
-                setup_network(
+                match setup_network(
                     &self.node,
                     network,
                     self.id,
@@ -77,6 +77,15 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
                     &self.author_tracker,
                 )
                 .await
+                {
+                    Ok((sync_handle, gossip_handle, abort_handles)) => {
+                        (Some(sync_handle), Some(gossip_handle), abort_handles)
+                    }
+                    Err(error) => {
+                        self.subscribable_topic.error(error);
+                        (None, None, Vec::new())
+                    }
+                }
             } else {
                 (None, None, Vec::new())
             };
@@ -113,7 +122,7 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
 
             let (tx, ephemeral_tx, abort_handles) =
                 if let Some(network) = network_guard.as_ref().unwrap().deref() {
-                    setup_network(
+                    match setup_network(
                         &self.node,
                         network,
                         self.id,
@@ -121,6 +130,15 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
                         &self.author_tracker,
                     )
                     .await
+                    {
+                        Ok((sync_handle, gossip_handle, abort_handles)) => {
+                            (Some(sync_handle), Some(gossip_handle), abort_handles)
+                        }
+                        Err(error) => {
+                            self.subscribable_topic.error(error);
+                            (None, None, Vec::new())
+                        }
+                    }
                 } else {
                     (None, None, Vec::new())
                 };
@@ -244,35 +262,31 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
     }
 }
 
-// FIXME: return errors
 async fn setup_network<T: SubscribableTopic + 'static>(
     node: &Arc<NodeInner>,
     network: &Network,
     id: TopicId,
     subscribable_topic: &Arc<T>,
     author_tracker: &Arc<AuthorTracker<T>>,
-) -> (Option<SyncHandle>, Option<GossipHandle>, Vec<AbortHandle>) {
+) -> Result<(SyncHandle, GossipHandle, Vec<AbortHandle>), SubscriptionError> {
     let mut abort_handles = Vec::with_capacity(3);
 
-    let stream = match network.log_sync.stream(id, true).await {
-        Ok(result) => result,
-        Err(error) => {
-            warn!(
-                "Failed to setup network for subscription to topic {}: {error}",
-                hex::encode(id)
-            );
-            return (None, None, abort_handles);
-        }
-    };
-
-    let mut topic_rx = stream.subscribe().await.unwrap();
+    let stream = network.log_sync.stream(id, true).await?;
+    let mut topic_rx = stream.subscribe().await?;
     let topic_tx = stream;
 
     let (persistent_tx, persistent_rx) =
         mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
 
     let abort_handle = spawn(async move {
-        while let Some(Ok(event)) = topic_rx.next().await {
+        while let Some(event) = topic_rx.next().await {
+            let event = match event {
+                Ok(event) => event,
+                Err(error) => {
+                    error!("Error while receiving sync message: {error}");
+                    continue;
+                }
+            };
             match event.event() {
                 Event::Operation(operation) => {
                     match validate_and_unpack(operation.as_ref().to_owned(), id) {
@@ -294,7 +308,7 @@ async fn setup_network<T: SubscribableTopic + 'static>(
 
     abort_handles.push(abort_handle);
 
-    let ephemeral_stream = network.gossip.stream(id).await.unwrap();
+    let ephemeral_stream = network.gossip.stream(id).await?;
     let mut ephemeral_rx = ephemeral_stream.subscribe();
     let ephemeral_tx = ephemeral_stream;
 
@@ -307,7 +321,7 @@ async fn setup_network<T: SubscribableTopic + 'static>(
             let bytes = match bytes {
                 Ok(bytes) => bytes,
                 Err(error) => {
-                    error!("Error while reciving ephemeral message: {error}");
+                    error!("Error while receiving ephemeral message: {error}");
                     continue;
                 }
             };
@@ -399,9 +413,9 @@ async fn setup_network<T: SubscribableTopic + 'static>(
 
     info!("Network subscription set up for topic {}", hex::encode(id));
 
-    let ephemeral_tx = network.gossip.stream(id).await.unwrap();
+    let ephemeral_tx = network.gossip.stream(id).await?;
 
-    (Some(topic_tx), Some(ephemeral_tx), abort_handles)
+    Ok((topic_tx, ephemeral_tx, abort_handles))
 }
 
 async fn teardown_network<T: SubscribableTopic + 'static>(
