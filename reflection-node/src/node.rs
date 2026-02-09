@@ -68,7 +68,6 @@ impl Node {
         private_key: PrivateKey,
         network_id: Hash,
         db_location: Option<&Path>,
-        connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
         let runtime = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             OwnedRuntimeOrHandle::Handle(handle)
@@ -82,9 +81,7 @@ impl Node {
 
         let db_file = db_location.map(|location| location.join("database.sqlite"));
         let inner = runtime
-            .spawn(async move {
-                NodeInner::new(network_id, private_key, db_file, connection_mode).await
-            })
+            .spawn(async move { NodeInner::new(network_id, private_key, db_file).await })
             .await??;
 
         Ok(Self {

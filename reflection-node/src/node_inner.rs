@@ -38,7 +38,6 @@ impl NodeInner {
         network_id: Hash,
         private_key: PrivateKey,
         db_file: Option<PathBuf>,
-        connection_mode: ConnectionMode,
     ) -> Result<Self, NodeError> {
         let connection_options = sqlx::sqlite::SqliteConnectOptions::new()
             .shared_cache(true)
@@ -67,29 +66,12 @@ impl NodeInner {
         let operation_store = OperationStore::new(pool.clone());
         let topic_store = TopicStore::new(pool);
 
-        let network = match connection_mode {
-            ConnectionMode::None => None,
-            ConnectionMode::Bluetooth => {
-                unimplemented!("Bluetooth is currently not implemented")
-            }
-            ConnectionMode::Network => {
-                match Network::new(&private_key, &network_id, &topic_store, &operation_store).await
-                {
-                    Ok(network) => Some(network),
-                    Err(error) => {
-                        warn!("Failed to startup network: {error}");
-                        None
-                    }
-                }
-            }
-        };
-
         Ok(Self {
             operation_store,
             topic_store,
             private_key,
             network_id,
-            network: RwLock::new(network),
+            network: RwLock::new(None),
             network_notifier: Notify::new(),
         })
     }
