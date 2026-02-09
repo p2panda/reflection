@@ -2,10 +2,13 @@ use std::sync::Arc;
 
 use crate::operation::ReflectionExtensions;
 use crate::operation_store::CreationError;
-use crate::subscription_inner::SubscriptionInner;
 
+use crate::network::LogSyncError;
+use crate::subscription_inner::SubscriptionInner;
 use p2panda_core::{Operation, PublicKey};
 use p2panda_sync::protocols::TopicLogSyncEvent;
+
+use p2panda_net::gossip::GossipError;
 use thiserror::Error;
 use tokio::sync::mpsc;
 use tokio::task::{AbortHandle, JoinError};
@@ -32,11 +35,22 @@ pub enum TopicError {
     Runtime(#[from] JoinError),
 }
 
+#[derive(Debug, Error)]
+pub enum SubscriptionError {
+    #[error(transparent)]
+    Gossip(#[from] GossipError),
+    #[error(transparent)]
+    LogSync(#[from] LogSyncError),
+    #[error(transparent)]
+    SyncHandle(#[from] SyncHandleError),
+}
+
 pub trait SubscribableTopic: Sync + Send {
     fn bytes_received(&self, author: PublicKey, data: Vec<u8>);
     fn author_joined(&self, author: PublicKey);
     fn author_left(&self, author: PublicKey);
     fn ephemeral_bytes_received(&self, author: PublicKey, data: Vec<u8>);
+    fn error(&self, error: SubscriptionError);
 }
 
 pub struct Subscription<T> {

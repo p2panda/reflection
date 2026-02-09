@@ -10,7 +10,10 @@ pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use reflection_node::p2panda_core;
-use reflection_node::topic::{SubscribableTopic, Subscription as TopicSubscription};
+use reflection_node::topic::{
+    SubscribableTopic, Subscription as TopicSubscription,
+    SubscriptionError as TopicSubscriptionError,
+};
 use tracing::error;
 
 use crate::author::Author;
@@ -931,6 +934,14 @@ impl SubscribableTopic for DocumentHandle {
                 {
                     document.imp().handle_ephemeral_data(author, data);
                 }
+            });
+        }
+    }
+
+    fn error(&self, error: TopicSubscriptionError) {
+        if let Some(document) = self.0.upgrade() {
+            document.main_context().invoke(move || {
+                error!("Network error received for subscribed document: {error}");
             });
         }
     }
