@@ -7,6 +7,7 @@ use p2panda_net::TopicId;
 use thiserror::Error;
 use tracing::info;
 
+use crate::network::NetworkError;
 use crate::node_inner::NodeInner;
 use crate::topic::{SubscribableTopic, Subscription, TopicError};
 pub use crate::topic_store::Author;
@@ -22,6 +23,8 @@ pub enum NodeError {
     Datebase(#[from] sqlx::Error),
     #[error(transparent)]
     DatebaseMigration(#[from] sqlx::migrate::MigrateError),
+    #[error(transparent)]
+    Network(#[from] NetworkError),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
@@ -96,10 +99,8 @@ impl Node {
     ) -> Result<(), NodeError> {
         let inner_clone = self.inner.clone();
         self.runtime
-            .spawn(async move {
-                inner_clone.set_connection_mode(connection_mode).await;
-            })
-            .await?;
+            .spawn(async move { inner_clone.set_connection_mode(connection_mode).await })
+            .await??;
 
         Ok(())
     }
