@@ -95,9 +95,9 @@ mod imp {
                 connection_mode
             };
 
-            node.set_connection_mode(real_connection_mode)
-                .await
-                .unwrap();
+            if let Err(error) = node.set_connection_mode(real_connection_mode).await {
+                error!("Failed to startup network: {error}");
+            }
         }
     }
 
