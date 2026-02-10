@@ -86,13 +86,27 @@ jobs:
           name: reflection-macos-${{ matrix.variant.arch }}
           path: reflection-${{ matrix.variant.arch }}.dmg
 
-      - name: Smoke test the artifact
+      - name: Smoke test the build
         env:
           RUST_BACKTRACE: "full"
           RUST_LOG: "debug"
           G_MESSAGES_DEBUG: "all"
         run: |
           ./Reflection.app/Contents/MacOS/reflection &
+          PID=$!
+          sleep 5
+          echo Killing reflection
+          kill $PID || true
+      - name: Smoke test the bundle
+        env:
+          RUST_BACKTRACE: "full"
+          RUST_LOG: "debug"
+          G_MESSAGES_DEBUG: "all"
+        run: |
+          hdiutil attach reflection-${{ matrix.variant.arch }}.dmg
+          ls /Volumes/reflection-${{ matrix.variant.arch }}
+          installer -package /Volumes/reflection-${{ matrix.variant.arch }}/Reflection.app -target /
+          reflection &
           PID=$!
           sleep 5
           echo Killing reflection
