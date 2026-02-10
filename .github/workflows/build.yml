@@ -97,6 +97,7 @@ jobs:
           sleep 5
           echo Killing reflection
           kill $PID || true
+
       - name: Smoke test the bundle
         env:
           RUST_BACKTRACE: "full"
