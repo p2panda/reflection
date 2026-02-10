@@ -3,17 +3,14 @@ use std::ops::{Deref, DerefMut, Drop};
 use std::sync::Arc;
 
 use chrono::Utc;
-use p2panda_core::Hash;
+use p2panda_core::Operation;
 use p2panda_core::{
     Body, Header,
     cbor::{decode_cbor, encode_cbor},
 };
-use p2panda_net::{
-    Network, TopicId,
-    streams::{EphemeralStream, EventuallyConsistentStream},
-};
+use p2panda_net::{TopicId, gossip::GossipHandle};
 use p2panda_stream::IngestExt;
-use p2panda_sync::protocols::topic_log_sync::TopicLogSyncEvent;
+use p2panda_sync::protocols::TopicLogSyncEvent as Event;
 use tokio::{
     sync::{RwLock, mpsc},
     task::{AbortHandle, spawn},
@@ -23,14 +20,18 @@ use tracing::{error, info, warn};
 
 use crate::author_tracker::{AuthorMessage, AuthorTracker};
 use crate::ephemerial_operation::EphemerialOperation;
+use crate::network::Network;
 use crate::node_inner::MessageType;
-use crate::node_inner::{NodeInner, TopicSyncManager};
+use crate::node_inner::NodeInner;
 use crate::operation::{LogType, ReflectionExtensions};
-use crate::topic::{SubscribableTopic, TopicError};
+use crate::topic::{SubscribableTopic, SubscriptionError, TopicError};
+
+pub type SyncHandle =
+    p2panda_net::sync::SyncHandle<Operation<ReflectionExtensions>, Event<ReflectionExtensions>>;
 
 pub struct SubscriptionInner<T> {
-    ephemeral_tx: RwLock<Option<EphemeralStream>>,
-    tx: RwLock<Option<EventuallyConsistentStream<TopicSyncManager>>>,
+    ephemeral_tx: RwLock<Option<GossipHandle>>,
+    tx: RwLock<Option<SyncHandle>>,
     pub(crate) node: Arc<NodeInner>,
     pub(crate) id: TopicId,
     pub(crate) subscribable_topic: Arc<T>,
@@ -68,7 +69,7 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
 
         let (tx, ephemeral_tx, abort_handles) =
             if let Some(network) = network_guard.as_ref().unwrap().deref() {
-                setup_network(
+                match setup_network(
                     &self.node,
                     network,
                     self.id,
@@ -76,6 +77,15 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
                     &self.author_tracker,
                 )
                 .await
+                {
+                    Ok((sync_handle, gossip_handle, abort_handles)) => {
+                        (Some(sync_handle), Some(gossip_handle), abort_handles)
+                    }
+                    Err(error) => {
+                        self.subscribable_topic.error(error);
+                        (None, None, Vec::new())
+                    }
+                }
             } else {
                 (None, None, Vec::new())
             };
@@ -112,7 +122,7 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
 
             let (tx, ephemeral_tx, abort_handles) =
                 if let Some(network) = network_guard.as_ref().unwrap().deref() {
-                    setup_network(
+                    match setup_network(
                         &self.node,
                         network,
                         self.id,
@@ -120,6 +130,15 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
                         &self.author_tracker,
                     )
                     .await
+                    {
+                        Ok((sync_handle, gossip_handle, abort_handles)) => {
+                            (Some(sync_handle), Some(gossip_handle), abort_handles)
+                        }
+                        Err(error) => {
+                            self.subscribable_topic.error(error);
+                            (None, None, Vec::new())
+                        }
+                    }
                 } else {
                     (None, None, Vec::new())
                 };
@@ -243,41 +262,33 @@ impl<T: SubscribableTopic + 'static> SubscriptionInner<T> {
     }
 }
 
-// FIXME: return errors
 async fn setup_network<T: SubscribableTopic + 'static>(
     node: &Arc<NodeInner>,
-    network: &Network<TopicSyncManager>,
+    network: &Network,
     id: TopicId,
     subscribable_topic: &Arc<T>,
     author_tracker: &Arc<AuthorTracker<T>>,
-) -> (
-    Option<EventuallyConsistentStream<TopicSyncManager>>,
-    Option<EphemeralStream>,
-    Vec<AbortHandle>,
-) {
+) -> Result<(SyncHandle, GossipHandle, Vec<AbortHandle>), SubscriptionError> {
     let mut abort_handles = Vec::with_capacity(3);
 
-    let stream = match network.stream(id, true).await {
-        Ok(result) => result,
-        Err(error) => {
-            warn!(
-                "Failed to setup network for subscription to topic {}: {error}",
-                hex::encode(id)
-            );
-            return (None, None, abort_handles);
-        }
-    };
-
-    let mut topic_rx = stream.subscribe().await.unwrap();
+    let stream = network.log_sync.stream(id, true).await?;
+    let mut topic_rx = stream.subscribe().await?;
     let topic_tx = stream;
 
     let (persistent_tx, persistent_rx) =
         mpsc::channel::<(Header<ReflectionExtensions>, Option<Body>, Vec<u8>)>(128);
 
     let abort_handle = spawn(async move {
-        while let Ok(event) = topic_rx.recv().await {
+        while let Some(event) = topic_rx.next().await {
+            let event = match event {
+                Ok(event) => event,
+                Err(error) => {
+                    error!("Error while receiving sync message: {error}");
+                    continue;
+                }
+            };
             match event.event() {
-                TopicLogSyncEvent::Operation(operation) => {
+                Event::Operation(operation) => {
                     match validate_and_unpack(operation.as_ref().to_owned(), id) {
                         Ok(data) => {
                             persistent_tx.send(data).await.unwrap();
@@ -297,13 +308,8 @@ async fn setup_network<T: SubscribableTopic + 'static>(
 
     abort_handles.push(abort_handle);
 
-    // Generate a different id than the eventually consistent streams to avoid collisions.
-    //
-    // @TODO(adz): We want to throw an error if users try to subscribe with the same id across
-    // different streams.
-    let ephemeral_id = Hash::new(id);
-    let ephemeral_stream = network.ephemeral_stream(ephemeral_id.into()).await.unwrap();
-    let mut ephemeral_rx = ephemeral_stream.subscribe().await.unwrap();
+    let ephemeral_stream = network.gossip.stream(id).await?;
+    let mut ephemeral_rx = ephemeral_stream.subscribe();
     let ephemeral_tx = ephemeral_stream;
 
     author_tracker.set_topic_tx(Some(ephemeral_tx)).await;
@@ -311,7 +317,14 @@ async fn setup_network<T: SubscribableTopic + 'static>(
     let author_tracker_clone = author_tracker.clone();
     let subscribable_topic_clone = subscribable_topic.clone();
     let abort_handle = spawn(async move {
-        while let Ok(bytes) = ephemeral_rx.recv().await {
+        while let Some(bytes) = ephemeral_rx.next().await {
+            let bytes = match bytes {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    error!("Error while receiving ephemeral message: {error}");
+                    continue;
+                }
+            };
             match decode_cbor(&bytes[..]) {
                 Ok(MessageType::Ephemeral(operation)) => {
                     if let Some((author, body)) = operation.validate_and_unpack() {
@@ -400,17 +413,16 @@ async fn setup_network<T: SubscribableTopic + 'static>(
 
     info!("Network subscription set up for topic {}", hex::encode(id));
 
-    let ephemeral_id = Hash::new(id);
-    let ephemeral_tx = network.ephemeral_stream(ephemeral_id.into()).await.unwrap();
+    let ephemeral_tx = network.gossip.stream(id).await?;
 
-    (Some(topic_tx), Some(ephemeral_tx), abort_handles)
+    Ok((topic_tx, ephemeral_tx, abort_handles))
 }
 
 async fn teardown_network<T: SubscribableTopic + 'static>(
     id: &TopicId,
     author_tracker: &Arc<AuthorTracker<T>>,
-    tx: Option<EventuallyConsistentStream<TopicSyncManager>>,
-    ephemeral_tx: Option<EphemeralStream>,
+    tx: Option<SyncHandle>,
+    ephemeral_tx: Option<GossipHandle>,
     abort_handles: Vec<AbortHandle>,
 ) {
     for handle in abort_handles {
@@ -419,27 +431,14 @@ async fn teardown_network<T: SubscribableTopic + 'static>(
 
     author_tracker.set_topic_tx(None).await;
 
-    if let Some(ephemeral_tx) = ephemeral_tx
-        && let Err(error) = ephemeral_tx.close()
-    {
-        error!(
-            "Failed to tear down ephemeral channel for topic {}: {error}",
-            hex::encode(id)
-        );
-    }
-
-    if let Some(tx) = tx {
-        if let Err(error) = tx.close() {
-            error!(
-                "Failed to tear down persistent channel for topic {}: {error}",
-                hex::encode(id)
-            );
-        }
+    if tx.is_some() {
         info!(
             "Network subscription torn down for topic {}",
             hex::encode(id)
         );
     }
+    drop(tx);
+    drop(ephemeral_tx);
 }
 
 type OperationWithRawHeader = (Header<ReflectionExtensions>, Option<Body>, Vec<u8>);

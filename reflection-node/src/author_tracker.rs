@@ -10,7 +10,7 @@ use crate::topic::SubscribableTopic;
 use chrono::Utc;
 use p2panda_core::cbor::{DecodeError, decode_cbor, encode_cbor};
 use p2panda_core::{PrivateKey, PublicKey};
-use p2panda_net::streams::EphemeralStream;
+use p2panda_net::gossip::GossipHandle;
 use tokio::sync::{Mutex, RwLock};
 use tracing::error;
 
@@ -47,7 +47,7 @@ pub struct AuthorTracker<T> {
     last_ping: Mutex<HashMap<PublicKey, Instant>>,
     subscribable_topic: Arc<T>,
     node: Arc<NodeInner>,
-    tx: RwLock<Option<EphemeralStream>>,
+    tx: RwLock<Option<GossipHandle>>,
 }
 
 impl<T: SubscribableTopic> AuthorTracker<T> {
@@ -60,7 +60,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         })
     }
 
-    pub async fn set_topic_tx(&self, tx: Option<EphemeralStream>) {
+    pub async fn set_topic_tx(&self, tx: Option<GossipHandle>) {
         let mut tx_guard = self.tx.write().await;
         // Send good bye message to the network
         if let Some(tx) = tx_guard.as_ref() {
@@ -174,7 +174,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
     }
 }
 
-async fn send_message(private_key: &PrivateKey, tx: &EphemeralStream, message: AuthorMessage) {
+async fn send_message(private_key: &PrivateKey, tx: &GossipHandle, message: AuthorMessage) {
     // FIXME: We need to add the current time to the message,
     // because iroh doesn't broadcast twice the same message message.
     let author_message = match encode_cbor(&(&message, SystemTime::now())) {

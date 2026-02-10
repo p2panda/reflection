@@ -1,5 +1,6 @@
 mod author_tracker;
 mod ephemerial_operation;
+mod network;
 pub mod node;
 mod node_inner;
 mod operation;
