@@ -105,8 +105,8 @@ jobs:
           G_MESSAGES_DEBUG: "all"
         run: |
           hdiutil attach reflection-${{ matrix.variant.arch }}.dmg
-          ls /Volumes/reflection-${{ matrix.variant.arch }}
-          installer -package /Volumes/reflection-${{ matrix.variant.arch }}/Reflection.app -target /
+          ls /Volumes/Reflection
+          installer -package /Volumes/Reflection/Reflection.app -target /
           reflection &
           PID=$!
           sleep 5
