@@ -106,7 +106,8 @@ jobs:
         run: |
           hdiutil attach reflection-${{ matrix.variant.arch }}.dmg
           ls /Volumes/Reflection
-          installer -package /Volumes/Reflection/Reflection.app -target /
+          cp -R /Volumes/Reflection/Reflection.app /Applications
+          hdiutil unmount /Volumes/Reflection
           reflection &
           PID=$!
           sleep 5
