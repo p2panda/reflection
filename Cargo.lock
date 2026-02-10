@@ -4461,7 +4461,6 @@ dependencies = [
 name = "reflection-doc"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-channel",
  "gio",
  "glib",

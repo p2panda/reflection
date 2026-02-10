@@ -2,7 +2,6 @@ use std::fmt;
 use std::hash::Hash;
 use std::sync::Arc;
 
-use anyhow::Result;
 use glib::prelude::*;
 use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
@@ -20,6 +19,30 @@ use crate::author::Author;
 use crate::authors::Authors;
 use crate::identity::PublicKey;
 use crate::service::Service;
+
+#[derive(Debug, Copy, Clone, glib::ErrorDomain)]
+#[error_domain(name = "reflection-document")]
+enum DocumentError {
+    Failed,
+    Node,
+    CRDT,
+}
+
+impl DocumentError {
+    fn from_loro_error(error: loro::LoroError) -> glib::Error {
+        glib::Error::new(DocumentError::CRDT, &error.to_string())
+    }
+
+    fn from_node_error(error: TopicSubscriptionError) -> glib::Error {
+        glib::Error::new(DocumentError::CRDT, &error.to_string())
+    }
+}
+
+/*impl From<loro::LoroError> for glib::error::Error {
+    fn from(error: loro::LoroError) -> Self {
+        glib::error::Error::new(DocumentError::CRDT, &error.to_string());
+    }
+}*/
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, glib::Boxed)]
 #[boxed_type(name = "ReflectionDocumentId", nullable)]
@@ -242,21 +265,21 @@ mod imp {
             }
         }
 
-        pub fn insert_text(&self, index: usize, chunk: &str) -> Result<()> {
+        pub fn insert_text(&self, index: usize, chunk: &str) -> Result<(), glib::Error> {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
             let text = doc.get_text(&*TEXT_CONTAINER_ID);
 
-            text.insert(index, chunk)?;
+            text.insert(index, chunk).map_err(DocumentError::from_loro_error)?;
             doc.commit();
 
             Ok(())
         }
 
-        pub fn delete_text(&self, index: usize, len: usize) -> Result<()> {
+        pub fn delete_text(&self, index: usize, len: usize) -> Result<(), glib::Error> {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
             let text = doc.get_text(&*TEXT_CONTAINER_ID);
 
-            text.delete(index, len)?;
+            text.delete(index, len).map_err(DocumentError::from_loro_error)?;
             doc.commit();
 
             Ok(())
@@ -666,6 +689,9 @@ mod imp {
                             glib::types::Type::I32,
                         ])
                         .build(),
+                    Signal::builder("error")
+                        .param_types([glib::Error::static_type()])
+                        .build(),
                 ]
             })
         }
@@ -720,11 +746,11 @@ impl Document {
             .build()
     }
 
-    pub fn insert_text(&self, pos: i32, text: &str) -> Result<()> {
+    pub fn insert_text(&self, pos: i32, text: &str) -> Result<(), glib::Error> {
         self.imp().insert_text(pos as usize, text)
     }
 
-    pub fn delete_range(&self, start_pos: i32, end_pos: i32) -> Result<()> {
+    pub fn delete_range(&self, start_pos: i32, end_pos: i32) -> Result<(), glib::Error> {
         self.imp()
             .delete_text(start_pos as usize, (end_pos - start_pos) as usize)
     }
@@ -942,6 +968,8 @@ impl SubscribableTopic for DocumentHandle {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 error!("Network error received for subscribed document: {error}");
+                let glib_error = DocumentError::from_node_error(error);
+                document.emit_by_name::<()>("error", &[&glib_error]);
             });
         }
     }
