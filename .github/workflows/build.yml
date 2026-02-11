@@ -105,10 +105,10 @@ jobs:
           G_MESSAGES_DEBUG: "all"
         run: |
           hdiutil attach reflection-${{ matrix.variant.arch }}.dmg
-          ls /Volumes/Reflection
           cp -R /Volumes/Reflection/Reflection.app /Applications
           hdiutil unmount /Volumes/Reflection
-          reflection &
+          ls -R /Volumes/Reflection
+          /Volumes/Reflection.app/Contents/MacOS/reflection &
           PID=$!
           sleep 5
           echo Killing reflection
