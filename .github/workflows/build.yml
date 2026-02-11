@@ -107,7 +107,7 @@ jobs:
           hdiutil attach reflection-${{ matrix.variant.arch }}.dmg
           cp -R /Volumes/Reflection/Reflection.app /Applications
           hdiutil unmount /Volumes/Reflection
-          ls -R /Volumes/Reflection
+          ls -R /Applications/Reflection.app
           /Volumes/Reflection.app/Contents/MacOS/reflection &
           PID=$!
           sleep 5
