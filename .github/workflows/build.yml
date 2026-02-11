@@ -108,7 +108,7 @@ jobs:
           cp -R /Volumes/Reflection/Reflection.app /Applications
           hdiutil unmount /Volumes/Reflection
           ls -R /Applications/Reflection.app
-          /Applications/Contents/MacOS/reflection &
+          /Applications/Reflection.app/Contents/MacOS/reflection &
           PID=$!
           sleep 5
           echo Killing reflection
