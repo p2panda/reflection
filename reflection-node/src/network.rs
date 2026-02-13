@@ -10,21 +10,21 @@ use p2panda_core::PrivateKey;
 use p2panda_net::address_book::{AddressBook, AddressBookError};
 use p2panda_net::addrs::NodeInfo;
 use p2panda_net::gossip::{Gossip, GossipError};
-use p2panda_net::iroh_endpoint::{Endpoint, EndpointError};
+use p2panda_net::iroh_endpoint::{Endpoint, EndpointAddr, EndpointError, RelayUrl};
 use p2panda_net::iroh_mdns::{MdnsDiscovery, MdnsDiscoveryError, MdnsDiscoveryMode};
 
 use crate::operation::ReflectionExtensions;
 use crate::operation_store::OperationStore;
 use crate::topic_store::{LogId, TopicStore};
 
-static RELAY_URL: LazyLock<iroh::RelayUrl> = LazyLock::new(|| {
+static RELAY_URL: LazyLock<RelayUrl> = LazyLock::new(|| {
     "https://euc1-1.relay.n0.iroh-canary.iroh.link"
         .parse()
         .expect("valid relay URL")
 });
 
 static BOOTSTRAP_NODE: LazyLock<NodeInfo> = LazyLock::new(|| {
-    let endpoint_addr = iroh::EndpointAddr::new(
+    let endpoint_addr = EndpointAddr::new(
         "9f63a15ab95959a992af96bf72fbc3e7dc98eeb4799f788bb07b20125053e795"
             .parse()
             .expect("valid bootstrap node id"),
