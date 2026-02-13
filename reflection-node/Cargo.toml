@@ -27,4 +27,3 @@ tracing = "0.1"
 test-log = { version = "0.2.19", default-features = false, features = ["trace", "color"] }
 hex = "0.4.3"
 rand_chacha = "0.10.0"
-iroh = "0.96.1"
