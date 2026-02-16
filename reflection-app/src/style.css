@@ -62,6 +62,7 @@
   min-width: 16px;
   min-height: 16px;
   border-radius: 9999px;
+  color: black; /* The color doesn't matter we need to set alpha to 100% */
 }
 
 .connection-popover .avatar {
