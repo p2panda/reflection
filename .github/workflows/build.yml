@@ -39,20 +39,25 @@ jobs:
   # flatpak run cx.modal.Reflection
 
   macos:
-    if: false  # This disable macos for now.
-    name: macOS
-    runs-on: macos-latest
+    name: macOS (${{ matrix.variant.arch }})
+    runs-on: ${{ matrix.variant.runner }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: x86_64-apple-darwin
-            arch: x86_64
-          - target: aarch64-apple-darwin
-            arch: arm64
+        variant:
+          - arch: x86_64
+            target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - arch: arm64
+            target: aarch64-apple-darwin
+            runner: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
+        with:
+          targets: ${{ matrix.variant.target }}
+          channel: nightly
+          cache-target: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -63,168 +68,47 @@ jobs:
             ~/Library/Caches/Homebrew
             /usr/local/Homebrew
             /opt/homebrew
-          key: ${{ runner.os }}-${{ matrix.arch }}-brew-${{ hashFiles('.github/workflows/build.yml') }}
+          key: ${{ runner.os }}-${{ matrix.variant.arch }}-brew-${{ hashFiles('**/Brewfile', '.github/workflows/build.yml') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-brew-
+            ${{ runner.os }}-${{ matrix.variant.arch }}-brew-
 
-      - name: Setup x86_64 Homebrew
-        if: matrix.arch == 'x86_64'
+      - name: Run macOS Build Script
         run: |
-          HOMEBREW_PREFIX="/usr/local"
-          sudo mkdir -p /usr/local
-          sudo chown -R $(whoami) /usr/local
-          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          eval "$(/usr/local/bin/brew shellenv)"
-          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/opt/pango/lib/pkgconfig:/usr/local/opt/cairo/lib/pkgconfig:/usr/local/opt/gdk-pixbuf/lib/pkgconfig:/usr/local/opt/graphene/lib/pkgconfig:/usr/local/opt/libffi/lib/pkgconfig:/usr/local/opt/gtk4/lib/pkgconfig:/usr/local/opt/libadwaita/lib/pkgconfig" >> $GITHUB_ENV
-
-      - name: Install pkg-config (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install pkg-config || echo ERROR
-
-      - name: Install GDK-Pixbuf (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install gdk-pixbuf || echo ERROR
-
-      - name: Install Cairo (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install cairo || echo ERROR
-
-      - name: Install Pango (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install pango || echo ERROR
-
-      - name: Install AT-SPI2-Core (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install at-spi2-core || echo ERROR
-
-      - name: Install Graphene (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install graphene || echo ERROR
-
-      - name: Install GTK4 (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install gtk4 || echo ERROR
-
-      - name: Install GtkSourceView5 (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install gtksourceview5 || echo ERROR
-
-      - name: Install Libadwaita (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install -v libadwaita
-
-      - name: Install dylibbundler (x86_64)
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install -v dylibbundler
-
-      - name: Install dylibbundler ARM64
-        if: matrix.arch == 'arm64'
-        run: brew install -v dylibbundler
-
-      - name: Verify and link x86_64 packages
-        if: matrix.arch == 'x86_64'
-        run: |
-          # Verify installations
-          arch -x86_64 /usr/local/bin/brew list pango
-          arch -x86_64 /usr/local/bin/brew list cairo
-          arch -x86_64 /usr/local/bin/brew list gdk-pixbuf
-          arch -x86_64 /usr/local/bin/brew list gtk4
-          arch -x86_64 /usr/local/bin/brew list gtksourceview5
-          arch -x86_64 /usr/local/bin/brew list libadwaita
-
-          # Link packages individually with error handling
-          for package in pango cairo gdk-pixbuf gtk4 gtksourceview5 libadwaita; do
-            arch -x86_64 /usr/local/bin/brew link --force $package || true
-          done
-
-      - name: Install ARM64 dependencies
-        if: matrix.arch == 'arm64'
-        run: |
-          brew install pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita gtksourceview5 || true
-          brew upgrade pkg-config gtk4 pango cairo gdk-pixbuf at-spi2-core graphene libadwaita gtksourceview5 || true
-
-      - name: Finalize ARM64 setup
-        if: matrix.arch == 'arm64'
-        run: |
-          echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig" >> $GITHUB_ENV
-          echo "PKG_CONFIG_ALLOW_CROSS=1" >> $GITHUB_ENV
-      - name: Add target ${{ matrix.target }}
-        run: rustup target add ${{ matrix.target }}
-      - name: Build
+          chmod +x build-aux/build_macos.sh
+          ./build-aux/build_macos.sh --release --app-bundle --dmg
         env:
-          PKG_CONFIG_ALLOW_CROSS: "1"
-          CFLAGS: "-I/usr/local/include -I/usr/local/include/gtk-4.0 -I/usr/local/include/glib-2.0 -I/usr/local/lib/glib-2.0/include"
-          LDFLAGS: "-L/usr/local/lib -framework Cocoa -framework Security"
           MACOSX_DEPLOYMENT_TARGET: "10.15"
-          PKG_CONFIG_SYSROOT_DIR: ""
-          PKG_CONFIG_PATH: "${{ env.PKG_CONFIG_PATH }}"
-        run: cargo build --release --target ${{ matrix.target }}
-      - name: Install glib-compile-resources
-        if: matrix.arch == 'x86_64'
-        run: arch -x86_64 /usr/local/bin/brew install glib || echo ERROR
 
-      - name: Install glib-compile-resources ARM64
-        if: matrix.arch == 'arm64'
-        run: brew install glib || echo ERROR
-
-      - name: Compile GResource
-        run: |
-          mkdir -p target/${{ matrix.target }}/release/
-          glib-compile-resources --sourcedir reflection-app/src --target target/${{ matrix.target }}/release/reflection.gresource reflection-app/src/reflection.gresource.xml
-
-      - name: Create App Bundle
-        run: |
-          mkdir -p Reflection.app/Contents/{MacOS,Resources}/share/reflection
-          cp target/${{ matrix.target }}/release/reflection Reflection.app/Contents/MacOS/
-          cp target/${{ matrix.target }}/release/reflection.gresource Reflection.app/Contents/Resources/share/reflection/
-
-          # Create Info.plist
-          cat > Reflection.app/Contents/Info.plist << EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>CFBundleExecutable</key>
-              <string>reflection</string>
-              <key>CFBundleIdentifier</key>
-              <string>cx.modal.Reflection</string>
-              <key>CFBundleName</key>
-              <string>Reflection</string>
-              <key>CFBundlePackageType</key>
-              <string>APPL</string>
-              <key>CFBundleShortVersionString</key>
-              <string>0.1.0</string>
-              <key>LSMinimumSystemVersion</key>
-              <string>10.15</string>
-              <key>CFBundleSupportedPlatforms</key>
-              <array>
-                  <string>MacOSX</string>
-              </array>
-          </dict>
-          </plist>
-          EOF
-
-      # Bundle dependencies
-      - name: Bundle dependencies
-        run: |
-          dylibbundler -od -b -x Reflection.app/Contents/MacOS/reflection \
-            -d Reflection.app/Contents/Frameworks/ \
-            -p @executable_path/../Frameworks/
-      # Create DMG
-      - name: Create DMG
-        run: hdiutil create -volname "Reflection" -srcfolder Reflection.app -ov -format UDZO reflection-${{ matrix.arch }}.dmg
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: reflection-macos-${{ matrix.arch }}
-          path: reflection-${{ matrix.arch }}.dmg
-      - name: Smoke test the artifact
+          # Build script creates artifacts in the current directory
+          name: reflection-macos-${{ matrix.variant.arch }}
+          path: reflection-${{ matrix.variant.arch }}.dmg
+
+      - name: Smoke test the build
         env:
           RUST_BACKTRACE: "full"
           RUST_LOG: "debug"
           G_MESSAGES_DEBUG: "all"
         run: |
           ./Reflection.app/Contents/MacOS/reflection &
+          PID=$!
+          sleep 5
+          echo Killing reflection
+          kill $PID || true
+
+      - name: Smoke test the bundle
+        env:
+          RUST_BACKTRACE: "full"
+          RUST_LOG: "debug"
+          G_MESSAGES_DEBUG: "all"
+        run: |
+          hdiutil attach reflection-${{ matrix.variant.arch }}.dmg
+          cp -R /Volumes/Reflection/Reflection.app /Applications
+          hdiutil unmount /Volumes/Reflection
+          ls -R /Applications/Reflection.app
+          /Applications/Reflection.app/Contents/MacOS/reflection &
           PID=$!
           sleep 5
           echo Killing reflection
