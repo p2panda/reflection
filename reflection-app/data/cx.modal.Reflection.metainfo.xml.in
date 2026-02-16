@@ -69,6 +69,15 @@
   </recommends>
 
   <releases>
+    <release version="0.2" date="2026-01-16">
+      <description translate="no">
+        <p>Second preview release.</p>
+        <ul>
+          <li>Using the latest p2panda version</li>
+        </ul>
+      </description>
+    </release>
+
     <release version="0.1" date="2025-12-23">
       <description translate="no">
         <p>Initial preview release.</p>

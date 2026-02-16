@@ -4440,7 +4440,7 @@ dependencies = [
 
 [[package]]
 name = "reflection"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "ashpd",
  "formatx",
@@ -4459,7 +4459,7 @@ dependencies = [
 
 [[package]]
 name = "reflection-doc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4478,7 +4478,7 @@ dependencies = [
 
 [[package]]
 name = "reflection-node"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "ciborium",
