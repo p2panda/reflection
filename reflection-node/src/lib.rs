@@ -1,17 +1,10 @@
 mod author_tracker;
-mod ephemerial_operation;
-mod network;
+mod database;
+mod message;
 pub mod node;
-mod node_inner;
-mod operation;
-mod operation_store;
-mod subscription_inner;
-pub mod topic;
+pub mod subscription;
 mod topic_store;
-mod utils;
-
-pub use p2panda_core;
-pub use topic::SubscribableTopic;
+pub mod traits;
 
 #[cfg(test)]
 mod tests {

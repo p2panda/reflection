@@ -1,0 +1,17 @@
+use p2panda::node::CreateStreamError;
+use p2panda_core::VerifyingKey;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum SubscriptionError {
+    #[error(transparent)]
+    CreateStream(#[from] CreateStreamError),
+}
+
+pub trait SubscribableTopic: Sync + Send {
+    fn bytes_received(&self, author: VerifyingKey, data: Vec<u8>);
+    fn author_joined(&self, author: VerifyingKey);
+    fn author_left(&self, author: VerifyingKey);
+    fn ephemeral_bytes_received(&self, author: VerifyingKey, data: Vec<u8>);
+    fn error(&self, error: SubscriptionError);
+}

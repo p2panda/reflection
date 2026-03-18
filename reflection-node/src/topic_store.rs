@@ -1,23 +1,13 @@
 use std::collections::HashMap;
-use std::hash::Hash as StdHash;
 
 use chrono::{DateTime, Utc};
-use p2panda_core::PublicKey;
-use p2panda_net::TopicId;
-use p2panda_store::LogStore;
-use p2panda_sync::protocols::Logs;
-use p2panda_sync::traits::TopicMap;
-use serde::{Deserialize, Serialize};
+use p2panda_core::{VerifyingKey, Topic};
 use sqlx::{FromRow, Row};
-use tracing::error;
-
-use crate::operation::{LogType, ReflectionExtensions};
-use crate::operation_store::OperationStore;
 
 #[derive(Debug, FromRow)]
 pub struct StoreTopic {
     #[sqlx(try_from = "Vec<u8>")]
-    pub id: TopicId,
+    pub id: Topic,
     #[sqlx(default)]
     pub name: Option<String>,
     pub last_accessed: Option<DateTime<Utc>>,
@@ -148,7 +138,11 @@ impl TopicStore {
         Ok(())
     }
 
-    pub async fn set_name_for_topic(&self, id: &TopicId, name: Option<String>) -> sqlx::Result<()> {
+    pub async fn set_name_for_topic(
+        &self,
+        topic: &Topic,
+        name: Option<String>,
+    ) -> sqlx::Result<()> {
         sqlx::query(
             "
             UPDATE topics
@@ -157,7 +151,7 @@ impl TopicStore {
             ",
         )
         .bind(name)
-        .bind(id.as_slice())
+        .bind(topic.as_bytes().as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -166,7 +160,7 @@ impl TopicStore {
 
     pub async fn set_last_accessed_for_topic(
         &self,
-        id: &TopicId,
+        topic: &Topic,
         last_accessed: Option<DateTime<Utc>>,
     ) -> sqlx::Result<()> {
         sqlx::query(
@@ -177,81 +171,10 @@ impl TopicStore {
             ",
         )
         .bind(last_accessed)
-        .bind(id.as_slice())
+        .bind(topic.as_bytes().as_slice())
         .execute(&self.pool)
         .await?;
 
         Ok(())
-    }
-
-    pub async fn operations_for_topic(
-        &self,
-        operation_store: &OperationStore,
-        id: &TopicId,
-    ) -> sqlx::Result<Vec<p2panda_core::Operation<ReflectionExtensions>>> {
-        let operation_store = operation_store.inner();
-        let authors = self.authors(id).await?;
-
-        let log_ids = [
-            LogId::new(LogType::Delta, id),
-            LogId::new(LogType::Snapshot, id),
-        ];
-
-        let mut result = Vec::new();
-
-        for author in authors.iter() {
-            for log_id in &log_ids {
-                let operations = match operation_store.get_log(author, log_id, None).await {
-                    Ok(Some(operations)) => {
-                        operations
-                            .into_iter()
-                            .map(|(header, body)| p2panda_core::Operation {
-                                hash: header.hash(),
-                                header,
-                                body,
-                            })
-                    }
-                    Ok(None) => {
-                        continue;
-                    }
-                    Err(error) => {
-                        error!(
-                            "Failed to load operation for {author} with log type {log_id:?}: {error}"
-                        );
-                        continue;
-                    }
-                };
-
-                result.extend(operations);
-            }
-        }
-
-        Ok(result)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, StdHash, Serialize, Deserialize)]
-pub struct LogId(LogType, TopicId);
-
-impl LogId {
-    pub fn new(log_type: LogType, topic: &TopicId) -> Self {
-        Self(log_type, *topic)
-    }
-}
-
-impl TopicMap<TopicId, Logs<LogId>> for TopicStore {
-    type Error = sqlx::Error;
-
-    async fn get(&self, topic: &TopicId) -> Result<Logs<LogId>, Self::Error> {
-        let authors = self.authors(topic).await?;
-
-        let log_ids = [
-            LogId::new(LogType::Delta, topic),
-            LogId::new(LogType::Snapshot, topic),
-        ];
-        Ok(authors
-            .into_iter()
-            .map(|author| (author, log_ids.to_vec()))
-            .collect())
     }
 }
