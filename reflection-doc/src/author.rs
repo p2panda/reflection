@@ -151,7 +151,10 @@ impl Author {
             .build()
     }
 
-    pub(crate) fn with_state(verifying_key: &VerifyingKey, last_seen: Option<&glib::DateTime>) -> Self {
+    pub(crate) fn with_state(
+        verifying_key: &VerifyingKey,
+        last_seen: Option<&glib::DateTime>,
+    ) -> Self {
         glib::Object::builder()
             .property("verifying-key", verifying_key)
             .property("last-seen", last_seen)
