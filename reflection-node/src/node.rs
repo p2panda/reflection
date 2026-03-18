@@ -85,8 +85,8 @@ pub struct Node {
 
 impl Node {
     pub async fn new(
-        private_key: PrivateKey,
-        network_id: Hash,
+        signing_key: SigningKey,
+        network_id: impl Into<NetworkId>,
         db_location: Option<&Path>,
     ) -> Result<Self, NodeError> {
         let runtime = if let Ok(handle) = tokio::runtime::Handle::try_current() {

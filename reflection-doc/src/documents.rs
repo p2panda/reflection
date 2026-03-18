@@ -5,7 +5,7 @@ use gio::subclass::prelude::ListModelImpl;
 use glib::subclass::prelude::*;
 use indexmap::IndexMap;
 
-use crate::identity::PublicKey;
+use crate::identity::VerifyingKey;
 use crate::service::StartupError;
 use crate::{
     author::Author,
@@ -68,7 +68,7 @@ impl Documents {
     }
 
     pub(crate) async fn load(&self, service: &Service) -> Result<(), StartupError> {
-        let public_key = service.private_key().public_key();
+        let verifying_key = service.signing_key().verifying_key();
 
         let documents = service.node().topics::<DocumentId>().await?;
 
@@ -85,17 +85,17 @@ impl Documents {
                 .authors
                 .iter()
                 .map(|author| {
-                    let author_public_key = PublicKey(author.public_key);
-                    if author_public_key == public_key {
+                    let author_verifying_key = VerifyingKey(author.verifying_key);
+                    if author_verifying_key == verifying_key {
                         let last_seen = author.last_seen.and_then(|last_seen| {
                             glib::DateTime::from_unix_utc(last_seen.timestamp()).ok()
                         });
-                        Author::for_this_device(&PublicKey(author.public_key), last_seen.as_ref())
+                        Author::for_this_device(&VerifyingKey(author.verifying_key), last_seen.as_ref())
                     } else {
                         let last_seen = author.last_seen.and_then(|last_seen| {
                             glib::DateTime::from_unix_utc(last_seen.timestamp()).ok()
                         });
-                        Author::with_state(&author_public_key, last_seen.as_ref())
+                        Author::with_state(&author_verifying_key, last_seen.as_ref())
                     }
                 })
                 .collect();

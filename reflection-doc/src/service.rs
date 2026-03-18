@@ -7,16 +7,9 @@ use std::sync::{Mutex, OnceLock};
 use thiserror::Error;
 use tracing::error;
 
-use crate::identity::PrivateKey;
-use crate::{
-    document::{Document, DocumentId},
-    documents::Documents,
-};
-use reflection_node::{
-    node,
-    node::{Node, NodeError},
-    topic::TopicError,
-};
+use crate::document::{Document, DocumentId};
+use crate::documents::Documents;
+use crate::identity::SigningKey;
 
 #[derive(Error, Debug)]
 pub enum StartupError {
@@ -53,8 +46,8 @@ mod imp {
     #[properties(wrapper_type = super::Service)]
     pub struct Service {
         pub node: OnceLock<Node>,
-        #[property(get, set, construct_only, type = PrivateKey)]
-        pub private_key: OnceLock<PrivateKey>,
+        #[property(get, set, construct_only, type = SigningKey)]
+        pub signing_key: OnceLock<SigningKey>,
         #[property(get, set, construct_only, nullable, type = Option<gio::File>)]
         pub data_dir: OnceLock<Option<gio::File>>,
         #[property(get)]
@@ -135,9 +128,9 @@ glib::wrapper! {
 }
 
 impl Service {
-    pub fn new(private_key: &PrivateKey, data_dir: Option<&gio::File>) -> Self {
+    pub fn new(signing_key: &SigningKey, data_dir: Option<&gio::File>) -> Self {
         glib::Object::builder()
-            .property("private-key", private_key)
+            .property("signing-key", signing_key)
             .property("data-dir", data_dir)
             .build()
     }
@@ -171,10 +164,10 @@ impl Service {
     }
 
     pub async fn startup(&self) -> Result<(), StartupError> {
-        let private_key = self.private_key().0;
-        let network_id = Hash::new(b"reflection");
+        let signing_key = self.signing_key().0;
+        let network_id = Hash::digest(b"reflection");
         let path = self.data_dir().and_then(|data_dir| data_dir.path());
-        let node = Node::new(private_key, network_id, path.as_deref()).await?;
+        let node = Node::new(signing_key, network_id, path.as_deref()).await?;
 
         self.imp()
             .node

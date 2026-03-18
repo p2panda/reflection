@@ -5,7 +5,7 @@ use glib::Properties;
 use glib::prelude::*;
 use glib::subclass::prelude::*;
 
-use crate::identity::PublicKey;
+use crate::identity::VerifyingKey;
 
 pub const COLORS: [(&str, &str); 14] = [
     ("Yellow", "#faf387"),
@@ -78,8 +78,8 @@ mod imp {
         #[property(name = "emoji", get = Self::emoji, type = String)]
         #[property(name = "color", get = Self::color, type = String)]
         #[property(name = "hex-color", get = Self::hex_color, type = String)]
-        #[property(get, set, construct_only, type = PublicKey)]
-        public_key: OnceLock<PublicKey>,
+        #[property(get, set, construct_only, type = VerifyingKey)]
+        verifying_key: OnceLock<VerifyingKey>,
         #[property(get, set, construct_only)]
         pub last_seen: Mutex<Option<glib::DateTime>>,
         #[property(get, default = true)]
@@ -100,7 +100,7 @@ mod imp {
 
     impl Author {
         fn name(&self) -> String {
-            let bytes = self.public_key.get().unwrap().as_bytes();
+            let bytes = self.verifying_key.get().unwrap().as_bytes();
             let selector_color = bytes[..(bytes.len() / 2)]
                 .iter()
                 .fold(0u8, |acc, b| acc ^ b) as usize
@@ -113,7 +113,7 @@ mod imp {
         }
 
         fn emoji(&self) -> String {
-            let bytes = self.public_key.get().unwrap().as_bytes();
+            let bytes = self.verifying_key.get().unwrap().as_bytes();
             let selector_emoji = bytes[(bytes.len() / 2)..]
                 .iter()
                 .fold(0u8, |acc, b| acc ^ b) as usize
@@ -122,7 +122,7 @@ mod imp {
         }
 
         fn color(&self) -> String {
-            let bytes = self.public_key.get().unwrap().as_bytes();
+            let bytes = self.verifying_key.get().unwrap().as_bytes();
             let selector_color = bytes[..(bytes.len() / 2)]
                 .iter()
                 .fold(0u8, |acc, b| acc ^ b) as usize
@@ -131,7 +131,7 @@ mod imp {
         }
 
         fn hex_color(&self) -> String {
-            let bytes = self.public_key.get().unwrap().as_bytes();
+            let bytes = self.verifying_key.get().unwrap().as_bytes();
             let selector_color = bytes[..(bytes.len() / 2)]
                 .iter()
                 .fold(0u8, |acc, b| acc ^ b) as usize
@@ -145,24 +145,24 @@ glib::wrapper! {
     pub struct Author(ObjectSubclass<imp::Author>);
 }
 impl Author {
-    pub(crate) fn new(public_key: &PublicKey) -> Self {
+    pub(crate) fn new(verifying_key: &VerifyingKey) -> Self {
         glib::Object::builder()
-            .property("public-key", public_key)
+            .property("verifying-key", verifying_key)
             .build()
     }
 
-    pub(crate) fn with_state(public_key: &PublicKey, last_seen: Option<&glib::DateTime>) -> Self {
+    pub(crate) fn with_state(verifying_key: &VerifyingKey, last_seen: Option<&glib::DateTime>) -> Self {
         glib::Object::builder()
-            .property("public-key", public_key)
+            .property("verifying-key", verifying_key)
             .property("last-seen", last_seen)
             .build()
     }
 
     pub(crate) fn for_this_device(
-        public_key: &PublicKey,
+        verifying_key: &VerifyingKey,
         last_seen: Option<&glib::DateTime>,
     ) -> Self {
-        let obj = Self::with_state(public_key, last_seen);
+        let obj = Self::with_state(verifying_key, last_seen);
 
         obj.imp().is_this_device.set(true);
         obj
