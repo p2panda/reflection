@@ -9,11 +9,9 @@ use glib::{Properties, clone};
 pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use reflection_node::p2panda_core;
-use reflection_node::topic::{
-    SubscribableTopic, Subscription as TopicSubscription,
-    SubscriptionError as TopicSubscriptionError,
-};
+use p2panda_core::{self, Topic};
+use reflection_node::subscription::Subscription as TopicSubscription;
+use reflection_node::traits::{SubscribableTopic, SubscriptionError as TopicSubscriptionError};
 use tracing::error;
 
 use crate::author::Author;
@@ -34,6 +32,18 @@ impl From<DocumentId> for [u8; 32] {
 impl From<[u8; 32]> for DocumentId {
     fn from(bytes: [u8; 32]) -> Self {
         Self(bytes)
+    }
+}
+
+impl From<Topic> for DocumentId {
+    fn from(value: Topic) -> Self {
+        Self(value.to_bytes())
+    }
+}
+
+impl From<DocumentId> for Topic {
+    fn from(value: DocumentId) -> Self {
+        Topic::from(value.0)
     }
 }
 
@@ -298,7 +308,7 @@ mod imp {
                     #[weak]
                     subscription,
                     async move {
-                        if let Err(error) = subscription.send_ephemeral(cursor_bytes).await {
+                        if let Err(error) = subscription.publish_ephemeral(cursor_bytes).await {
                             error!("Failed to send cursor position: {}", error);
                         }
                     }
@@ -495,7 +505,7 @@ mod imp {
                             subscription,
                             async move {
                                 // Broadcast a "text delta" to all peers
-                                if let Err(error) = subscription.send_delta(delta_bytes).await {
+                                if let Err(error) = subscription.publish_delta(delta_bytes).await {
                                     error!(
                                         "Failed to send delta of document to the network: {}",
                                         error
@@ -828,7 +838,7 @@ impl Document {
                 .export(ExportMode::Snapshot)
                 .expect("encoded crdt snapshot");
 
-            if let Err(error) = subscription.send_snapshot(snapshot_bytes).await {
+            if let Err(error) = subscription.publish_snapshot(snapshot_bytes).await {
                 error!(
                     "Failed to send snapshot of document to the network: {}",
                     error
@@ -872,7 +882,7 @@ impl Document {
                 .expect("crdt_doc to be set")
                 .export(ExportMode::Snapshot)
                 .expect("encoded crdt snapshot");
-            if let Err(error) = subscription.send_snapshot(snapshot_bytes).await {
+            if let Err(error) = subscription.publish_snapshot(snapshot_bytes).await {
                 error!(
                     "Failed to send snapshot of document to the network: {}",
                     error

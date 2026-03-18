@@ -70,7 +70,7 @@ impl Documents {
     pub(crate) async fn load(&self, service: &Service) -> Result<(), StartupError> {
         let public_key = service.private_key().public_key();
 
-        let documents = service.node().topics::<DocumentId>().await?;
+        let documents = service.node().topics().await?;
 
         let mut list = self.imp().list.write().unwrap();
         assert!(list.is_empty());
@@ -102,14 +102,14 @@ impl Documents {
 
             let obj = Document::with_state(
                 service,
-                Some(&document.id),
+                Some(&document.id.into()),
                 document.name.as_deref(),
                 last_accessed.as_ref(),
             );
 
             obj.authors().load(authors);
 
-            list.insert(document.id, obj);
+            list.insert(document.id.into(), obj);
         }
 
         drop(list);

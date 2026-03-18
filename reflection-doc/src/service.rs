@@ -1,29 +1,26 @@
+use std::sync::{Mutex, OnceLock};
+
 use gio::prelude::{FileExt, ListModelExtManual, NetworkMonitorExt};
 use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
 use glib::{Properties, clone};
-use reflection_node::p2panda_core::Hash;
-use std::sync::{Mutex, OnceLock};
+use p2panda_core::Hash;
+use reflection_node::node;
+use reflection_node::node::{Node, NodeError};
+use reflection_node::subscription::SubscriptionError;
 use thiserror::Error;
 use tracing::error;
 
+use crate::document::{Document, DocumentId};
+use crate::documents::Documents;
 use crate::identity::PrivateKey;
-use crate::{
-    document::{Document, DocumentId},
-    documents::Documents,
-};
-use reflection_node::{
-    node,
-    node::{Node, NodeError},
-    topic::TopicError,
-};
 
 #[derive(Error, Debug)]
 pub enum StartupError {
     #[error(transparent)]
     Node(#[from] NodeError),
     #[error(transparent)]
-    Topic(#[from] TopicError),
+    Topic(#[from] SubscriptionError),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, glib::Enum, Default)]

@@ -14,6 +14,7 @@ glib = "0.21"
 hex = "0.4.3"
 indexmap = "2.13.0"
 loro = { tag = "loro-crdt@1.10.6", git = "https://github.com/loro-dev/loro.git" }
+p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "534363cfc33d2e3275748bf8b0a9307e6eb261c0" }
 rand = "0.10.0"
 reflection-node = { path = "../reflection-node" }
 serde = { version = "1.0.228", features = ["derive"] }

@@ -5,11 +5,11 @@ pub mod documents;
 pub mod service;
 
 pub mod identity {
+    use std::fmt;
     use std::hash::Hash;
 
-    use reflection_node::p2panda_core;
-    pub use reflection_node::p2panda_core::identity::IdentityError;
-    use std::fmt;
+    use p2panda_core;
+    pub use p2panda_core::identity::IdentityError;
 
     #[derive(Clone, Debug, glib::Boxed)]
     #[boxed_type(name = "ReflectionPrivateKey", nullable)]
