@@ -10,9 +10,7 @@ pub mod traits;
 mod tests {
     use std::sync::Arc;
 
-    use p2panda_core::Hash;
-    use p2panda_core::PrivateKey;
-    use p2panda_core::PublicKey;
+    use p2panda_core::{Hash, SigningKey, Topic, VerifyingKey};
     use tokio::sync::{Mutex, mpsc};
 
     use crate::node::ConnectionMode;
@@ -22,9 +20,9 @@ mod tests {
     #[tokio::test]
     #[test_log::test]
     async fn create_topic() {
-        let private_key = PrivateKey::new();
-        let network_id = Hash::new(b"reflection");
-        let node = Node::new(private_key, network_id, None).await.unwrap();
+        let signing_key = SigningKey::generate();
+        let network_id = Hash::digest(b"reflection");
+        let node = Node::new(signing_key, network_id, None).await.unwrap();
 
         let id: [u8; 32] = [0; 32];
         let _sub = node.subscribe(id, TestTopic::new()).await;
@@ -57,22 +55,25 @@ mod tests {
     }
 
     impl SubscribableTopic for TestTopic {
-        fn bytes_received(&self, _author: PublicKey, data: Vec<u8>) {
+        fn bytes_received(&self, _author: VerifyingKey, data: Vec<u8>) {
             self.tx.send(data).unwrap();
         }
 
-        fn author_joined(&self, _author: PublicKey) {}
-        fn author_left(&self, _author: PublicKey) {}
-        fn ephemeral_bytes_received(&self, _author: PublicKey, _data: Vec<u8>) {}
-        fn error(&self, _error: crate::topic::SubscriptionError) {}
+        fn author_joined(&self, _author: VerifyingKey) {}
+        fn author_left(&self, _author: VerifyingKey) {}
+        fn ephemeral_bytes_received(&self, _author: VerifyingKey, _data: Vec<u8>) {}
+        fn error(&self, _error: SubscriptionError) {}
     }
 
     #[tokio::test]
     #[test_log::test]
     async fn subscribe_topic() {
-        let private_key = PrivateKey::new();
-        let network_id = Hash::new(b"reflection");
-        let node = Node::new(private_key, network_id, None).await.unwrap();
+        let network_id = Hash::digest(b"reflection");
+        let topic_id: Topic = [1; 32].into();
+
+        let node = Node::new(SigningKey::generate(), network_id, None)
+            .await
+            .unwrap();
         node.set_connection_mode(ConnectionMode::Network)
             .await
             .unwrap();

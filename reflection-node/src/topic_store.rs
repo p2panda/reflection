@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use p2panda_core::{VerifyingKey, Topic};
+use p2panda_core::{Topic, VerifyingKey};
 use sqlx::{FromRow, Row};
 
 #[derive(Debug, FromRow)]
@@ -17,7 +17,7 @@ pub struct StoreTopic {
 
 #[derive(Debug, Clone)]
 pub struct Author {
-    pub public_key: PublicKey,
+    pub verifying_key: VerifyingKey,
     pub last_seen: Option<DateTime<Utc>>,
 }
 
@@ -27,20 +27,8 @@ pub struct TopicStore {
 }
 
 impl TopicStore {
-    pub fn new(pool: sqlx::SqlitePool) -> Self {
+    pub fn from_pool(pool: sqlx::SqlitePool) -> Self {
         Self { pool }
-    }
-
-    async fn authors(&self, id: &TopicId) -> sqlx::Result<Vec<PublicKey>> {
-        let list = sqlx::query("SELECT public_key FROM authors WHERE topic_id = ?")
-            .bind(id.as_slice())
-            .fetch_all(&self.pool)
-            .await?;
-
-        Ok(list
-            .iter()
-            .filter_map(|row| PublicKey::try_from(row.get::<&[u8], _>("public_key")).ok())
-            .collect())
     }
 
     pub async fn topics(&self) -> sqlx::Result<Vec<StoreTopic>> {
@@ -48,22 +36,23 @@ impl TopicStore {
             sqlx::query_as("SELECT id, name, last_accessed FROM topics")
                 .fetch_all(&self.pool)
                 .await?;
-        let authors = sqlx::query("SELECT public_key, topic_id, last_seen FROM authors")
+        let authors = sqlx::query("SELECT verifying_key, topic_id, last_seen FROM authors")
             .fetch_all(&self.pool)
             .await?;
 
         let mut authors_per_topic = authors.iter().fold(HashMap::new(), |mut acc, row| {
-            let Ok(id) = TopicId::try_from(row.get::<&[u8], _>("topic_id")) else {
+            let Ok(id) = Topic::try_from(row.get::<&[u8], _>("topic_id")) else {
                 return acc;
             };
-            let Ok(public_key) = PublicKey::try_from(row.get::<&[u8], _>("public_key")) else {
+            let Ok(verifying_key) = VerifyingKey::try_from(row.get::<&[u8], _>("verifying_key"))
+            else {
                 return acc;
             };
             let Ok(last_seen) = row.try_get::<Option<DateTime<Utc>>, _>("last_seen") else {
                 return acc;
             };
             acc.entry(id).or_insert_with(Vec::new).push(Author {
-                public_key,
+                verifying_key,
                 last_seen,
             });
             acc
@@ -78,40 +67,45 @@ impl TopicStore {
         Ok(topics)
     }
 
-    pub async fn add_topic(&self, id: &TopicId) -> sqlx::Result<()> {
-        // The id is the primary key in the table therefore ignore insertion when the topic exists already
+    pub async fn add_topic(&self, topic: &Topic) -> sqlx::Result<()> {
+        // The id is the primary key in the table therefore ignore insertion when the topic exists
+        // already
         sqlx::query(
             "
             INSERT OR IGNORE INTO topics ( id )
             VALUES ( ? )
             ",
         )
-        .bind(id.as_slice())
+        .bind(topic.as_bytes().as_slice())
         .execute(&self.pool)
         .await?;
 
         Ok(())
     }
 
-    pub async fn delete_topic(&self, id: &TopicId) -> sqlx::Result<()> {
+    pub async fn delete_topic(&self, topic: &Topic) -> sqlx::Result<()> {
         sqlx::query("DELETE FROM topics WHERE id = ?")
-            .bind(id.as_slice())
+            .bind(topic.as_bytes().as_slice())
             .execute(&self.pool)
             .await?;
 
         Ok(())
     }
 
-    pub async fn add_author(&self, id: &TopicId, public_key: &PublicKey) -> sqlx::Result<()> {
+    pub async fn add_author(
+        &self,
+        topic: &Topic,
+        verifying_key: &VerifyingKey,
+    ) -> sqlx::Result<()> {
         // The author/id pair is required to be unique therefore ignore if the insertion fails
         sqlx::query(
             "
-            INSERT OR IGNORE INTO authors ( public_key, topic_id )
+            INSERT OR IGNORE INTO authors ( verifying_key, topic_id )
             VALUES ( ?, ? )
             ",
         )
-        .bind(public_key.as_bytes().as_slice())
-        .bind(id.as_slice())
+        .bind(verifying_key.as_bytes().as_slice())
+        .bind(topic.as_bytes().as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -120,18 +114,18 @@ impl TopicStore {
 
     pub async fn set_last_seen_for_author(
         &self,
-        public_key: PublicKey,
+        verifying_key: VerifyingKey,
         last_seen: Option<DateTime<Utc>>,
     ) -> sqlx::Result<()> {
         sqlx::query(
             "
             UPDATE authors
             SET last_seen = ?
-            WHERE public_key = ?
+            WHERE verifying_key = ?
             ",
         )
         .bind(last_seen)
-        .bind(public_key.as_bytes().as_slice())
+        .bind(verifying_key.as_bytes().as_slice())
         .execute(&self.pool)
         .await?;
 

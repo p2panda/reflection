@@ -23,7 +23,7 @@ use tracing::info;
 
 #[cfg(target_os = "linux")]
 use crate::APP_ID;
-use reflection_doc::identity::{IdentityError, PrivateKey};
+use reflection_doc::identity::{IdentityError, SigningKey};
 
 #[cfg(target_os = "linux")]
 const XDG_SCHEMA: &str = "xdg:schema";
@@ -52,60 +52,60 @@ pub enum Error {
 }
 
 #[cfg(target_os = "linux")]
-pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
+pub async fn get_or_create_identity() -> Result<SigningKey, Error> {
     let keyring = oo7::Keyring::new().await?;
 
     keyring.unlock().await?;
 
-    let private_key: PrivateKey =
+    let signing_key: SigningKey =
         if let Some(item) = keyring.search_items(&attributes()).await?.first() {
             item.unlock().await?;
-            let private_key = PrivateKey::try_from(item.secret().await?.as_bytes())?;
-            info!("Found existing identity: {}", private_key.public_key());
+            let signing_key = SigningKey::try_from(item.secret().await?.as_bytes())?;
+            info!("Found existing identity: {}", signing_key.verifying_key());
 
-            private_key
+            signing_key
         } else {
-            let private_key = PrivateKey::new();
+            let signing_key = SigningKey::generate();
             keyring
-                .create_item("Reflection", &attributes(), private_key.as_bytes(), true)
+                .create_item("Reflection", &attributes(), signing_key.as_bytes(), true)
                 .await?;
 
             info!(
                 "No existing identity found. Create new identity: {}",
-                private_key.public_key()
+                signing_key.verifying_key()
             );
-            private_key
+            signing_key
         };
 
-    Ok(private_key)
+    Ok(signing_key)
 }
 
 #[cfg(target_os = "macos")]
-pub async fn get_or_create_identity() -> Result<PrivateKey, Error> {
+pub async fn get_or_create_identity() -> Result<SigningKey, Error> {
     let entry = keyring::Entry::new("Reflection Identity", "default user")?;
 
-    let private_key: PrivateKey = match entry.get_password() {
+    let signing_key: SigningKey = match entry.get_password() {
         Ok(password) => {
-            let private_key = PrivateKey::try_from(
+            let signing_key = SigningKey::try_from(
                 Base64Engine
                     .decode(password)
                     .expect("Failed to decode base64 secret from keyring")
                     .as_slice(),
             )?;
-            info!("Found existing identity: {}", private_key.public_key());
-            private_key
+            info!("Found existing identity: {}", signing_key.verifying_key());
+            signing_key
         }
         Err(keyring::Error::NoEntry) => {
-            let private_key = PrivateKey::new();
-            entry.set_password(&Base64Engine.encode(private_key.as_bytes()))?;
+            let signing_key = SigningKey::generate();
+            entry.set_password(&Base64Engine.encode(signing_key.as_bytes()))?;
             info!(
                 "No existing identity found. Create new identity: {}",
-                private_key.public_key()
+                signing_key.verifying_key()
             );
-            private_key
+            signing_key
         }
         Err(e) => return Err(Error::Service(e)),
     };
 
-    Ok(private_key)
+    Ok(signing_key)
 }

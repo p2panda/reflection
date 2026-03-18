@@ -67,7 +67,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
             self.set_last_seen(author).await;
         }
 
-        let this_author = self.node.private_key.public_key();
+        let this_author = self.node.verifying_key;
         if tx.is_some() {
             self.subscribable_topic.author_joined(this_author);
         } else {
@@ -78,7 +78,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         *tx_guard = tx;
     }
 
-    pub async fn received(&self, message: AuthorMessage, author: PublicKey) {
+    pub async fn received(&self, author: VerifyingKey, message: AuthorTrackerMessage) {
         match message {
             AuthorTrackerMessage::Hello => {
                 self.join(author).await;
@@ -98,7 +98,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         }
     }
 
-    async fn join(&self, author: PublicKey) {
+    async fn join(&self, author: VerifyingKey) {
         self.last_ping.lock().await.insert(author, Instant::now());
         self.subscribable_topic.author_joined(author);
         self.set_last_seen(author).await;
@@ -108,7 +108,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         self.send(AuthorTrackerMessage::Ping).await;
     }
 
-    async fn ping(&self, author: PublicKey) {
+    async fn ping(&self, author: VerifyingKey) {
         let old = self.last_ping.lock().await.insert(author, Instant::now());
 
         // If this is a new author emit author join
@@ -118,7 +118,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         self.set_last_seen(author).await;
     }
 
-    async fn left(&self, author: PublicKey) {
+    async fn left(&self, author: VerifyingKey) {
         self.last_ping.lock().await.remove(&author);
         self.subscribable_topic.author_left(author);
         self.set_last_seen(author).await;
@@ -155,7 +155,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         }
     }
 
-    async fn set_last_seen(&self, author: PublicKey) {
+    async fn set_last_seen(&self, author: VerifyingKey) {
         if let Err(error) = self
             .node
             .topic_store

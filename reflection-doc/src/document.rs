@@ -18,7 +18,7 @@ use tracing::error;
 
 use crate::author::Author;
 use crate::authors::Authors;
-use crate::identity::PublicKey;
+use crate::identity::VerifyingKey;
 use crate::service::Service;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, glib::Boxed)]
@@ -414,7 +414,7 @@ mod imp {
         }
 
         fn setup_loro_document(&self) {
-            let public_key = self.obj().service().private_key().public_key();
+            let verifying_key = self.obj().service().signing_key().verifying_key();
             let obj = self.obj();
             let doc = LoroDoc::new();
             // The peer id represents the identity of the author applying local changes (that's
@@ -428,7 +428,7 @@ mod imp {
                 // this should not really be a problem, but it would be nice if the Loro API would
                 // change some day.
                 let mut buf = [0u8; 8];
-                buf[..8].copy_from_slice(&public_key.0.as_bytes()[..8]);
+                buf[..8].copy_from_slice(&verifying_key.0.as_bytes()[..8]);
                 u64::from_be_bytes(buf)
             })
             .expect("set peer id for new document");
@@ -688,7 +688,7 @@ mod imp {
 
             // Add ourself to the list of authors
             self.authors
-                .add_this_device(self.obj().service().private_key().public_key());
+                .add_this_device(self.obj().service().signing_key().verifying_key());
         }
     }
 }
@@ -900,19 +900,19 @@ unsafe impl Sync for Document {}
 struct DocumentHandle(glib::WeakRef<Document>);
 
 impl SubscribableTopic for DocumentHandle {
-    fn bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
+    fn bytes_received(&self, author: p2panda_core::VerifyingKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 document.imp().on_remote_message(data);
-                document.authors().add(PublicKey(author));
+                document.authors().add(VerifyingKey(author));
             });
         }
     }
 
-    fn author_joined(&self, author: p2panda_core::PublicKey) {
+    fn author_joined(&self, author: p2panda_core::VerifyingKey) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                let author = document.authors().add(PublicKey(author));
+                let author = document.authors().add(VerifyingKey(author));
                 author.set_online(true);
                 // When a new author joins we need to send ephemeral messages again
                 document.imp().brodcast_ephemeral();
@@ -920,20 +920,20 @@ impl SubscribableTopic for DocumentHandle {
         }
     }
 
-    fn author_left(&self, author: p2panda_core::PublicKey) {
+    fn author_left(&self, author: p2panda_core::VerifyingKey) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                let author = document.authors().add(PublicKey(author));
+                let author = document.authors().add(VerifyingKey(author));
                 author.set_online(false);
             });
         }
     }
 
-    fn ephemeral_bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
+    fn ephemeral_bytes_received(&self, author: p2panda_core::VerifyingKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 if let Ok(data) = decode_cbor(&data[..])
-                    && let Some(author) = document.authors().author(&PublicKey(author))
+                    && let Some(author) = document.authors().author(&VerifyingKey(author))
                 {
                     document.imp().handle_ephemeral_data(author, data);
                 }
