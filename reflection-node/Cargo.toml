@@ -8,6 +8,9 @@ authors = [
   "Julian Sparber <julian@sparber.net>"
 ]
 
+[features]
+test_utils = []
+
 [dependencies]
 thiserror = "2.0.18"
 chrono = "0.4.43"
