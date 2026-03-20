@@ -8,16 +8,18 @@ authors = [
 ]
 
 [dependencies]
-reflection-node = { path = "../reflection-node" }
 anyhow = "1.0.101"
-async-channel = "2.5.0"
-glib = "0.21"
 gio = "0.21"
-loro = { tag = "loro-crdt@1.10.6", git = "https://github.com/loro-dev/loro.git" }
-thiserror = "2.0.18"
-tracing = "0.1"
-test-log = { version = "0.2.19", default-features = false, features = ["trace", "color"] }
-serde = { version = "1.0.228", features = ["derive"] }
-rand = "0.10.0"
+glib = "0.21"
 hex = "0.4.3"
 indexmap = "2.13.0"
+loro = { tag = "loro-crdt@1.10.6", git = "https://github.com/loro-dev/loro.git" }
+rand = "0.10.0"
+reflection-node = { path = "../reflection-node" }
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+tracing = "0.1"
+
+[dev-dependencies]
+reflection-node = { path = "../reflection-node", features = ["test_utils"] }
+test-log = { version = "0.2.19", default-features = false, features = ["trace", "color"] }
