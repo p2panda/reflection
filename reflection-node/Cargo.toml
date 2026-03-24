@@ -12,21 +12,16 @@ authors = [
 test_utils = []
 
 [dependencies]
-thiserror = "2.0.18"
 chrono = "0.4.43"
-ciborium = "0.2.2"
-p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "a1308c116c1bd345f2cd6af7df41d2a6e0a4a682" }
-p2panda-discovery = { git = "https://github.com/p2panda/p2panda", rev = "a1308c116c1bd345f2cd6af7df41d2a6e0a4a682" }
-p2panda-net = { git = "https://github.com/p2panda/p2panda", rev = "a1308c116c1bd345f2cd6af7df41d2a6e0a4a682" }
-p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "a1308c116c1bd345f2cd6af7df41d2a6e0a4a682", features = ["sqlite"], default-features = false }
-p2panda-stream = { git = "https://github.com/p2panda/p2panda", rev = "a1308c116c1bd345f2cd6af7df41d2a6e0a4a682" }
-p2panda-sync = { git = "https://github.com/p2panda/p2panda", rev = "a1308c116c1bd345f2cd6af7df41d2a6e0a4a682" }
+p2panda = { git = "https://github.com/p2panda/p2panda", rev = "534363cfc33d2e3275748bf8b0a9307e6eb261c0" }
+p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "534363cfc33d2e3275748bf8b0a9307e6eb261c0" }
+p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "534363cfc33d2e3275748bf8b0a9307e6eb261c0" }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_bytes = "0.11.19"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false }
+thiserror = "2.0.18"
 tokio = { version = "1.49.0", features = ["rt", "sync"] }
 tokio-stream = "0.1.18"
 tracing = "0.1"
+
+[dev-dependencies]
 test-log = { version = "0.2.19", default-features = false, features = ["trace", "color"] }
-hex = "0.4.3"
-rand_chacha = "0.10.0"

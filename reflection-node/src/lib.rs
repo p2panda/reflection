@@ -1,30 +1,20 @@
 mod author_tracker;
-mod ephemerial_operation;
-mod network;
+mod database;
+mod message;
 pub mod node;
-mod node_inner;
-mod operation;
-mod operation_store;
-mod subscription_inner;
-pub mod topic;
+pub mod subscription;
 mod topic_store;
-mod utils;
-
-pub use p2panda_core;
-pub use topic::SubscribableTopic;
+pub mod traits;
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use p2panda_core::Hash;
-    use p2panda_core::PrivateKey;
-    use p2panda_core::PublicKey;
+    use p2panda_core::{Hash, PrivateKey, PublicKey, Topic};
     use tokio::sync::{Mutex, mpsc};
 
-    use crate::node::ConnectionMode;
-    use crate::node::Node;
-    use crate::topic::SubscribableTopic;
+    use crate::node::{ConnectionMode, Node};
+    use crate::traits::{SubscribableTopic, SubscriptionError};
 
     #[tokio::test]
     #[test_log::test]
@@ -35,10 +25,10 @@ mod tests {
 
         let id: [u8; 32] = [0; 32];
         let _sub = node.subscribe(id, TestTopic::new()).await;
-        let topics = node.topics::<[u8; 32]>().await.unwrap();
+        let topics = node.topics().await.unwrap();
 
         assert_eq!(topics.len(), 1);
-        assert_eq!(topics.first().unwrap().id, id);
+        assert_eq!(topics.first().unwrap().id, id.into());
 
         node.shutdown().await.unwrap();
     }
@@ -71,31 +61,29 @@ mod tests {
         fn author_joined(&self, _author: PublicKey) {}
         fn author_left(&self, _author: PublicKey) {}
         fn ephemeral_bytes_received(&self, _author: PublicKey, _data: Vec<u8>) {}
-        fn error(&self, _error: crate::topic::SubscriptionError) {}
+        fn error(&self, _error: SubscriptionError) {}
     }
 
     #[tokio::test]
     #[test_log::test]
     async fn subscribe_topic() {
-        let private_key = PrivateKey::new();
         let network_id = Hash::new(b"reflection");
-        let node = Node::new(private_key, network_id, None).await.unwrap();
+        let topic_id: Topic = [1; 32].into();
+
+        let node = Node::new(PrivateKey::new(), network_id, None)
+            .await
+            .unwrap();
         node.set_connection_mode(ConnectionMode::Network)
             .await
             .unwrap();
 
         let test_topic = TestTopic::new();
 
-        let id: [u8; 32] = [0; 32];
-        let subscription = node.subscribe(id, test_topic).await.unwrap();
+        let subscription = node.subscribe(topic_id, test_topic).await.unwrap();
 
-        let topics = node.topics::<[u8; 32]>().await.unwrap();
-        assert_eq!(topics.len(), 1);
-        assert_eq!(topics.first().unwrap().id, id);
-
-        let private_key2 = PrivateKey::new();
-        let network_id2 = Hash::new(b"reflection");
-        let node2 = Node::new(private_key2, network_id2, None).await.unwrap();
+        let node2 = Node::new(PrivateKey::new(), network_id, None)
+            .await
+            .unwrap();
         node2
             .set_connection_mode(ConnectionMode::Network)
             .await
@@ -103,15 +91,17 @@ mod tests {
 
         let test_topic2 = TestTopic::new();
 
-        let _subscription2 = node2.subscribe(id, test_topic2.clone()).await.unwrap();
+        let _subscription2 = node2
+            .subscribe(topic_id, test_topic2.clone())
+            .await
+            .unwrap();
 
-        let topics2 = node2.topics::<[u8; 32]>().await.unwrap();
-        assert_eq!(topics2.len(), 1);
-        assert_eq!(topics2.first().unwrap().id, id);
+        // TODO: Need to sleep here to make sure tx already exists.
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
         let test_snapshot = "test".as_bytes().to_vec();
         subscription
-            .send_snapshot(test_snapshot.clone())
+            .publish_snapshot(test_snapshot.clone())
             .await
             .unwrap();
 
