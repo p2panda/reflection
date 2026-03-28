@@ -200,7 +200,7 @@ EOF
     echo -e "${BLUE}🔗 Bundling dependencies...${NC}"
     dylibbundler -od -b -x /Applications/Reflection.app/Contents/MacOS/reflection \
         -d /Applications/Reflection.app/Contents/Frameworks/ \
-        -p @executable_path/../Frameworks/ #> /dev/null 2>&1 || echo -e "${YELLOW}⚠️  Some libraries may not be bundled${NC}"
+        -p @executable_path/../Frameworks/ > /dev/null 2>&1 || echo -e "${YELLOW}⚠️  Some libraries may not be bundled${NC}"
 
     echo -e "${GREEN}✅ App bundle created: Reflection.app${NC}"
 
