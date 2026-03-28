@@ -26,7 +26,7 @@ use crate::APP_ID;
 use reflection_doc::identity::{IdentityError, PrivateKey};
 
 #[cfg(target_os = "linux")]
-const XDG_SCHEMA: &'static str = "xdg:schema";
+const XDG_SCHEMA: &str = "xdg:schema";
 
 #[cfg(target_os = "linux")]
 fn attributes() -> HashMap<&'static str, String> {
