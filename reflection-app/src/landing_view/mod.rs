@@ -30,10 +30,10 @@ use reflection_doc::{document::Document, documents::Documents};
 mod imp {
     use super::*;
 
-    use adw::prelude::{Cast, EditableExt, ListModelExt, StaticType, WidgetExt};
+    use adw::prelude::{Cast, EditableExt, ListModelExt, SorterExt, StaticType, WidgetExt};
     use adw::subclass::prelude::{
         CompositeTemplateClass, CompositeTemplateInitializingExt, NavigationPageImpl,
-        WidgetClassExt, WidgetImpl,
+        WidgetClassExt, WidgetImpl, WidgetImplExt,
     };
 
     use glib::subclass::prelude::*;
@@ -59,6 +59,7 @@ mod imp {
 
         #[property(get = Self::model, set = Self::set_model, type = Option<Documents>, nullable)]
         model: gtk::FilterListModel,
+        sorter: gtk::CustomSorter,
     }
 
     #[glib::object_subclass]
@@ -119,13 +120,43 @@ mod imp {
                 }
             ));
 
+            let sort_model = gtk::SortListModel::default();
+
+            self.sorter.set_sort_func(|a, b| {
+                let document_a = a.downcast_ref::<Document>().unwrap();
+                let document_b = b.downcast_ref::<Document>().unwrap();
+
+                if document_a.last_accessed().is_none() && document_b.last_accessed().is_none() {
+                    return gtk::Ordering::Equal;
+                } else if document_a.last_accessed().is_none() {
+                    return gtk::Ordering::Smaller;
+                } else if document_b.last_accessed().is_none() {
+                    return gtk::Ordering::Larger;
+                }
+
+                document_b
+                    .last_accessed()
+                    .cmp(&document_a.last_accessed())
+                    .into()
+            });
+
+            sort_model.set_sorter(Some(&self.sorter));
+            self.model.set_model(Some(&sort_model));
+
             self.update_stack();
         }
     }
 
     impl LandingView {
         fn model(&self) -> Option<Documents> {
-            if let Some(model) = self.model.model() {
+            if let Some(model) = self
+                .model
+                .model()
+                .unwrap()
+                .downcast::<gtk::SortListModel>()
+                .unwrap()
+                .model()
+            {
                 model.downcast().ok()
             } else {
                 None
@@ -133,7 +164,14 @@ mod imp {
         }
 
         fn set_model(&self, model: Option<&Documents>) {
-            self.model.set_model(model);
+            let sort_list = self
+                .model
+                .model()
+                .unwrap()
+                .downcast::<gtk::SortListModel>()
+                .unwrap();
+            sort_list.set_model(model);
+            self.sorter.changed(gtk::SorterChange::Different);
         }
 
         fn update_stack(&self) {
@@ -161,7 +199,14 @@ mod imp {
         }
     }
 
-    impl WidgetImpl for LandingView {}
+    impl WidgetImpl for LandingView {
+        fn map(&self) {
+            self.parent_map();
+            // Resort every time before the landing page is shown
+            self.sorter.changed(gtk::SorterChange::Different);
+        }
+    }
+
     impl NavigationPageImpl for LandingView {}
 }
 
