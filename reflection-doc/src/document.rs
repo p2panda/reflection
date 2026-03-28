@@ -158,8 +158,11 @@ mod imp {
         let mut name = String::with_capacity(DOCUMENT_NAME_LENGTH);
         crdt_text.iter(|slice| {
             for char in slice.chars() {
-                if char == '\n' || name.len() > DOCUMENT_NAME_LENGTH {
-                    // Only use the first line as name for the document
+                if char == '\n' && name.is_empty() {
+                    // Skip leading empty lines
+                    continue;
+                } else if char == '\n' || name.len() > DOCUMENT_NAME_LENGTH {
+                    // Only use the first non-empty line as name for the document
                     return false;
                 } else if (!name.is_empty() && char.is_whitespace()) || char.is_alphanumeric() {
                     name.push(char);
