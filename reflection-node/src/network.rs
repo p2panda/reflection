@@ -82,16 +82,21 @@ impl Network {
     ) -> Result<Self, NetworkError> {
         let address_book = AddressBook::builder().spawn().await?;
 
-        if let Err(error) = address_book.insert_node_info(BOOTSTRAP_NODE.clone()).await {
+        if cfg!(not(any(test, feature = "test_utils")))
+            && let Err(error) = address_book.insert_node_info(BOOTSTRAP_NODE.clone()).await
+        {
             error!("Failed to add bootstrap node to the address book: {error}");
         }
 
-        let endpoint = Endpoint::builder(address_book.clone())
+        let mut builder = Endpoint::builder(address_book.clone())
             .network_id(network_id.into())
-            .private_key(private_key.clone())
-            .relay_url(RELAY_URL.clone())
-            .spawn()
-            .await?;
+            .private_key(private_key.clone());
+
+        if cfg!(not(any(test, feature = "test_utils"))) {
+            builder = builder.relay_url(RELAY_URL.clone());
+        }
+
+        let endpoint = builder.spawn().await?;
 
         let mdns_discovery = MdnsDiscovery::builder(address_book.clone(), endpoint.clone())
             .mode(MdnsDiscoveryMode::Active)
