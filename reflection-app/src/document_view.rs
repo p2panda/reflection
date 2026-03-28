@@ -23,7 +23,7 @@ use std::cell::{Cell, RefCell};
 use reflection_doc::document::{Document, DocumentId};
 
 use adw::{prelude::*, subclass::prelude::*};
-use gtk::{gdk, gio::prelude::ApplicationExtManual, glib, glib::clone};
+use gtk::{gdk, glib, glib::clone};
 
 use crate::{
     ConnectionPopover, ReflectionApplication, ReflectionTextBuffer, TextView,
@@ -48,7 +48,7 @@ mod imp {
         pub share_code_label: TemplateChild<gtk::Label>,
         #[template_child]
         pub copy_code_button: TemplateChild<gtk::Button>,
-        pub css_provider: gtk::CssProvider,
+        pub zoom_tag: gtk::TextTag,
         pub font_size: Cell<f64>,
         #[property(get, set = Self::set_font_scale, default = 0.0)]
         pub font_scale: Cell<f64>,
@@ -134,6 +134,15 @@ mod imp {
             let buffer = ReflectionTextBuffer::new();
             self.text_view.set_buffer(Some(&buffer));
 
+            buffer.tag_table().add(&self.zoom_tag);
+            buffer.connect_changed(clone!(
+                #[weak(rename_to = this)]
+                self,
+                move |buffer| {
+                    this.apply_zoom_tag(buffer.upcast_ref());
+                }
+            ));
+
             let size = ReflectionApplication::default()
                 .system_settings()
                 .monospace_font_name()
@@ -141,12 +150,6 @@ mod imp {
                     font.size() as f64 / gtk::pango::SCALE as f64
                 });
             self.font_size.set(size);
-            self.obj().set_font_scale(0.0);
-            gtk::style_context_add_provider_for_display(
-                &gtk::Widget::display(self.obj().upcast_ref()),
-                &self.css_provider,
-                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-            );
 
             let scroll_controller =
                 gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
@@ -218,11 +221,16 @@ mod imp {
             self.font_scale.set(value);
 
             let size = (font_size + self.obj().font_scale()).max(1.0);
-            self.zoom_level.set(size / font_size);
+            let scale = size / font_size;
+            self.zoom_level.set(scale);
             self.obj().notify_zoom_level();
-            self.css_provider
-                .load_from_string(&format!(".sourceview {{ font-size: {size}pt; }}"));
+            self.zoom_tag.set_scale(scale);
+            self.apply_zoom_tag(&self.text_view.buffer());
             self.obj().action_set_enabled("window.zoom-out", size > 1.0);
+        }
+
+        fn apply_zoom_tag(&self, buffer: &gtk::TextBuffer) {
+            buffer.apply_tag(&self.zoom_tag, &buffer.start_iter(), &buffer.end_iter());
         }
 
         fn set_document(&self, document: Option<Document>) {
