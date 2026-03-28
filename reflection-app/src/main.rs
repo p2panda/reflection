@@ -62,6 +62,13 @@ fn main() -> glib::ExitCode {
     let ui_res = gio::Resource::load(UI_RESOURCES_FILE).expect("Could not load UI gresource file");
     gio::resources_register(&ui_res);
 
+    #[cfg(target_os = "macos")]
+    {
+        let mac_res =
+            gio::Resource::load(MAC_RESOURCES_FILE).expect("Could not load MacOS gresource file");
+        gio::resources_register(&mac_res);
+    }
+
     gtk::glib::set_application_name("Reflection");
     gtk::init().expect("Could not start GTK4");
 

@@ -14,6 +14,16 @@ gnome.compile_resources('ui-resources',
   install_dir: pkgdatadir,
 )
 
+# Resources specifc for MacOS
+if build_machine.system() == 'darwin'
+  gnome.compile_resources('mac-resources',
+    'mac-resources.gresource.xml',
+    gresource_bundle: true,
+    install: true,
+    install_dir: pkgdatadir,
+  )
+endif
+
 conf = configuration_data()
 conf.set_quoted('APP_ID', application_id)
 conf.set_quoted('VERSION', meson.project_version())
