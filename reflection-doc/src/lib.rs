@@ -89,7 +89,6 @@ mod tests {
         let test_string = "Hello World";
 
         let context = glib::MainContext::ref_thread_default();
-        println!("Context: {context:?}");
 
         let private_key = PrivateKey::new();
         let service = Service::new(&private_key, None);
@@ -106,10 +105,9 @@ mod tests {
 
     #[test_log::test(glib::async_test)]
     async fn basic_sync() {
-        let test_string = "Hello World";
+        let expected_string = "Hello World";
 
         let context = glib::MainContext::ref_thread_default();
-        println!("Context: {context:?}");
 
         let private_key = PrivateKey::new();
         let service = Service::new(&private_key, None);
@@ -128,13 +126,22 @@ mod tests {
 
         assert_eq!(document.id(), document2.id());
 
-        assert!(document.insert_text(0, test_string).is_ok());
-        assert_eq!(document.text(), test_string);
+        assert!(document.insert_text(0, expected_string).is_ok());
+        assert_eq!(document.text(), expected_string);
+
+        // Wait until text got synced.
+        loop {
+            glib::timeout_future(std::time::Duration::from_millis(50)).await;
+
+            if document2.text() == expected_string {
+                break;
+            }
+        }
 
         service.shutdown().await;
         service2.shutdown().await;
 
-        assert_eq!(document2.text(), test_string);
+        assert_eq!(document2.text(), expected_string);
     }
 
     #[test_log::test(glib::async_test)]
@@ -142,7 +149,6 @@ mod tests {
         let expected_string = "Hello, World!";
 
         let context = glib::MainContext::ref_thread_default();
-        println!("Context: {context:?}");
 
         let private_key = PrivateKey::new();
         let service = Service::new(&private_key, None);
@@ -167,6 +173,15 @@ mod tests {
         assert!(document.insert_text(7, "W").is_ok());
         assert_eq!(document.text(), expected_string);
 
+        // Wait until text got synced.
+        loop {
+            glib::timeout_future(std::time::Duration::from_millis(50)).await;
+
+            if document2.text() == expected_string {
+                break;
+            }
+        }
+
         service.shutdown().await;
         service2.shutdown().await;
 
@@ -175,16 +190,16 @@ mod tests {
 
     #[test_log::test(glib::async_test)]
     async fn sync_longer_text() {
-        let test_string = "Et aut omnis eos corporis ut. Qui est blanditiis blanditiis.
-        Sit quia nam maxime accusantium ut voluptatem. Fuga consequuntur animi et et est.
-        Unde voluptas consequatur mollitia id odit optio harum sint. Fugit quo aut et laborum aut cupiditate.";
+        let test_string = "Et aut omnis eos corporis ut. Qui est blanditiis blanditiis. Sit quia
+        nam maxime accusantium ut voluptatem. Fuga consequuntur animi et et est. Unde voluptas
+        consequatur mollitia id odit optio harum sint. Fugit quo aut et laborum aut cupiditate.";
+
         let expected_string = format!(
             "{}{}{}{}",
             test_string, test_string, test_string, test_string
         );
 
         let context = glib::MainContext::ref_thread_default();
-        println!("Context: {context:?}");
 
         let private_key = PrivateKey::new();
         let service = Service::new(&private_key, None);
@@ -208,6 +223,15 @@ mod tests {
         assert!(document.insert_text(0, test_string).is_ok());
         assert!(document.insert_text(0, test_string).is_ok());
         assert!(document.insert_text(0, test_string).is_ok());
+
+        // Wait until text got synced.
+        loop {
+            glib::timeout_future(std::time::Duration::from_millis(50)).await;
+
+            if document2.text() == expected_string {
+                break;
+            }
+        }
 
         service.shutdown().await;
         service2.shutdown().await;

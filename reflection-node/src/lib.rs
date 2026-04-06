@@ -15,22 +15,23 @@ pub use topic::SubscribableTopic;
 
 #[cfg(test)]
 mod tests {
-    use crate::SubscribableTopic;
-    use crate::node::{ConnectionMode, Node};
+    use std::sync::Arc;
+
     use p2panda_core::Hash;
     use p2panda_core::PrivateKey;
     use p2panda_core::PublicKey;
-    use std::sync::Arc;
     use tokio::sync::{Mutex, mpsc};
+
+    use crate::node::ConnectionMode;
+    use crate::node::Node;
+    use crate::topic::SubscribableTopic;
 
     #[tokio::test]
     #[test_log::test]
     async fn create_topic() {
         let private_key = PrivateKey::new();
         let network_id = Hash::new(b"reflection");
-        let node = Node::new(private_key, network_id, None, ConnectionMode::Network)
-            .await
-            .unwrap();
+        let node = Node::new(private_key, network_id, None).await.unwrap();
 
         let id: [u8; 32] = [0; 32];
         let _sub = node.subscribe(id, TestTopic::new()).await;
@@ -70,6 +71,7 @@ mod tests {
         fn author_joined(&self, _author: PublicKey) {}
         fn author_left(&self, _author: PublicKey) {}
         fn ephemeral_bytes_received(&self, _author: PublicKey, _data: Vec<u8>) {}
+        fn error(&self, _error: crate::topic::SubscriptionError) {}
     }
 
     #[tokio::test]
@@ -77,7 +79,8 @@ mod tests {
     async fn subscribe_topic() {
         let private_key = PrivateKey::new();
         let network_id = Hash::new(b"reflection");
-        let node = Node::new(private_key, network_id, None, ConnectionMode::Network)
+        let node = Node::new(private_key, network_id, None).await.unwrap();
+        node.set_connection_mode(ConnectionMode::Network)
             .await
             .unwrap();
 
@@ -92,7 +95,9 @@ mod tests {
 
         let private_key2 = PrivateKey::new();
         let network_id2 = Hash::new(b"reflection");
-        let node2 = Node::new(private_key2, network_id2, None, ConnectionMode::Network)
+        let node2 = Node::new(private_key2, network_id2, None).await.unwrap();
+        node2
+            .set_connection_mode(ConnectionMode::Network)
             .await
             .unwrap();
 
