@@ -174,6 +174,8 @@ if [ "$CREATE_APP_BUNDLE" = true ]; then
     <string>reflection</string>
     <key>CFBundleIdentifier</key>
     <string>cx.modal.Reflection</string>
+    <key>CFBundleIconFile</key>
+    <string>cx.modal.Reflection.icns</string>
     <key>CFBundleName</key>
     <string>Reflection</string>
     <key>CFBundleDisplayName</key>
