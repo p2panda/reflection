@@ -4740,7 +4740,7 @@ dependencies = [
 
 [[package]]
 name = "reflection"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ashpd",
  "base64 0.21.7",
@@ -4761,7 +4761,7 @@ dependencies = [
 
 [[package]]
 name = "reflection-doc"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "gio",
@@ -4779,7 +4779,7 @@ dependencies = [
 
 [[package]]
 name = "reflection-node"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "ciborium",
