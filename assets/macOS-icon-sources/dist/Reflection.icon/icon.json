@@ -1,0 +1,71 @@
+{
+  "color-space-for-untagged-svg-colors" : "display-p3",
+  "fill" : {
+    "automatic-gradient" : "display-p3:0.82549,0.93333,0.90951,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name-specializations" : [
+            {
+              "value" : "default-front.svg"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "dark-front.svg"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "mono-front.svg"
+            }
+          ],
+          "name" : "dark-front"
+        },
+        {
+          "image-name-specializations" : [
+            {
+              "value" : "default-mid.svg"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "dark-mid.svg"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "mono-mid.svg"
+            }
+          ],
+          "name" : "dark-mid"
+        },
+        {
+          "image-name-specializations" : [
+            {
+              "value" : "default-back.svg"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "dark-back.svg"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : "mono-back.svg"
+            }
+          ],
+          "name" : "dark-back"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
+  }
+}

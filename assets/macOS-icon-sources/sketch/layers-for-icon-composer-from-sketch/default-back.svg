@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024px" height="1024px" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>default-back</title>
+    <g id="Template---App-Icons" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="1---Layer" transform="translate(0, 0)">
+            <path d="M501.013686,360 L730.986314,360 C780.019845,360 797.800588,365.105409 815.726514,374.692299 C833.65244,384.279189 847.720811,398.34756 857.307701,416.273486 C866.894591,434.199412 872,451.980155 872,501.013686 L872,730.986314 C872,780.019845 866.894591,797.800588 857.307701,815.726514 C847.720811,833.65244 833.65244,847.720811 815.726514,857.307701 C797.800588,866.894591 780.019845,872 730.986314,872 L501.013686,872 C451.980155,872 434.199412,866.894591 416.273486,857.307701 C398.34756,847.720811 384.279189,833.65244 374.692299,815.726514 C365.105409,797.800588 360,780.019845 360,730.986314 L360,501.013686 C360,451.980155 365.105409,434.199412 374.692299,416.273486 C384.279189,398.34756 398.34756,384.279189 416.273486,374.692299 C434.199412,365.105409 451.980155,360 501.013686,360 Z" id="back" stroke="#15D0AC" stroke-width="46" fill="#FFFFFF"></path>
+            <rect id="Rectangle-2" fill="#DEDDDA" x="465" y="465" width="302" height="26"></rect>
+            <rect id="Rectangle-2-Copy-4" fill="#15D0AC" x="465" y="507" width="302" height="26"></rect>
+            <rect id="Rectangle-2-Copy-2" fill="#DEDDDA" x="465" y="549" width="302" height="26"></rect>
+            <rect id="Rectangle-2-Copy-3" fill="#DEDDDA" x="465" y="591" width="255" height="26"></rect>
+            <rect id="Rectangle-2-Copy-6" fill="#DEDDDA" x="465" y="703" width="302" height="26"></rect>
+            <rect id="Rectangle-2-Copy-7" fill="#DEDDDA" x="465" y="661" width="302" height="26"></rect>
+            <rect id="Rectangle-2-Copy-9" fill="#F956B2" x="465" y="703" width="177" height="26"></rect>
+            <rect id="Rectangle-2-Copy-5" fill="#DEDDDA" x="465" y="745" width="255" height="26"></rect>
+            <rect id="Rectangle-2-Copy-10" fill="#F956B2" x="465" y="661" width="255" height="26"></rect>
+        </g>
+    </g>
+</svg>
