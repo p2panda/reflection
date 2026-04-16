@@ -69,6 +69,18 @@
   </recommends>
 
   <releases>
+    <release version="0.3" date="2026-04-16">
+      <description translate="no">
+        <p>Third preview release.</p>
+        <ul>
+          <li>Add support for MacOS</li>
+          <li>Sort pads by last accessed</li>
+          <li>Fix zooming with multiple window</li>
+          <li>Small UI improvments</li>
+        </ul>
+      </description>
+    </release>
+
     <release version="0.2" date="2026-01-16">
       <description translate="no">
         <p>Second preview release.</p>
