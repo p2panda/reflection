@@ -13,7 +13,7 @@ gio = "0.21"
 glib = "0.21"
 hex = "0.4.3"
 indexmap = "2.13.0"
-loro = { tag = "loro-crdt@1.10.6", git = "https://github.com/loro-dev/loro.git" }
+loro = "1.10.8"
 rand = "0.10.0"
 reflection-node = { path = "../reflection-node" }
 serde = { version = "1.0.228", features = ["derive"] }
