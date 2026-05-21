@@ -15,6 +15,8 @@ use crate::document::{Document, DocumentId};
 use crate::documents::Documents;
 use crate::identity::SigningKey;
 
+static NETWORK_NAME: &[u8] = b"reflection-v2";
+
 #[derive(Error, Debug)]
 pub enum StartupError {
     #[error(transparent)]
@@ -169,7 +171,7 @@ impl Service {
 
     pub async fn startup(&self) -> Result<(), StartupError> {
         let signing_key = self.signing_key().0;
-        let network_id = Hash::digest(b"reflection");
+        let network_id = Hash::digest(NETWORK_NAME);
         let path = self.data_dir().and_then(|data_dir| data_dir.path());
         let node = Node::new(signing_key, network_id, path.as_deref()).await?;
 
