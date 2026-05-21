@@ -10,7 +10,7 @@ use thiserror::Error;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task::{AbortHandle, JoinError};
 use tokio_stream::StreamExt;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::author_tracker::AuthorTracker;
 use crate::message::EphemeralMessage;
@@ -285,6 +285,7 @@ where
     let mut abort_handles = Vec::with_capacity(3);
 
     // 1. Handle incoming operations from eventually consistent topic stream.
+    // ======================================================================
 
     // Always start from re-playing _all_ operations in the beginning. This is due to Reflection not
     // keeping materialised document state around and we need to repeat materialising the document
@@ -312,14 +313,59 @@ where
                     // Forward the message payload up to the app layer.
                     subscribable_topic_clone.bytes_received(author, operation.message().to_owned());
                 }
+                StreamEvent::SyncStarted {
+                    remote_node_id,
+                    session_id,
+                    incoming_operations,
+                    outgoing_operations,
+                    incoming_bytes,
+                    outgoing_bytes,
+                    ..
+                } => {
+                    info!(
+                        %session_id,
+                        remote_node_id = &remote_node_id.to_string()[0..8],
+                        "sync started w. {} incoming ({} bytes) and {} outgoing operations ({} bytes)",
+                        incoming_operations,
+                        incoming_bytes,
+                        outgoing_operations,
+                        outgoing_bytes,
+                    );
+                }
+                StreamEvent::SyncEnded {
+                    remote_node_id,
+                    session_id,
+                    error,
+                    ..
+                } => {
+                    match error {
+                        Some(error) => {
+                            warn!(
+                                %session_id,
+                                remote_node_id = &remote_node_id.to_string()[0..8],
+                                "sync failed with error {error}",
+                            );
+                        }
+                        None => {
+                            info!(
+                                %session_id,
+                                remote_node_id = &remote_node_id.to_string()[0..8],
+                                "sync ended",
+                            );
+                        },
+                    }
+                }
                 StreamEvent::DecodeFailed { error, .. } => {
                     error!("failed decoding incoming operation from stream: {error}");
                 }
                 StreamEvent::ReplayFailed { error, .. } => {
                     error!("error occurred while replaying operation stream: {error}");
                 }
-                StreamEvent::SyncStarted { .. } | StreamEvent::SyncEnded { .. } => {
-                    // TODO: Handle sync events.
+                StreamEvent::ProcessingFailed { event, error, .. } => {
+                    error!("error occurred while processing operation {}: {error}", event.header().hash());
+                }
+                StreamEvent::AckFailed { error, .. } => {
+                    error!("error occurred while acking event: {error}");
                 }
                 _ => (),
             }
@@ -330,6 +376,7 @@ where
     abort_handles.push(abort_handle);
 
     // 2. Handle incoming messages from ephemeral topic stream.
+    // ========================================================
 
     let (ephemeral_tx, mut ephemeral_rx) = network.ephemeral_stream::<EphemeralMessage>(id).await?;
 
@@ -359,6 +406,7 @@ where
     abort_handles.push(abort_handle);
 
     // 3. Run task to track online status of authors.
+    // ==============================================
 
     let author_tracker_clone = author_tracker.clone();
     let abort_handle = tokio::spawn(async move {
