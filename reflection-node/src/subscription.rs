@@ -3,9 +3,9 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use chrono::Utc;
+use p2panda::Topic;
 use p2panda::node::CreateStreamError;
 use p2panda::streams::{EphemeralStreamPublisher, StreamEvent, StreamFrom, StreamPublisher};
-use p2panda_core::Topic;
 use thiserror::Error;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task::{AbortHandle, JoinError};

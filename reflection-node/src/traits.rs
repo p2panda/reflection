@@ -1,5 +1,5 @@
+use p2panda::VerifyingKey;
 use p2panda::node::CreateStreamError;
-use p2panda_core::VerifyingKey;
 use thiserror::Error;
 
 #[derive(Debug, Error)]

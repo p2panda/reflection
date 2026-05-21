@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use p2panda_core::{Topic, VerifyingKey};
+use p2panda::{Topic, VerifyingKey};
 use sqlx::{FromRow, Row};
 
 #[derive(Debug, FromRow)]

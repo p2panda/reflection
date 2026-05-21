@@ -56,7 +56,7 @@ pub enum ConnectionMode {
 
 #[derive(Clone, Debug)]
 pub struct Topic {
-    pub id: p2panda_core::Topic,
+    pub id: p2panda::Topic,
     pub name: Option<String>,
     pub last_accessed: Option<DateTime<Utc>>,
     pub authors: Vec<Author>,
@@ -169,7 +169,7 @@ impl Node {
 
     pub async fn subscribe<T>(
         &self,
-        id: impl Into<p2panda_core::Topic>,
+        id: impl Into<p2panda::Topic>,
         subscribable_topic: T,
     ) -> Result<Subscription<T>, SubscriptionError>
     where
@@ -191,7 +191,7 @@ impl Node {
 
     pub async fn delete_topic(
         &self,
-        id: impl Into<p2panda_core::Topic>,
+        id: impl Into<p2panda::Topic>,
     ) -> Result<(), SubscriptionError> {
         let id = id.into();
         let inner = self.inner.clone();
@@ -260,7 +260,7 @@ impl NodeInner {
 
     pub async fn subscribe<T>(
         self: Arc<Self>,
-        id: impl Into<p2panda_core::Topic>,
+        id: impl Into<p2panda::Topic>,
         subscribable_topic: Arc<T>,
     ) -> Result<SubscriptionInner<T>, SubscriptionError>
     where
@@ -280,7 +280,7 @@ impl NodeInner {
 
     pub async fn delete_topic(
         self: Arc<Self>,
-        id: impl Into<p2panda_core::Topic>,
+        id: impl Into<p2panda::Topic>,
     ) -> Result<(), SubscriptionError> {
         let id = id.into();
         self.topic_store.delete_topic(&id).await?;
