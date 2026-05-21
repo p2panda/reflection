@@ -396,8 +396,11 @@ where
         while let Some(message) = ephemeral_rx.next().await {
             match message.body() {
                 EphemeralMessage::Application(bytes) => {
-                    subscribable_topic_clone
-                        .ephemeral_bytes_received(message.author(), bytes.to_owned());
+                    subscribable_topic_clone.ephemeral_bytes_received(
+                        message.author(),
+                        message.timestamp(),
+                        bytes.to_owned(),
+                    );
                 }
                 EphemeralMessage::AuthorTracker(tracker) => {
                     author_tracker_clone

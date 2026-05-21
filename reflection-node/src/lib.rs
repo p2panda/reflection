@@ -60,7 +60,8 @@ mod tests {
 
         fn author_joined(&self, _author: VerifyingKey) {}
         fn author_left(&self, _author: VerifyingKey) {}
-        fn ephemeral_bytes_received(&self, _author: VerifyingKey, _data: Vec<u8>) {}
+        fn ephemeral_bytes_received(&self, _author: VerifyingKey, _timestamp: u64, _data: Vec<u8>) {
+        }
         fn error(&self, _error: SubscriptionError) {}
     }
 
