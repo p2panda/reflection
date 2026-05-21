@@ -99,11 +99,15 @@ impl DocumentId {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-enum EphemerialData {
+#[serde(tag = "t", content = "d")]
+enum EphemeralData {
+    #[serde(rename = "cursor")]
     Cursor {
+        #[serde(rename = "i")]
         insert_cursor: Option<loro::cursor::Cursor>,
+
+        #[serde(rename = "s")]
         selection_bound: Option<loro::cursor::Cursor>,
-        timestamp: std::time::SystemTime,
     },
 }
 
@@ -292,10 +296,9 @@ mod imp {
         }
 
         pub fn brodcast_ephemeral(&self) {
-            let cursor_data = EphemerialData::Cursor {
+            let cursor_data = EphemeralData::Cursor {
                 insert_cursor: self.insert_cursor.read().unwrap().clone(),
                 selection_bound: self.selection_bound.read().unwrap().clone(),
-                timestamp: std::time::SystemTime::now(),
             };
 
             let cursor_bytes = match encode_cbor(&cursor_data) {
@@ -599,12 +602,16 @@ mod imp {
             self.crdt_doc.set(doc).unwrap();
         }
 
-        pub(super) fn handle_ephemeral_data(&self, author: Author, data: EphemerialData) {
+        pub(super) fn handle_ephemeral_data(
+            &self,
+            author: Author,
+            timestamp: u64,
+            data: EphemeralData,
+        ) {
             match data {
-                EphemerialData::Cursor {
+                EphemeralData::Cursor {
                     insert_cursor,
                     selection_bound,
-                    timestamp,
                 } => {
                     let doc = self.crdt_doc.get().expect("crdt_doc to be set");
 
@@ -939,13 +946,20 @@ impl SubscribableTopic for DocumentHandle {
         }
     }
 
-    fn ephemeral_bytes_received(&self, author: p2panda_core::VerifyingKey, data: Vec<u8>) {
+    fn ephemeral_bytes_received(
+        &self,
+        author: p2panda_core::VerifyingKey,
+        timestamp: u64,
+        data: Vec<u8>,
+    ) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 if let Ok(data) = decode_cbor(&data[..])
                     && let Some(author) = document.authors().author(&VerifyingKey(author))
                 {
-                    document.imp().handle_ephemeral_data(author, data);
+                    document
+                        .imp()
+                        .handle_ephemeral_data(author, timestamp, data);
                 }
             });
         }
