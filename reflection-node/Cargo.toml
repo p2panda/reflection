@@ -14,7 +14,6 @@ test_utils = []
 [dependencies]
 chrono = "0.4.43"
 p2panda = "0.6.1"
-p2panda-core = "0.6.1"
 p2panda-store = "0.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false }

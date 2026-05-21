@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
+use p2panda::VerifyingKey;
 use p2panda::streams::EphemeralStreamPublisher;
-use p2panda_core::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, warn};

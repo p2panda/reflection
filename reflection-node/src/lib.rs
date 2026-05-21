@@ -10,7 +10,7 @@ pub mod traits;
 mod tests {
     use std::sync::Arc;
 
-    use p2panda_core::{Hash, SigningKey, Topic, VerifyingKey};
+    use p2panda::{Hash, SigningKey, Topic, VerifyingKey};
     use tokio::sync::{Mutex, mpsc};
 
     use crate::node::{ConnectionMode, Node};
