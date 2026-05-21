@@ -14,6 +14,8 @@ pub use crate::topic_store::Author;
 use crate::topic_store::{StoreTopic, TopicStore};
 use crate::traits::SubscribableTopic;
 
+static DATABASE_FILE: &str = "database-v2.sqlite";
+
 static RELAY_URL: LazyLock<RelayUrl> = LazyLock::new(|| {
     "https://euc1-1.relay.n0.iroh-canary.iroh.link"
         .parse()
@@ -101,7 +103,7 @@ impl Node {
 
         let inner = {
             let network_id = network_id.into();
-            let db_file = db_location.map(|location| location.join("database.sqlite"));
+            let db_file = db_location.map(|location| location.join(DATABASE_FILE));
 
             runtime
                 .spawn(NodeInner::new(signing_key, network_id, db_file))
