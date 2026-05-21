@@ -305,6 +305,12 @@ where
                 StreamEvent::Processed { operation, .. } => {
                     let author = operation.author();
 
+                    info!(
+                        author = &author.to_string()[0..8],
+                        "processed operation with id {}",
+                        operation.id()
+                    );
+
                     // When we discover a new author we need to add them to our topic store.
                     if let Err(error) = node_clone.topic_store.add_author(&id, &author).await {
                         error!("can't store author to database: {error}");
