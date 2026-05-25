@@ -5,34 +5,34 @@ use p2panda::{Topic, VerifyingKey};
 use sqlx::{FromRow, Row};
 
 #[derive(Debug, FromRow)]
-pub struct StoreTopic {
+pub struct TopicRow {
     #[sqlx(try_from = "Vec<u8>")]
     pub id: Topic,
     #[sqlx(default)]
     pub name: Option<String>,
     pub last_accessed: Option<DateTime<Utc>>,
     #[sqlx(skip)]
-    pub authors: Vec<Author>,
+    pub authors: Vec<TrackedAuthor>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Author {
+pub struct TrackedAuthor {
     pub verifying_key: VerifyingKey,
     pub last_seen: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct TopicStore {
+pub struct TrackedTopicStore {
     pool: sqlx::SqlitePool,
 }
 
-impl TopicStore {
+impl TrackedTopicStore {
     pub fn from_pool(pool: sqlx::SqlitePool) -> Self {
         Self { pool }
     }
 
-    pub async fn topics(&self) -> sqlx::Result<Vec<StoreTopic>> {
-        let mut topics: Vec<StoreTopic> =
+    pub async fn topics(&self) -> sqlx::Result<Vec<TopicRow>> {
+        let mut topics: Vec<TopicRow> =
             sqlx::query_as("SELECT id, name, last_accessed FROM topics")
                 .fetch_all(&self.pool)
                 .await?;
@@ -51,7 +51,7 @@ impl TopicStore {
             let Ok(last_seen) = row.try_get::<Option<DateTime<Utc>>, _>("last_seen") else {
                 return acc;
             };
-            acc.entry(id).or_insert_with(Vec::new).push(Author {
+            acc.entry(id).or_insert_with(Vec::new).push(TrackedAuthor {
                 verifying_key,
                 last_seen,
             });

@@ -105,14 +105,14 @@ impl Documents {
 
             let obj = Document::with_state(
                 service,
-                Some(&document.id.into()),
+                Some(&document.topic.into()),
                 document.name.as_deref(),
                 last_accessed.as_ref(),
             );
 
             obj.authors().load(authors);
 
-            list.insert(document.id.into(), obj);
+            list.insert(document.topic.into(), obj);
         }
 
         drop(list);

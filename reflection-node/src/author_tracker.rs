@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, warn};
 
-use crate::message::EphemeralMessage;
+use crate::ephemeral_message::EphemeralMessage;
 use crate::node::NodeInner;
-use crate::traits::SubscribableTopic;
+use crate::traits::TopicSubscription;
 
 const OFFLINE_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -41,7 +41,7 @@ pub struct AuthorTracker<T> {
     tx: RwLock<Option<EphemeralStreamPublisher<EphemeralMessage>>>,
 }
 
-impl<T: SubscribableTopic> AuthorTracker<T> {
+impl<T: TopicSubscription> AuthorTracker<T> {
     pub fn new(node: Arc<NodeInner>, subscribable_topic: Arc<T>) -> Arc<Self> {
         Arc::new(Self {
             last_ping: Mutex::new(HashMap::new()),

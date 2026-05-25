@@ -9,10 +9,10 @@ use tokio::sync::{Notify, RwLock};
 use tracing::info;
 
 use crate::database::{database_pool, run_migrations};
-use crate::subscription::{StoreError, Subscription, SubscriptionInner};
-pub use crate::topic_store::Author;
-use crate::topic_store::{StoreTopic, TopicStore};
-use crate::traits::SubscribableTopic;
+pub use crate::topic_store::TrackedAuthor;
+use crate::topic_store::{TopicRow, TrackedTopicStore};
+use crate::topic_stream::{TopicStream, TopicStreamError, TopicStreamInner};
+use crate::traits::TopicSubscription;
 
 static DATABASE_FILE: &str = "database-v2.sqlite";
 
@@ -55,11 +55,11 @@ pub enum ConnectionMode {
 }
 
 #[derive(Clone, Debug)]
-pub struct Topic {
-    pub id: p2panda::Topic,
+pub struct TrackedTopic {
+    pub topic: p2panda::Topic,
     pub name: Option<String>,
     pub last_accessed: Option<DateTime<Utc>>,
-    pub authors: Vec<Author>,
+    pub authors: Vec<TrackedAuthor>,
 }
 
 #[derive(Debug)]
@@ -139,7 +139,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn topics(&self) -> Result<Vec<Topic>, StoreError> {
+    pub async fn topics(&self) -> Result<Vec<TrackedTopic>, TopicStreamError> {
         let inner = self.inner.clone();
         let topics = self
             .runtime
@@ -149,14 +149,14 @@ impl Node {
         let topics = topics
             .into_iter()
             .map(|topic| {
-                let StoreTopic {
+                let TopicRow {
                     id,
                     name,
                     last_accessed,
                     authors,
                 } = topic;
-                Topic {
-                    id,
+                TrackedTopic {
+                    topic: id,
                     name,
                     last_accessed,
                     authors,
@@ -167,33 +167,36 @@ impl Node {
         Ok(topics)
     }
 
-    pub async fn subscribe<T>(
+    pub async fn stream<T>(
         &self,
-        id: impl Into<p2panda::Topic>,
-        subscribable_topic: T,
-    ) -> Result<Subscription<T>, StoreError>
+        topic: impl Into<p2panda::Topic>,
+        subscription: T,
+    ) -> Result<TopicStream<T>, TopicStreamError>
     where
-        T: SubscribableTopic + 'static,
+        T: TopicSubscription + 'static,
     {
-        let id = id.into();
-        let subscribable_topic = Arc::new(subscribable_topic);
+        let topic = topic.into();
+        let subscription = Arc::new(subscription);
         let inner = self.inner.clone();
         let inner_subscription = self
             .runtime
-            .spawn(async move { inner.subscribe(id, subscribable_topic).await })
+            .spawn(async move { inner.stream(topic, subscription).await })
             .await??;
 
-        let subscription = Subscription::new(self.runtime.clone(), inner_subscription).await;
-        info!(%id, "subscribed to topic");
+        let subscription = TopicStream::new(self.runtime.clone(), inner_subscription).await;
+        info!(%topic, "subscribed to topic");
 
         Ok(subscription)
     }
 
-    pub async fn delete_topic(&self, id: impl Into<p2panda::Topic>) -> Result<(), StoreError> {
-        let id = id.into();
+    pub async fn delete_topic(
+        &self,
+        topic: impl Into<p2panda::Topic>,
+    ) -> Result<(), TopicStreamError> {
+        let topic = topic.into();
         let inner = self.inner.clone();
         self.runtime
-            .spawn(async move { inner.delete_topic(id).await })
+            .spawn(async move { inner.delete_topic(topic).await })
             .await?
     }
 }
@@ -202,7 +205,7 @@ impl Node {
 pub(crate) struct NodeInner {
     pub(crate) network: RwLock<p2panda::Node>,
     pub(crate) shutdown_notifier: Notify,
-    pub(crate) topic_store: TopicStore,
+    pub(crate) topic_store: TrackedTopicStore,
     pub(crate) verifying_key: VerifyingKey,
 }
 
@@ -217,7 +220,7 @@ impl NodeInner {
         let pool = database_pool(db_file).await?;
         run_migrations(&pool).await?;
 
-        let topic_store = TopicStore::from_pool(pool.clone());
+        let topic_store = TrackedTopicStore::from_pool(pool.clone());
 
         let mut builder = p2panda::Node::builder()
             .network_id(network_id.into())
@@ -255,32 +258,36 @@ impl NodeInner {
         self.shutdown_notifier.notify_waiters();
     }
 
-    pub async fn subscribe<T>(
+    pub async fn stream<T>(
         self: Arc<Self>,
-        id: impl Into<p2panda::Topic>,
+        topic: impl Into<p2panda::Topic>,
         subscribable_topic: Arc<T>,
-    ) -> Result<SubscriptionInner<T>, StoreError>
+    ) -> Result<TopicStreamInner<T>, TopicStreamError>
     where
-        T: SubscribableTopic + 'static,
+        T: TopicSubscription + 'static,
     {
-        let id = id.into();
+        let topic = topic.into();
 
-        self.topic_store.add_topic(&id).await?;
+        self.topic_store.add_topic(&topic).await?;
 
         // Add ourselves as an author to the topic store.
         self.topic_store
-            .add_author(&id, &self.verifying_key)
+            .add_author(&topic, &self.verifying_key)
             .await?;
 
-        Ok(SubscriptionInner::new(self.clone(), id, subscribable_topic))
+        Ok(TopicStreamInner::new(
+            self.clone(),
+            topic,
+            subscribable_topic,
+        ))
     }
 
     pub async fn delete_topic(
         self: Arc<Self>,
-        id: impl Into<p2panda::Topic>,
-    ) -> Result<(), StoreError> {
-        let id = id.into();
-        self.topic_store.delete_topic(&id).await?;
+        topic: impl Into<p2panda::Topic>,
+    ) -> Result<(), TopicStreamError> {
+        let topic = topic.into();
+        self.topic_store.delete_topic(&topic).await?;
         Ok(())
     }
 }
