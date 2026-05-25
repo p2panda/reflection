@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 
 use chrono::{DateTime, Utc};
@@ -9,6 +9,7 @@ use tokio::sync::{Notify, RwLock};
 use tracing::info;
 
 use crate::database::{database_pool, run_migrations};
+use crate::migration::run_p2panda_migrations;
 pub use crate::topic_store::TrackedAuthor;
 use crate::topic_store::{TopicRow, TrackedTopicStore};
 use crate::topic_stream::{TopicStream, TopicStreamError, TopicStreamInner};
@@ -41,6 +42,9 @@ pub enum NodeError {
 
     #[error(transparent)]
     DatabaseMigration(#[from] sqlx::migrate::MigrateError),
+
+    #[error(transparent)]
+    NodeMigration(#[from] crate::migration::MigrationError),
 
     #[error(transparent)]
     NodeSpawn(#[from] SpawnError),
@@ -89,7 +93,7 @@ impl Node {
     pub async fn new(
         signing_key: SigningKey,
         network_id: impl Into<NetworkId>,
-        db_location: Option<&Path>,
+        base_path: Option<PathBuf>,
     ) -> Result<Self, NodeError> {
         let runtime = if let Ok(handle) = tokio::runtime::Handle::try_current() {
             OwnedRuntimeOrHandle::Handle(handle)
@@ -101,14 +105,9 @@ impl Node {
             )
         };
 
-        let inner = {
-            let network_id = network_id.into();
-            let db_file = db_location.map(|location| location.join(DATABASE_FILE));
-
-            runtime
-                .spawn(NodeInner::new(signing_key, network_id, db_file))
-                .await??
-        };
+        let inner = runtime
+            .spawn(NodeInner::new(signing_key, network_id.into(), base_path))
+            .await??;
 
         Ok(Self {
             inner: Arc::new(inner),
@@ -213,10 +212,13 @@ impl NodeInner {
     pub async fn new(
         signing_key: SigningKey,
         network_id: impl Into<NetworkId>,
-        db_file: Option<PathBuf>,
+        base_path: Option<PathBuf>,
     ) -> Result<Self, NodeError> {
         let verifying_key = signing_key.verifying_key();
 
+        let db_file = base_path
+            .clone()
+            .map(|location| location.join(DATABASE_FILE));
         let pool = database_pool(db_file).await?;
         run_migrations(&pool).await?;
 
@@ -235,6 +237,11 @@ impl NodeInner {
         }
 
         let node = builder.spawn().await?;
+
+        // Ignore node migrations if this instance is running only temporarily in memory.
+        if let Some(ref base_path) = base_path {
+            run_p2panda_migrations(&node, base_path).await?;
+        }
 
         Ok(Self {
             network: RwLock::new(node),

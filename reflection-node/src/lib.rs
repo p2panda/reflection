@@ -8,6 +8,7 @@
 mod author_tracker;
 mod database;
 mod ephemeral_message;
+mod migration;
 mod node;
 mod topic_store;
 mod topic_stream;

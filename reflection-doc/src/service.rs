@@ -173,7 +173,7 @@ impl Service {
         let signing_key = self.signing_key().0;
         let network_id = Hash::digest(NETWORK_NAME);
         let path = self.data_dir().and_then(|data_dir| data_dir.path());
-        let node = Node::new(signing_key, network_id, path.as_deref()).await?;
+        let node = Node::new(signing_key, network_id, path.into()).await?;
 
         self.imp()
             .node
