@@ -18,12 +18,9 @@ use crate::node::NodeInner;
 use crate::traits::SubscribableTopic;
 
 #[derive(Debug, Error)]
-pub enum SubscriptionError {
+pub enum PublishError {
     #[error(transparent)]
     Runtime(#[from] JoinError),
-
-    #[error(transparent)]
-    TopicStore(#[from] sqlx::Error),
 
     #[error(transparent)]
     StreamPublish(#[from] p2panda::streams::PublishError),
@@ -33,6 +30,15 @@ pub enum SubscriptionError {
 
     #[error("streams to publish data into network are not available due to a setup error")]
     BrokenStream,
+}
+
+#[derive(Debug, Error)]
+pub enum StoreError {
+    #[error(transparent)]
+    Runtime(#[from] JoinError),
+
+    #[error(transparent)]
+    Database(#[from] sqlx::Error),
 }
 
 pub struct Subscription<T> {
@@ -74,28 +80,28 @@ where
         }
     }
 
-    pub async fn publish_delta(&self, data: Vec<u8>) -> Result<(), SubscriptionError> {
+    pub async fn publish_delta(&self, data: Vec<u8>) -> Result<(), PublishError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.publish_delta(data).await })
             .await?
     }
 
-    pub async fn publish_snapshot(&self, data: Vec<u8>) -> Result<(), SubscriptionError> {
+    pub async fn publish_snapshot(&self, data: Vec<u8>) -> Result<(), PublishError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.publish_snapshot(data).await })
             .await?
     }
 
-    pub async fn publish_ephemeral(&self, data: Vec<u8>) -> Result<(), SubscriptionError> {
+    pub async fn publish_ephemeral(&self, data: Vec<u8>) -> Result<(), PublishError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.publish_ephemeral(data).await })
             .await?
     }
 
-    pub async fn unsubscribe(self) -> Result<(), SubscriptionError> {
+    pub async fn unsubscribe(self) -> Result<(), StoreError> {
         self.network_monitor_task.abort();
 
         let inner = self.inner.clone();
@@ -111,7 +117,7 @@ where
     /// Set the name for a given topic.
     ///
     /// This information will be written to the database.
-    pub async fn set_name(&self, name: Option<String>) -> Result<(), SubscriptionError> {
+    pub async fn set_name(&self, name: Option<String>) -> Result<(), StoreError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.set_name(name).await })
@@ -192,7 +198,7 @@ where
         let _ = self.unsubscribe().await;
     }
 
-    pub async fn unsubscribe(&self) -> Result<(), SubscriptionError> {
+    pub async fn unsubscribe(&self) -> Result<(), StoreError> {
         let mut tx_guard = self.tx.write().await;
         let mut ephemeral_tx_guard = self.ephemeral_tx.write().await;
         let mut abort_handles_guard = self.abort_handles.write().await;
@@ -218,18 +224,18 @@ where
         Ok(())
     }
 
-    pub async fn publish_delta(&self, data: Vec<u8>) -> Result<(), SubscriptionError> {
+    pub async fn publish_delta(&self, data: Vec<u8>) -> Result<(), PublishError> {
         if let Some(tx) = self.tx.read().await.as_ref() {
             info!("delta operation sent for topic with id {}", self.id);
             tx.publish(data).await?;
         } else {
-            return Err(SubscriptionError::BrokenStream);
+            return Err(PublishError::BrokenStream);
         }
 
         Ok(())
     }
 
-    pub async fn publish_snapshot(&self, data: Vec<u8>) -> Result<(), SubscriptionError> {
+    pub async fn publish_snapshot(&self, data: Vec<u8>) -> Result<(), PublishError> {
         if let Some(tx) = self.tx.read().await.as_ref() {
             info!("snapshot saved for topic with id {}", self.id);
 
@@ -237,25 +243,25 @@ where
             // previous entries.
             tx.prune(Some(data)).await?;
         } else {
-            return Err(SubscriptionError::BrokenStream);
+            return Err(PublishError::BrokenStream);
         }
 
         Ok(())
     }
 
-    pub async fn publish_ephemeral(&self, data: Vec<u8>) -> Result<(), SubscriptionError> {
+    pub async fn publish_ephemeral(&self, data: Vec<u8>) -> Result<(), PublishError> {
         if let Some(ephemeral_tx) = self.ephemeral_tx.read().await.as_ref() {
             ephemeral_tx
                 .publish(EphemeralMessage::Application(data))
                 .await?;
         } else {
-            return Err(SubscriptionError::BrokenStream);
+            return Err(PublishError::BrokenStream);
         }
 
         Ok(())
     }
 
-    pub async fn set_name(&self, name: Option<String>) -> Result<(), SubscriptionError> {
+    pub async fn set_name(&self, name: Option<String>) -> Result<(), StoreError> {
         self.node
             .topic_store
             .set_name_for_topic(&self.id, name)
@@ -363,15 +369,19 @@ where
                 }
                 StreamEvent::DecodeFailed { error, .. } => {
                     error!("failed decoding incoming operation from stream: {error}");
+                    subscribable_topic_clone.error(error.into());
                 }
                 StreamEvent::ReplayFailed { error, .. } => {
                     error!("error occurred while replaying operation stream: {error}");
+                    subscribable_topic_clone.error(crate::traits::SubscriptionError::ReplayStream(error));
                 }
                 StreamEvent::ProcessingFailed { event, error, .. } => {
                     error!("error occurred while processing operation {}: {error}", event.header().hash());
+                    subscribable_topic_clone.error(error.into());
                 }
                 StreamEvent::AckFailed { error, .. } => {
                     error!("error occurred while acking event: {error}");
+                    subscribable_topic_clone.error(crate::traits::SubscriptionError::AckedMessage(error));
                 }
                 _ => (),
             }

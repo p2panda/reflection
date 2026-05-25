@@ -9,7 +9,7 @@ use tokio::sync::{Notify, RwLock};
 use tracing::info;
 
 use crate::database::{database_pool, run_migrations};
-use crate::subscription::{Subscription, SubscriptionError, SubscriptionInner};
+use crate::subscription::{StoreError, Subscription, SubscriptionInner};
 pub use crate::topic_store::Author;
 use crate::topic_store::{StoreTopic, TopicStore};
 use crate::traits::SubscribableTopic;
@@ -37,10 +37,10 @@ pub enum NodeError {
     RuntimeSpawn(#[from] tokio::task::JoinError),
 
     #[error(transparent)]
-    Datebase(#[from] sqlx::Error),
+    Database(#[from] sqlx::Error),
 
     #[error(transparent)]
-    DatebaseMigration(#[from] sqlx::migrate::MigrateError),
+    DatabaseMigration(#[from] sqlx::migrate::MigrateError),
 
     #[error(transparent)]
     NodeSpawn(#[from] SpawnError),
@@ -139,7 +139,7 @@ impl Node {
         Ok(())
     }
 
-    pub async fn topics(&self) -> Result<Vec<Topic>, SubscriptionError> {
+    pub async fn topics(&self) -> Result<Vec<Topic>, StoreError> {
         let inner = self.inner.clone();
         let topics = self
             .runtime
@@ -171,7 +171,7 @@ impl Node {
         &self,
         id: impl Into<p2panda::Topic>,
         subscribable_topic: T,
-    ) -> Result<Subscription<T>, SubscriptionError>
+    ) -> Result<Subscription<T>, StoreError>
     where
         T: SubscribableTopic + 'static,
     {
@@ -189,10 +189,7 @@ impl Node {
         Ok(subscription)
     }
 
-    pub async fn delete_topic(
-        &self,
-        id: impl Into<p2panda::Topic>,
-    ) -> Result<(), SubscriptionError> {
+    pub async fn delete_topic(&self, id: impl Into<p2panda::Topic>) -> Result<(), StoreError> {
         let id = id.into();
         let inner = self.inner.clone();
         self.runtime
@@ -262,7 +259,7 @@ impl NodeInner {
         self: Arc<Self>,
         id: impl Into<p2panda::Topic>,
         subscribable_topic: Arc<T>,
-    ) -> Result<SubscriptionInner<T>, SubscriptionError>
+    ) -> Result<SubscriptionInner<T>, StoreError>
     where
         T: SubscribableTopic + 'static,
     {
@@ -281,7 +278,7 @@ impl NodeInner {
     pub async fn delete_topic(
         self: Arc<Self>,
         id: impl Into<p2panda::Topic>,
-    ) -> Result<(), SubscriptionError> {
+    ) -> Result<(), StoreError> {
         let id = id.into();
         self.topic_store.delete_topic(&id).await?;
         Ok(())
