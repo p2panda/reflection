@@ -7,7 +7,7 @@ use glib::{Properties, clone};
 use p2panda_core::Hash;
 use reflection_node::node;
 use reflection_node::node::{Node, NodeError};
-use reflection_node::subscription::SubscriptionError;
+use reflection_node::subscription::StoreError;
 use thiserror::Error;
 use tracing::error;
 
@@ -21,8 +21,9 @@ static NETWORK_NAME: &[u8] = b"reflection-v2";
 pub enum StartupError {
     #[error(transparent)]
     Node(#[from] NodeError),
+
     #[error(transparent)]
-    Topic(#[from] SubscriptionError),
+    Store(#[from] StoreError),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, glib::Enum, Default)]
