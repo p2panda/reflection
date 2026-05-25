@@ -5,9 +5,8 @@ use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
 use glib::{Properties, clone};
 use p2panda_core::Hash;
-use reflection_node::node;
-use reflection_node::node::{Node, NodeError};
-use reflection_node::subscription::StoreError;
+use reflection_node::TopicStreamError;
+use reflection_node::{Node, NodeError};
 use thiserror::Error;
 use tracing::error;
 
@@ -23,7 +22,7 @@ pub enum StartupError {
     Node(#[from] NodeError),
 
     #[error(transparent)]
-    Store(#[from] StoreError),
+    TopicStream(#[from] TopicStreamError),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, glib::Enum, Default)]
@@ -36,12 +35,12 @@ pub enum ConnectionMode {
     Network,
 }
 
-impl From<ConnectionMode> for node::ConnectionMode {
+impl From<ConnectionMode> for reflection_node::ConnectionMode {
     fn from(value: ConnectionMode) -> Self {
         match value {
-            ConnectionMode::None => node::ConnectionMode::None,
-            ConnectionMode::Bluetooth => node::ConnectionMode::Bluetooth,
-            ConnectionMode::Network => node::ConnectionMode::Network,
+            ConnectionMode::None => reflection_node::ConnectionMode::None,
+            ConnectionMode::Bluetooth => reflection_node::ConnectionMode::Bluetooth,
+            ConnectionMode::Network => reflection_node::ConnectionMode::Network,
         }
     }
 }
@@ -88,9 +87,9 @@ mod imp {
                 monitor.is_network_available()
             };
             let connection_mode = (*self.connection_mode.lock().unwrap()).into();
-            let wants_network = connection_mode == node::ConnectionMode::Network;
+            let wants_network = connection_mode == reflection_node::ConnectionMode::Network;
             let real_connection_mode = if !network_available && wants_network {
-                node::ConnectionMode::None
+                reflection_node::ConnectionMode::None
             } else {
                 connection_mode
             };

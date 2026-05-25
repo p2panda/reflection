@@ -10,8 +10,7 @@ pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{self, Topic};
-use reflection_node::subscription::Subscription as TopicSubscription;
-use reflection_node::traits::{SubscribableTopic, SubscriptionError as TopicSubscriptionError};
+use reflection_node::{TopicStream, TopicSubscription, TopicSubscriptionError};
 use tracing::error;
 
 use crate::author::Author;
@@ -144,7 +143,7 @@ mod imp {
         #[property(get, construct_only)]
         id: OnceCell<DocumentId>,
         #[property(name = "subscribed", get = Self::subscribed, type = bool)]
-        pub(super) subscription: RwLock<Option<Arc<TopicSubscription<DocumentHandle>>>>,
+        pub(super) subscription: RwLock<Option<Arc<TopicStream<DocumentHandle>>>>,
         #[property(get = Self::service, set = Self::set_service, construct_only, type = Service)]
         service: glib::WeakRef<Service>,
         #[property(get)]
@@ -662,7 +661,7 @@ mod imp {
             }
         }
 
-        pub(super) fn subscription(&self) -> Option<Arc<TopicSubscription<DocumentHandle>>> {
+        pub(super) fn subscription(&self) -> Option<Arc<TopicStream<DocumentHandle>>> {
             self.subscription.read().unwrap().clone()
         }
     }
@@ -814,7 +813,7 @@ impl Document {
         }
 
         let handle = DocumentHandle(self.downgrade());
-        match self.service().node().subscribe(self.id(), handle).await {
+        match self.service().node().stream(self.id(), handle).await {
             Ok(subscription) => {
                 self.imp()
                     .subscription
@@ -916,7 +915,7 @@ unsafe impl Sync for Document {}
 
 struct DocumentHandle(glib::WeakRef<Document>);
 
-impl SubscribableTopic for DocumentHandle {
+impl TopicSubscription for DocumentHandle {
     fn bytes_received(&self, author: p2panda_core::VerifyingKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
@@ -968,7 +967,7 @@ impl SubscribableTopic for DocumentHandle {
     fn error(&self, error: TopicSubscriptionError) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                error!("Network error received for subscribed document: {error}");
+                error!("error received for subscribed document: {error}");
             });
         }
     }

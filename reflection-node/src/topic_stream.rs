@@ -13,9 +13,9 @@ use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
 
 use crate::author_tracker::AuthorTracker;
-use crate::message::EphemeralMessage;
+use crate::ephemeral_message::EphemeralMessage;
 use crate::node::NodeInner;
-use crate::traits::SubscribableTopic;
+use crate::traits::TopicSubscription;
 
 #[derive(Debug, Error)]
 pub enum PublishError {
@@ -33,7 +33,7 @@ pub enum PublishError {
 }
 
 #[derive(Debug, Error)]
-pub enum StoreError {
+pub enum TopicStreamError {
     #[error(transparent)]
     Runtime(#[from] JoinError),
 
@@ -41,23 +41,23 @@ pub enum StoreError {
     Database(#[from] sqlx::Error),
 }
 
-pub struct Subscription<T> {
-    inner: Arc<SubscriptionInner<T>>,
+pub struct TopicStream<T> {
+    inner: Arc<TopicStreamInner<T>>,
     runtime: tokio::runtime::Handle,
     network_monitor_task: AbortHandle,
 }
 
-impl<T> Drop for Subscription<T> {
+impl<T> Drop for TopicStream<T> {
     fn drop(&mut self) {
         self.network_monitor_task.abort();
     }
 }
 
-impl<T> Subscription<T>
+impl<T> TopicStream<T>
 where
-    T: SubscribableTopic + 'static,
+    T: TopicSubscription + 'static,
 {
-    pub(crate) async fn new(runtime: tokio::runtime::Handle, inner: SubscriptionInner<T>) -> Self {
+    pub(crate) async fn new(runtime: tokio::runtime::Handle, inner: TopicStreamInner<T>) -> Self {
         let (ready_tx, ready_rx) = oneshot::channel();
 
         // Spawn task to establish streams to publish and subscribe to messages, the same task will
@@ -73,7 +73,7 @@ where
         // Wait until streams with network have been established.
         let _ = ready_rx.await;
 
-        Subscription {
+        TopicStream {
             inner,
             runtime,
             network_monitor_task,
@@ -101,7 +101,7 @@ where
             .await?
     }
 
-    pub async fn unsubscribe(self) -> Result<(), StoreError> {
+    pub async fn unsubscribe(self) -> Result<(), TopicStreamError> {
         self.network_monitor_task.abort();
 
         let inner = self.inner.clone();
@@ -109,7 +109,7 @@ where
             .spawn(async move { inner.unsubscribe().await })
             .await??;
 
-        info!("unsubscribed from topic {}", self.inner.id);
+        info!("unsubscribed from topic {}", self.inner.topic);
 
         Ok(())
     }
@@ -117,7 +117,7 @@ where
     /// Set the name for a given topic.
     ///
     /// This information will be written to the database.
-    pub async fn set_name(&self, name: Option<String>) -> Result<(), StoreError> {
+    pub async fn set_name(&self, name: Option<String>) -> Result<(), TopicStreamError> {
         let inner = self.inner.clone();
         self.runtime
             .spawn(async move { inner.set_name(name).await })
@@ -125,17 +125,17 @@ where
     }
 }
 
-pub(crate) struct SubscriptionInner<T> {
+pub(crate) struct TopicStreamInner<T> {
     tx: RwLock<Option<StreamPublisher<Vec<u8>>>>,
     ephemeral_tx: RwLock<Option<EphemeralStreamPublisher<EphemeralMessage>>>,
     node: Arc<NodeInner>,
-    id: Topic,
-    subscribable_topic: Arc<T>,
+    topic: Topic,
+    subscription: Arc<T>,
     author_tracker: Arc<AuthorTracker<T>>,
     abort_handles: RwLock<Vec<AbortHandle>>,
 }
 
-impl<T> Drop for SubscriptionInner<T> {
+impl<T> Drop for TopicStreamInner<T> {
     fn drop(&mut self) {
         for handle in self.abort_handles.get_mut() {
             handle.abort();
@@ -143,20 +143,20 @@ impl<T> Drop for SubscriptionInner<T> {
     }
 }
 
-impl<T> SubscriptionInner<T>
+impl<T> TopicStreamInner<T>
 where
-    T: SubscribableTopic + 'static,
+    T: TopicSubscription + 'static,
 {
-    pub fn new(node: Arc<NodeInner>, id: Topic, subscribable_topic: Arc<T>) -> Self {
-        let author_tracker = AuthorTracker::new(node.clone(), subscribable_topic.clone());
+    pub fn new(node: Arc<NodeInner>, topic: Topic, subscription: Arc<T>) -> Self {
+        let author_tracker = AuthorTracker::new(node.clone(), subscription.clone());
 
-        SubscriptionInner {
+        TopicStreamInner {
             tx: RwLock::new(None),
             ephemeral_tx: RwLock::new(None),
             node,
-            id,
+            topic,
             abort_handles: RwLock::new(Vec::new()),
-            subscribable_topic,
+            subscription,
             author_tracker,
         }
     }
@@ -168,8 +168,8 @@ where
         let result = setup_streams(
             &self.node,
             network_guard.deref(),
-            self.id,
-            &self.subscribable_topic,
+            self.topic,
+            &self.subscription,
             &self.author_tracker,
         )
         .await;
@@ -181,7 +181,7 @@ where
                 *self.abort_handles.write().await = abort_handles;
             }
             Err(error) => {
-                self.subscribable_topic.error(error.into());
+                self.subscription.error(error.into());
             }
         }
 
@@ -198,7 +198,7 @@ where
         let _ = self.unsubscribe().await;
     }
 
-    pub async fn unsubscribe(&self) -> Result<(), StoreError> {
+    pub async fn unsubscribe(&self) -> Result<(), TopicStreamError> {
         let mut tx_guard = self.tx.write().await;
         let mut ephemeral_tx_guard = self.ephemeral_tx.write().await;
         let mut abort_handles_guard = self.abort_handles.write().await;
@@ -209,11 +209,11 @@ where
 
         self.node
             .topic_store
-            .set_last_accessed_for_topic(&self.id, Some(Utc::now()))
+            .set_last_accessed_for_topic(&self.topic, Some(Utc::now()))
             .await?;
 
         teardown_streams(
-            &self.id,
+            &self.topic,
             &self.author_tracker,
             tx,
             ephemeral_tx,
@@ -226,7 +226,7 @@ where
 
     pub async fn publish_delta(&self, data: Vec<u8>) -> Result<(), PublishError> {
         if let Some(tx) = self.tx.read().await.as_ref() {
-            info!("delta operation sent for topic with id {}", self.id);
+            info!("delta operation sent for topic with id {}", self.topic);
             tx.publish(data).await?;
         } else {
             return Err(PublishError::BrokenStream);
@@ -237,7 +237,7 @@ where
 
     pub async fn publish_snapshot(&self, data: Vec<u8>) -> Result<(), PublishError> {
         if let Some(tx) = self.tx.read().await.as_ref() {
-            info!("snapshot saved for topic with id {}", self.id);
+            info!("snapshot saved for topic with id {}", self.topic);
 
             // Append an operation to our log and set the prune flag to true. This will remove
             // previous entries.
@@ -261,10 +261,10 @@ where
         Ok(())
     }
 
-    pub async fn set_name(&self, name: Option<String>) -> Result<(), StoreError> {
+    pub async fn set_name(&self, name: Option<String>) -> Result<(), TopicStreamError> {
         self.node
             .topic_store
-            .set_name_for_topic(&self.id, name)
+            .set_name_for_topic(&self.topic, name)
             .await?;
 
         Ok(())
@@ -286,7 +286,7 @@ async fn setup_streams<T>(
     CreateStreamError,
 >
 where
-    T: SubscribableTopic + 'static,
+    T: TopicSubscription + 'static,
 {
     let mut abort_handles = Vec::with_capacity(3);
 
@@ -373,7 +373,7 @@ where
                 }
                 StreamEvent::ReplayFailed { error, .. } => {
                     error!("error occurred while replaying operation stream: {error}");
-                    subscribable_topic_clone.error(crate::traits::SubscriptionError::ReplayStream(error));
+                    subscribable_topic_clone.error(crate::traits::TopicSubscriptionError::ReplayStream(error));
                 }
                 StreamEvent::ProcessingFailed { event, error, .. } => {
                     error!("error occurred while processing operation {}: {error}", event.header().hash());
@@ -381,7 +381,7 @@ where
                 }
                 StreamEvent::AckFailed { error, .. } => {
                     error!("error occurred while acking event: {error}");
-                    subscribable_topic_clone.error(crate::traits::SubscriptionError::AckedMessage(error));
+                    subscribable_topic_clone.error(crate::traits::TopicSubscriptionError::AckedMessage(error));
                 }
                 _ => (),
             }
@@ -441,13 +441,13 @@ where
 }
 
 async fn teardown_streams<T>(
-    id: &Topic,
+    topic: &Topic,
     author_tracker: &Arc<AuthorTracker<T>>,
     tx: Option<StreamPublisher<Vec<u8>>>,
     ephemeral_tx: Option<EphemeralStreamPublisher<EphemeralMessage>>,
     abort_handles: Vec<AbortHandle>,
 ) where
-    T: SubscribableTopic + 'static,
+    T: TopicSubscription + 'static,
 {
     for handle in abort_handles {
         handle.abort();
@@ -456,7 +456,7 @@ async fn teardown_streams<T>(
     author_tracker.set_topic_tx(None).await;
 
     if tx.is_some() {
-        info!("network streams torn down for topic {}", id);
+        info!("network streams torn down for topic {}", topic);
     }
 
     drop(tx);
