@@ -13,8 +13,8 @@ test_utils = []
 
 [dependencies]
 chrono = "0.4.43"
-p2panda = "0.6.1"
-p2panda-store = "0.6.1"
+p2panda = { git = "https://github.com/p2panda/p2panda", rev = "2bd982821b46bdbaaced9c053884b57fb84f6655" }
+p2panda-store = { git = "https://github.com/p2panda/p2panda", rev = "2bd982821b46bdbaaced9c053884b57fb84f6655" }
 serde = { version = "1.0.228", features = ["derive"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "chrono"], default-features = false }
 thiserror = "2.0.18"

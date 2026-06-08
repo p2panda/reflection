@@ -23,7 +23,7 @@ static RELAY_URL: LazyLock<RelayUrl> = LazyLock::new(|| {
 });
 
 static BOOTSTRAP_NODE_ID: LazyLock<VerifyingKey> = LazyLock::new(|| {
-    "9f63a15ab95959a992af96bf72fbc3e7dc98eeb4799f788bb07b20125053e795"
+    "f992f1f5702087f89941ffb97ec3e7915996572c6814344a716c990b5537370c"
         .parse()
         .expect("valid bootstrap node id")
 });
