@@ -17,7 +17,7 @@ use crate::traits::TopicSubscription;
 static DATABASE_FILE: &str = "database-v2.sqlite";
 
 static RELAY_URL: LazyLock<RelayUrl> = LazyLock::new(|| {
-    "https://euc1-1.relay.n0.iroh-canary.iroh.link"
+    "https://euc1-1.relay.n0.iroh.link."
         .parse()
         .expect("valid relay URL")
 });
