@@ -21,9 +21,14 @@ pub async fn database_pool(db_file: Option<PathBuf>) -> Result<SqlitePool, sqlx:
         SqlitePool::connect_with(connection_options).await?
     } else {
         let connection_options = connection_options.in_memory(true);
-        // FIXME: we need to set max connection to 1 for in memory sqlite DB. Probably has to
-        // do something with this issue: https://github.com/launchbadge/sqlx/issues/2510
-        let pool_options = SqlitePoolOptions::new().max_connections(1);
+        // NOTE: We need to set min / max connection to 1 for in memory sqlite DB and the max
+        // lifetime and idle timeout to none ("forever") to avoid dropping the whole database when
+        // the last connection closed. See issue: https://github.com/launchbadge/sqlx/issues/2510
+        let pool_options = SqlitePoolOptions::new()
+            .max_connections(1)
+            .min_connections(1)
+            .max_lifetime(None)
+            .idle_timeout(None);
         pool_options.connect_with(connection_options).await?
     };
 
