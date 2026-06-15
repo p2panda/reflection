@@ -13,9 +13,9 @@ gio = "0.21"
 glib = "0.21"
 hex = "0.4.3"
 indexmap = "2.13.0"
-loro = "1.12.0"
-p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "2bd982821b46bdbaaced9c053884b57fb84f6655" }
-rand = "0.10.0"
+loro = "1.13.6"
+p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb" }
+rand = "0.10.1"
 reflection-node = { path = "../reflection-node" }
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
