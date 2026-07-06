@@ -5,29 +5,29 @@ pub mod documents;
 pub mod service;
 
 pub mod identity {
+    use std::fmt;
     use std::hash::Hash;
 
-    use reflection_node::p2panda_core;
-    pub use reflection_node::p2panda_core::identity::IdentityError;
-    use std::fmt;
+    use p2panda_core;
+    pub use p2panda_core::identity::IdentityError;
 
     #[derive(Clone, Debug, glib::Boxed)]
-    #[boxed_type(name = "ReflectionPrivateKey", nullable)]
-    pub struct PrivateKey(pub(crate) p2panda_core::PrivateKey);
+    #[boxed_type(name = "ReflectionSigningKey", nullable)]
+    pub struct SigningKey(pub(crate) p2panda_core::SigningKey);
 
-    impl Default for PrivateKey {
+    impl Default for SigningKey {
         fn default() -> Self {
-            Self::new()
+            Self::generate()
         }
     }
 
-    impl PrivateKey {
-        pub fn new() -> PrivateKey {
-            PrivateKey(p2panda_core::PrivateKey::new())
+    impl SigningKey {
+        pub fn generate() -> SigningKey {
+            SigningKey(p2panda_core::SigningKey::generate())
         }
 
-        pub fn public_key(&self) -> PublicKey {
-            PublicKey(self.0.public_key())
+        pub fn verifying_key(&self) -> VerifyingKey {
+            VerifyingKey(self.0.verifying_key())
         }
 
         pub fn as_bytes(&self) -> &[u8] {
@@ -35,43 +35,43 @@ pub mod identity {
         }
     }
 
-    impl TryFrom<&[u8]> for PrivateKey {
+    impl TryFrom<&[u8]> for SigningKey {
         type Error = p2panda_core::IdentityError;
 
         fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-            Ok(PrivateKey(p2panda_core::PrivateKey::try_from(value)?))
+            Ok(SigningKey(p2panda_core::SigningKey::try_from(value)?))
         }
     }
 
-    impl<'a> From<&'a PrivateKey> for &'a [u8] {
-        fn from(value: &PrivateKey) -> &[u8] {
+    impl<'a> From<&'a SigningKey> for &'a [u8] {
+        fn from(value: &SigningKey) -> &[u8] {
             value.0.as_bytes().as_slice()
         }
     }
 
-    impl fmt::Display for PrivateKey {
+    impl fmt::Display for SigningKey {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             fmt::Display::fmt(&self.0, f)
         }
     }
 
     #[derive(Clone, Debug, PartialEq, Hash, Eq, glib::Boxed)]
-    #[boxed_type(name = "ReflectionPublicKey", nullable)]
-    pub struct PublicKey(pub(crate) p2panda_core::PublicKey);
+    #[boxed_type(name = "ReflectionVerifyingKey", nullable)]
+    pub struct VerifyingKey(pub(crate) p2panda_core::VerifyingKey);
 
-    impl fmt::Display for PublicKey {
+    impl fmt::Display for VerifyingKey {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             fmt::Display::fmt(&self.0, f)
         }
     }
 
-    impl<'a> From<&'a PublicKey> for &'a [u8] {
-        fn from(value: &PublicKey) -> &[u8] {
+    impl<'a> From<&'a VerifyingKey> for &'a [u8] {
+        fn from(value: &VerifyingKey) -> &[u8] {
             value.0.as_bytes().as_slice()
         }
     }
 
-    impl PublicKey {
+    impl VerifyingKey {
         pub fn as_bytes(&self) -> &[u8] {
             self.0.as_bytes().as_slice()
         }
@@ -81,7 +81,7 @@ pub mod identity {
 #[cfg(test)]
 mod tests {
     use crate::document::DocumentId;
-    use crate::identity::PrivateKey;
+    use crate::identity::SigningKey;
     use crate::service::Service;
 
     #[test_log::test(glib::async_test)]
@@ -90,8 +90,8 @@ mod tests {
 
         let context = glib::MainContext::ref_thread_default();
 
-        let private_key = PrivateKey::new();
-        let service = Service::new(&private_key, None);
+        let signing_key = SigningKey::generate();
+        let service = Service::new(&signing_key, None);
         service.startup().await.unwrap();
 
         let document = service.join_document_with_main_context(&DocumentId::new(), &context);
@@ -109,16 +109,16 @@ mod tests {
 
         let context = glib::MainContext::ref_thread_default();
 
-        let private_key = PrivateKey::new();
-        let service = Service::new(&private_key, None);
+        let signing_key = SigningKey::generate();
+        let service = Service::new(&signing_key, None);
         service.startup().await.unwrap();
 
         let document = service.join_document_with_main_context(&DocumentId::new(), &context);
         document.subscribe().await;
         let id = document.id();
 
-        let private_key2 = PrivateKey::new();
-        let service2 = Service::new(&private_key2, None);
+        let signing_key2 = SigningKey::generate();
+        let service2 = Service::new(&signing_key2, None);
         service2.startup().await.unwrap();
 
         let document2 = service2.join_document_with_main_context(&id, &context);
@@ -150,16 +150,16 @@ mod tests {
 
         let context = glib::MainContext::ref_thread_default();
 
-        let private_key = PrivateKey::new();
-        let service = Service::new(&private_key, None);
+        let signing_key = SigningKey::generate();
+        let service = Service::new(&signing_key, None);
         service.startup().await.unwrap();
 
         let document = service.join_document_with_main_context(&DocumentId::new(), &context);
         document.subscribe().await;
         let id = document.id();
 
-        let private_key2 = PrivateKey::new();
-        let service2 = Service::new(&private_key2, None);
+        let signing_key2 = SigningKey::generate();
+        let service2 = Service::new(&signing_key2, None);
         service2.startup().await.unwrap();
 
         let document2 = service2.join_document_with_main_context(&id, &context);
@@ -201,8 +201,8 @@ mod tests {
 
         let context = glib::MainContext::ref_thread_default();
 
-        let private_key = PrivateKey::new();
-        let service = Service::new(&private_key, None);
+        let signing_key = SigningKey::generate();
+        let service = Service::new(&signing_key, None);
         service.startup().await.unwrap();
 
         let document = service.join_document_with_main_context(&DocumentId::new(), &context);
@@ -210,8 +210,8 @@ mod tests {
 
         document.subscribe().await;
 
-        let private_key2 = PrivateKey::new();
-        let service2 = Service::new(&private_key2, None);
+        let signing_key2 = SigningKey::generate();
+        let service2 = Service::new(&signing_key2, None);
         service2.startup().await.unwrap();
 
         let document2 = service2.join_document_with_main_context(&id, &context);

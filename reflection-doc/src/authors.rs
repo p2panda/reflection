@@ -6,14 +6,14 @@ use glib::subclass::prelude::*;
 use indexmap::IndexMap;
 
 use crate::author::Author;
-use crate::identity::PublicKey;
+use crate::identity::VerifyingKey;
 
 mod imp {
     use super::*;
 
     #[derive(Default)]
     pub struct Authors {
-        pub(super) list: RwLock<IndexMap<PublicKey, Author>>,
+        pub(super) list: RwLock<IndexMap<VerifyingKey, Author>>,
     }
 
     #[glib::object_subclass]
@@ -70,9 +70,9 @@ impl Authors {
         assert_eq!(list.len(), 1);
 
         for author in authors {
-            let public_key = author.public_key();
-            if !list.contains_key(&public_key) {
-                list.insert(public_key, author);
+            let verifying_key = author.verifying_key();
+            if !list.contains_key(&verifying_key) {
+                list.insert(verifying_key, author);
             }
         }
 
@@ -80,7 +80,7 @@ impl Authors {
         self.items_changed(1, 0, authors_len as u32);
     }
 
-    pub(crate) fn add_this_device(&self, author_key: PublicKey) {
+    pub(crate) fn add_this_device(&self, author_key: VerifyingKey) {
         let mut list = self.imp().list.write().unwrap();
         let now = glib::DateTime::now_utc().ok();
 
@@ -92,7 +92,7 @@ impl Authors {
         self.items_changed(0, 0, 1);
     }
 
-    pub(crate) fn add(&self, author_key: PublicKey) -> Author {
+    pub(crate) fn add(&self, author_key: VerifyingKey) -> Author {
         let mut list = self.imp().list.write().unwrap();
         let entry = list.entry(author_key);
         let index = entry.index();
@@ -108,7 +108,7 @@ impl Authors {
         author
     }
 
-    pub(crate) fn author(&self, author_key: &PublicKey) -> Option<Author> {
+    pub(crate) fn author(&self, author_key: &VerifyingKey) -> Option<Author> {
         let list = self.imp().list.read().unwrap();
         list.get(author_key).cloned()
     }

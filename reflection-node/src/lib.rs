@@ -1,58 +1,44 @@
+//! Peer-to-peer, local-first networking and sync "backend" of Reflection based on p2panda.
+//!
+//! Some features implemented in `reflection-node` add functionality on top of p2panda:
+//!
+//! - Author Presence: Indicate which authors have contributed to which topic and if they're
+//!   currently online.
+//! - Persisted Topics: Store to persist all previously used topics.
 mod author_tracker;
-mod ephemerial_operation;
-mod network;
-pub mod node;
-mod node_inner;
-mod operation;
-mod operation_store;
-mod subscription_inner;
-pub mod topic;
+mod database;
+mod ephemeral_message;
+mod node;
 mod topic_store;
-mod utils;
+mod topic_stream;
+mod traits;
 
-pub use p2panda_core;
-pub use topic::SubscribableTopic;
+#[doc(hidden)] // FIXME: We're currently not supporting this feature.
+pub use node::ConnectionMode;
+pub use node::{Node, NodeError, TrackedAuthor, TrackedTopic};
+pub use topic_stream::{PublishError, TopicStream, TopicStreamError};
+pub use traits::{TopicSubscription, TopicSubscriptionError};
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
-    use p2panda_core::Hash;
-    use p2panda_core::PrivateKey;
-    use p2panda_core::PublicKey;
+    use p2panda::{Hash, SigningKey, Topic, VerifyingKey};
     use tokio::sync::{Mutex, mpsc};
 
-    use crate::node::ConnectionMode;
-    use crate::node::Node;
-    use crate::topic::SubscribableTopic;
-
-    #[tokio::test]
-    #[test_log::test]
-    async fn create_topic() {
-        let private_key = PrivateKey::new();
-        let network_id = Hash::new(b"reflection");
-        let node = Node::new(private_key, network_id, None).await.unwrap();
-
-        let id: [u8; 32] = [0; 32];
-        let _sub = node.subscribe(id, TestTopic::new()).await;
-        let topics = node.topics::<[u8; 32]>().await.unwrap();
-
-        assert_eq!(topics.len(), 1);
-        assert_eq!(topics.first().unwrap().id, id);
-
-        node.shutdown().await.unwrap();
-    }
+    use crate::node::{ConnectionMode, Node};
+    use crate::traits::{TopicSubscription, TopicSubscriptionError};
 
     #[derive(Clone)]
-    struct TestTopic {
+    struct TestDocument {
         tx: mpsc::UnboundedSender<Vec<u8>>,
         rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
     }
 
-    impl TestTopic {
+    impl TestDocument {
         fn new() -> Self {
             let (tx, rx) = mpsc::unbounded_channel::<Vec<u8>>();
-            TestTopic {
+            TestDocument {
                 tx,
                 rx: Arc::new(Mutex::new(rx)),
             }
@@ -63,55 +49,70 @@ mod tests {
         }
     }
 
-    impl SubscribableTopic for TestTopic {
-        fn bytes_received(&self, _author: PublicKey, data: Vec<u8>) {
+    impl TopicSubscription for TestDocument {
+        fn bytes_received(&self, _author: VerifyingKey, data: Vec<u8>) {
             self.tx.send(data).unwrap();
         }
 
-        fn author_joined(&self, _author: PublicKey) {}
-        fn author_left(&self, _author: PublicKey) {}
-        fn ephemeral_bytes_received(&self, _author: PublicKey, _data: Vec<u8>) {}
-        fn error(&self, _error: crate::topic::SubscriptionError) {}
+        fn author_joined(&self, _author: VerifyingKey) {}
+        fn author_left(&self, _author: VerifyingKey) {}
+        fn ephemeral_bytes_received(&self, _author: VerifyingKey, _timestamp: u64, _data: Vec<u8>) {
+        }
+        fn error(&self, _error: TopicSubscriptionError) {}
+    }
+
+    #[tokio::test]
+    #[test_log::test]
+    async fn create_topic() {
+        let signing_key = SigningKey::generate();
+        let network_id = Hash::digest(b"reflection");
+        let node = Node::new(signing_key, network_id, None).await.unwrap();
+
+        let id: [u8; 32] = [0; 32];
+        let _sub = node.stream(id, TestDocument::new()).await;
+        let topics = node.topics().await.unwrap();
+
+        assert_eq!(topics.len(), 1);
+        assert_eq!(topics.first().unwrap().topic, id.into());
+
+        node.shutdown().await.unwrap();
     }
 
     #[tokio::test]
     #[test_log::test]
     async fn subscribe_topic() {
-        let private_key = PrivateKey::new();
-        let network_id = Hash::new(b"reflection");
-        let node = Node::new(private_key, network_id, None).await.unwrap();
+        let network_id = Hash::digest(b"reflection");
+        let topic_id: Topic = [1; 32].into();
+
+        let node = Node::new(SigningKey::generate(), network_id, None)
+            .await
+            .unwrap();
         node.set_connection_mode(ConnectionMode::Network)
             .await
             .unwrap();
 
-        let test_topic = TestTopic::new();
+        let test_topic = TestDocument::new();
 
-        let id: [u8; 32] = [0; 32];
-        let subscription = node.subscribe(id, test_topic).await.unwrap();
+        let subscription = node.stream(topic_id, test_topic).await.unwrap();
 
-        let topics = node.topics::<[u8; 32]>().await.unwrap();
-        assert_eq!(topics.len(), 1);
-        assert_eq!(topics.first().unwrap().id, id);
-
-        let private_key2 = PrivateKey::new();
-        let network_id2 = Hash::new(b"reflection");
-        let node2 = Node::new(private_key2, network_id2, None).await.unwrap();
+        let node2 = Node::new(SigningKey::generate(), network_id, None)
+            .await
+            .unwrap();
         node2
             .set_connection_mode(ConnectionMode::Network)
             .await
             .unwrap();
 
-        let test_topic2 = TestTopic::new();
+        let test_topic2 = TestDocument::new();
 
-        let _subscription2 = node2.subscribe(id, test_topic2.clone()).await.unwrap();
+        let _subscription2 = node2.stream(topic_id, test_topic2.clone()).await.unwrap();
 
-        let topics2 = node2.topics::<[u8; 32]>().await.unwrap();
-        assert_eq!(topics2.len(), 1);
-        assert_eq!(topics2.first().unwrap().id, id);
+        // TODO: Need to sleep here to make sure tx already exists.
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
 
         let test_snapshot = "test".as_bytes().to_vec();
         subscription
-            .send_snapshot(test_snapshot.clone())
+            .publish_snapshot(test_snapshot.clone())
             .await
             .unwrap();
 

@@ -1,56 +1,47 @@
 use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
-use crate::ephemerial_operation::EphemerialOperation;
-use crate::node_inner::MessageType;
-use crate::node_inner::NodeInner;
-use crate::topic::SubscribableTopic;
 use chrono::Utc;
-use p2panda_core::cbor::{DecodeError, decode_cbor, encode_cbor};
-use p2panda_core::{PrivateKey, PublicKey};
-use p2panda_net::gossip::GossipHandle;
+use p2panda::VerifyingKey;
+use p2panda::streams::EphemeralStreamPublisher;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
-use tracing::error;
+use tracing::{error, warn};
+
+use crate::ephemeral_message::EphemeralMessage;
+use crate::node::NodeInner;
+use crate::traits::TopicSubscription;
 
 const OFFLINE_TIMEOUT: Duration = Duration::from_secs(60);
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub enum AuthorMessage {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthorTrackerMessage {
     Hello,
     Ping,
     Bye,
 }
 
-impl std::fmt::Display for AuthorMessage {
+impl std::fmt::Display for AuthorTrackerMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            AuthorMessage::Hello => write!(f, "Hello message"),
-            AuthorMessage::Ping => write!(f, "Ping message"),
-            AuthorMessage::Bye => write!(f, "Bye message"),
+            AuthorTrackerMessage::Hello => write!(f, "Hello message"),
+            AuthorTrackerMessage::Ping => write!(f, "Ping message"),
+            AuthorTrackerMessage::Bye => write!(f, "Bye message"),
         }
     }
 }
 
-impl TryFrom<&[u8]> for AuthorMessage {
-    type Error = DecodeError;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        let (res, _): (AuthorMessage, SystemTime) = decode_cbor(value)?;
-
-        Ok(res)
-    }
-}
-
 pub struct AuthorTracker<T> {
-    last_ping: Mutex<HashMap<PublicKey, Instant>>,
+    last_ping: Mutex<HashMap<VerifyingKey, Instant>>,
     subscribable_topic: Arc<T>,
     node: Arc<NodeInner>,
-    tx: RwLock<Option<GossipHandle>>,
+    tx: RwLock<Option<EphemeralStreamPublisher<EphemeralMessage>>>,
 }
 
-impl<T: SubscribableTopic> AuthorTracker<T> {
+impl<T: TopicSubscription> AuthorTracker<T> {
     pub fn new(node: Arc<NodeInner>, subscribable_topic: Arc<T>) -> Arc<Self> {
         Arc::new(Self {
             last_ping: Mutex::new(HashMap::new()),
@@ -60,21 +51,23 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         })
     }
 
-    pub async fn set_topic_tx(&self, tx: Option<GossipHandle>) {
+    pub async fn set_topic_tx(&self, tx: Option<EphemeralStreamPublisher<EphemeralMessage>>) {
         let mut tx_guard = self.tx.write().await;
+
         // Send good bye message to the network
         if let Some(tx) = tx_guard.as_ref() {
-            send_message(&self.node.private_key, tx, AuthorMessage::Bye).await;
+            send_message(tx, AuthorTrackerMessage::Bye).await;
         }
 
-        // Set all authors that the tracker has seen to offline, authors the tracker hasn't seen are already offline
+        // Set all authors that the tracker has seen to offline, authors the tracker hasn't seen
+        // are already offline
         let old_authors = std::mem::take(self.last_ping.lock().await.deref_mut());
         for author in old_authors.into_keys() {
             self.subscribable_topic.author_left(author);
             self.set_last_seen(author).await;
         }
 
-        let this_author = self.node.private_key.public_key();
+        let this_author = self.node.verifying_key;
         if tx.is_some() {
             self.subscribable_topic.author_joined(this_author);
         } else {
@@ -85,37 +78,37 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         *tx_guard = tx;
     }
 
-    pub async fn received(&self, message: AuthorMessage, author: PublicKey) {
+    pub async fn received(&self, author: VerifyingKey, message: AuthorTrackerMessage) {
         match message {
-            AuthorMessage::Hello => {
+            AuthorTrackerMessage::Hello => {
                 self.join(author).await;
             }
-            AuthorMessage::Ping => {
+            AuthorTrackerMessage::Ping => {
                 self.ping(author).await;
             }
-            AuthorMessage::Bye => {
+            AuthorTrackerMessage::Bye => {
                 self.left(author).await;
             }
         }
     }
 
-    async fn send(&self, message: AuthorMessage) {
+    async fn send(&self, message: AuthorTrackerMessage) {
         if let Some(tx) = self.tx.read().await.as_ref() {
-            send_message(&self.node.private_key, tx, message).await;
+            send_message(tx, message).await;
         }
     }
 
-    async fn join(&self, author: PublicKey) {
+    async fn join(&self, author: VerifyingKey) {
         self.last_ping.lock().await.insert(author, Instant::now());
         self.subscribable_topic.author_joined(author);
         self.set_last_seen(author).await;
 
         // Send a ping to the network to ensure that the new author knows we exist
         // Normally we send a ping every `OFFLINE_TIMEOUT / 2`
-        self.send(AuthorMessage::Ping).await;
+        self.send(AuthorTrackerMessage::Ping).await;
     }
 
-    async fn ping(&self, author: PublicKey) {
+    async fn ping(&self, author: VerifyingKey) {
         let old = self.last_ping.lock().await.insert(author, Instant::now());
 
         // If this is a new author emit author join
@@ -125,7 +118,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         self.set_last_seen(author).await;
     }
 
-    async fn left(&self, author: PublicKey) {
+    async fn left(&self, author: VerifyingKey) {
         self.last_ping.lock().await.remove(&author);
         self.subscribable_topic.author_left(author);
         self.set_last_seen(author).await;
@@ -133,7 +126,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
 
     pub async fn spawn(&self) {
         // Send a hello to the network so other authors know we joined the topic
-        self.send(AuthorMessage::Hello).await;
+        self.send(AuthorTrackerMessage::Hello).await;
 
         let mut interval = tokio::time::interval(OFFLINE_TIMEOUT / 2);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -144,7 +137,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
             interval.tick().await;
 
             // Send a ping to the network so that we won't be marked as offline
-            self.send(AuthorMessage::Ping).await;
+            self.send(AuthorTrackerMessage::Ping).await;
             let mut expired = Vec::new();
             self.last_ping.lock().await.retain(|author, instant| {
                 if instant.elapsed() > OFFLINE_TIMEOUT {
@@ -162,7 +155,7 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
         }
     }
 
-    async fn set_last_seen(&self, author: PublicKey) {
+    async fn set_last_seen(&self, author: VerifyingKey) {
         if let Err(error) = self
             .node
             .topic_store
@@ -174,25 +167,11 @@ impl<T: SubscribableTopic> AuthorTracker<T> {
     }
 }
 
-async fn send_message(private_key: &PrivateKey, tx: &GossipHandle, message: AuthorMessage) {
-    // FIXME: We need to add the current time to the message,
-    // because iroh doesn't broadcast twice the same message message.
-    let author_message = match encode_cbor(&(&message, SystemTime::now())) {
-        Ok(result) => result,
-        Err(error) => {
-            error!("Failed to encode {message} as CBOR: {error}");
-            return;
-        }
-    };
-    let operation = EphemerialOperation::new(author_message, private_key);
-    let bytes = match encode_cbor(&MessageType::AuthorEphemeral(operation)) {
-        Ok(result) => result,
-        Err(error) => {
-            error!("Failed to encode {message} as CBOR: {error}");
-            return;
-        }
-    };
-    if let Err(error) = tx.publish(bytes).await {
-        error!("Failed to sent {message} to the network: {error}");
+async fn send_message(
+    tx: &EphemeralStreamPublisher<EphemeralMessage>,
+    message: AuthorTrackerMessage,
+) {
+    if let Err(err) = tx.publish(EphemeralMessage::AuthorTracker(message)).await {
+        warn!("error occurred when sending ephemeral message: {err}");
     }
 }

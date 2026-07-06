@@ -9,16 +9,13 @@ use glib::{Properties, clone};
 pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
 use p2panda_core::cbor::{decode_cbor, encode_cbor};
-use reflection_node::p2panda_core;
-use reflection_node::topic::{
-    SubscribableTopic, Subscription as TopicSubscription,
-    SubscriptionError as TopicSubscriptionError,
-};
+use p2panda_core::{self, Topic};
+use reflection_node::{TopicStream, TopicSubscription, TopicSubscriptionError};
 use tracing::error;
 
 use crate::author::Author;
 use crate::authors::Authors;
-use crate::identity::PublicKey;
+use crate::identity::VerifyingKey;
 use crate::service::Service;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, glib::Boxed)]
@@ -34,6 +31,18 @@ impl From<DocumentId> for [u8; 32] {
 impl From<[u8; 32]> for DocumentId {
     fn from(bytes: [u8; 32]) -> Self {
         Self(bytes)
+    }
+}
+
+impl From<Topic> for DocumentId {
+    fn from(value: Topic) -> Self {
+        Self(value.to_bytes())
+    }
+}
+
+impl From<DocumentId> for Topic {
+    fn from(value: DocumentId) -> Self {
+        Topic::from(value.0)
     }
 }
 
@@ -89,11 +98,15 @@ impl DocumentId {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-enum EphemerialData {
+#[serde(tag = "t", content = "d")]
+enum EphemeralData {
+    #[serde(rename = "cursor")]
     Cursor {
+        #[serde(rename = "i")]
         insert_cursor: Option<loro::cursor::Cursor>,
+
+        #[serde(rename = "s")]
         selection_bound: Option<loro::cursor::Cursor>,
-        timestamp: std::time::SystemTime,
     },
 }
 
@@ -130,7 +143,7 @@ mod imp {
         #[property(get, construct_only)]
         id: OnceCell<DocumentId>,
         #[property(name = "subscribed", get = Self::subscribed, type = bool)]
-        pub(super) subscription: RwLock<Option<Arc<TopicSubscription<DocumentHandle>>>>,
+        pub(super) subscription: RwLock<Option<Arc<TopicStream<DocumentHandle>>>>,
         #[property(get = Self::service, set = Self::set_service, construct_only, type = Service)]
         service: glib::WeakRef<Service>,
         #[property(get)]
@@ -282,10 +295,9 @@ mod imp {
         }
 
         pub fn brodcast_ephemeral(&self) {
-            let cursor_data = EphemerialData::Cursor {
+            let cursor_data = EphemeralData::Cursor {
                 insert_cursor: self.insert_cursor.read().unwrap().clone(),
                 selection_bound: self.selection_bound.read().unwrap().clone(),
-                timestamp: std::time::SystemTime::now(),
             };
 
             let cursor_bytes = match encode_cbor(&cursor_data) {
@@ -301,7 +313,7 @@ mod imp {
                     #[weak]
                     subscription,
                     async move {
-                        if let Err(error) = subscription.send_ephemeral(cursor_bytes).await {
+                        if let Err(error) = subscription.publish_ephemeral(cursor_bytes).await {
                             error!("Failed to send cursor position: {}", error);
                         }
                     }
@@ -414,7 +426,7 @@ mod imp {
         }
 
         fn setup_loro_document(&self) {
-            let public_key = self.obj().service().private_key().public_key();
+            let verifying_key = self.obj().service().signing_key().verifying_key();
             let obj = self.obj();
             let doc = LoroDoc::new();
             // The peer id represents the identity of the author applying local changes (that's
@@ -428,7 +440,7 @@ mod imp {
                 // this should not really be a problem, but it would be nice if the Loro API would
                 // change some day.
                 let mut buf = [0u8; 8];
-                buf[..8].copy_from_slice(&public_key.0.as_bytes()[..8]);
+                buf[..8].copy_from_slice(&verifying_key.0.as_bytes()[..8]);
                 u64::from_be_bytes(buf)
             })
             .expect("set peer id for new document");
@@ -498,7 +510,7 @@ mod imp {
                             subscription,
                             async move {
                                 // Broadcast a "text delta" to all peers
-                                if let Err(error) = subscription.send_delta(delta_bytes).await {
+                                if let Err(error) = subscription.publish_delta(delta_bytes).await {
                                     error!(
                                         "Failed to send delta of document to the network: {}",
                                         error
@@ -589,12 +601,16 @@ mod imp {
             self.crdt_doc.set(doc).unwrap();
         }
 
-        pub(super) fn handle_ephemeral_data(&self, author: Author, data: EphemerialData) {
+        pub(super) fn handle_ephemeral_data(
+            &self,
+            author: Author,
+            timestamp: u64,
+            data: EphemeralData,
+        ) {
             match data {
-                EphemerialData::Cursor {
+                EphemeralData::Cursor {
                     insert_cursor,
                     selection_bound,
-                    timestamp,
                 } => {
                     let doc = self.crdt_doc.get().expect("crdt_doc to be set");
 
@@ -645,7 +661,7 @@ mod imp {
             }
         }
 
-        pub(super) fn subscription(&self) -> Option<Arc<TopicSubscription<DocumentHandle>>> {
+        pub(super) fn subscription(&self) -> Option<Arc<TopicStream<DocumentHandle>>> {
             self.subscription.read().unwrap().clone()
         }
     }
@@ -688,7 +704,7 @@ mod imp {
 
             // Add ourself to the list of authors
             self.authors
-                .add_this_device(self.obj().service().private_key().public_key());
+                .add_this_device(self.obj().service().signing_key().verifying_key());
         }
     }
 }
@@ -797,7 +813,7 @@ impl Document {
         }
 
         let handle = DocumentHandle(self.downgrade());
-        match self.service().node().subscribe(self.id(), handle).await {
+        match self.service().node().stream(self.id(), handle).await {
             Ok(subscription) => {
                 self.imp()
                     .subscription
@@ -831,7 +847,7 @@ impl Document {
                 .export(ExportMode::Snapshot)
                 .expect("encoded crdt snapshot");
 
-            if let Err(error) = subscription.send_snapshot(snapshot_bytes).await {
+            if let Err(error) = subscription.publish_snapshot(snapshot_bytes).await {
                 error!(
                     "Failed to send snapshot of document to the network: {}",
                     error
@@ -875,7 +891,7 @@ impl Document {
                 .expect("crdt_doc to be set")
                 .export(ExportMode::Snapshot)
                 .expect("encoded crdt snapshot");
-            if let Err(error) = subscription.send_snapshot(snapshot_bytes).await {
+            if let Err(error) = subscription.publish_snapshot(snapshot_bytes).await {
                 error!(
                     "Failed to send snapshot of document to the network: {}",
                     error
@@ -892,6 +908,12 @@ impl Document {
 
         self.service().documents().remove(&self.id());
     }
+
+    pub async fn export(&self) -> Vec<u8> {
+        let doc = self.imp().crdt_doc.get().expect("crdt_doc to be set");
+
+        doc.export(ExportMode::Snapshot).unwrap()
+    }
 }
 
 unsafe impl Send for Document {}
@@ -899,20 +921,20 @@ unsafe impl Sync for Document {}
 
 struct DocumentHandle(glib::WeakRef<Document>);
 
-impl SubscribableTopic for DocumentHandle {
-    fn bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
+impl TopicSubscription for DocumentHandle {
+    fn bytes_received(&self, author: p2panda_core::VerifyingKey, data: Vec<u8>) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 document.imp().on_remote_message(data);
-                document.authors().add(PublicKey(author));
+                document.authors().add(VerifyingKey(author));
             });
         }
     }
 
-    fn author_joined(&self, author: p2panda_core::PublicKey) {
+    fn author_joined(&self, author: p2panda_core::VerifyingKey) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                let author = document.authors().add(PublicKey(author));
+                let author = document.authors().add(VerifyingKey(author));
                 author.set_online(true);
                 // When a new author joins we need to send ephemeral messages again
                 document.imp().brodcast_ephemeral();
@@ -920,22 +942,29 @@ impl SubscribableTopic for DocumentHandle {
         }
     }
 
-    fn author_left(&self, author: p2panda_core::PublicKey) {
+    fn author_left(&self, author: p2panda_core::VerifyingKey) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                let author = document.authors().add(PublicKey(author));
+                let author = document.authors().add(VerifyingKey(author));
                 author.set_online(false);
             });
         }
     }
 
-    fn ephemeral_bytes_received(&self, author: p2panda_core::PublicKey, data: Vec<u8>) {
+    fn ephemeral_bytes_received(
+        &self,
+        author: p2panda_core::VerifyingKey,
+        timestamp: u64,
+        data: Vec<u8>,
+    ) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
                 if let Ok(data) = decode_cbor(&data[..])
-                    && let Some(author) = document.authors().author(&PublicKey(author))
+                    && let Some(author) = document.authors().author(&VerifyingKey(author))
                 {
-                    document.imp().handle_ephemeral_data(author, data);
+                    document
+                        .imp()
+                        .handle_ephemeral_data(author, timestamp, data);
                 }
             });
         }
@@ -944,7 +973,7 @@ impl SubscribableTopic for DocumentHandle {
     fn error(&self, error: TopicSubscriptionError) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                error!("Network error received for subscribed document: {error}");
+                error!("error received for subscribed document: {error}");
             });
         }
     }

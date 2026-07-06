@@ -22,7 +22,7 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gettextrs::gettext;
 use gtk::{gdk, gio, glib, glib::Properties, glib::clone};
-use reflection_doc::{document::DocumentId, identity::PrivateKey, service::Service};
+use reflection_doc::{document::DocumentId, identity::SigningKey, service::Service};
 use std::{cell::RefCell, fs};
 use thiserror::Error;
 use tracing::error;
@@ -258,15 +258,15 @@ impl ReflectionApplication {
     }
 
     async fn create_service(&self) -> Result<Service, Error> {
-        let private_key = secret::get_or_create_identity().await?;
+        let signing_key = secret::get_or_create_identity().await?;
 
         let mut data_path = glib::user_data_dir();
         data_path.push("Reflection");
-        data_path.push(private_key.public_key().to_string());
+        data_path.push(signing_key.verifying_key().to_string());
         fs::create_dir_all(&data_path)?;
         let data_dir = gio::File::for_path(data_path);
 
-        let service = Service::new(&private_key, Some(&data_dir));
+        let service = Service::new(&signing_key, Some(&data_dir));
         service.startup().await?;
 
         Ok(service)
@@ -406,8 +406,8 @@ impl ReflectionApplication {
     }
 
     async fn new_temporary_identity(&self) {
-        let private_key = PrivateKey::new();
-        let service = Service::new(&private_key, None);
+        let signing_key = SigningKey::generate();
+        let service = Service::new(&signing_key, None);
 
         if let Err(error) = service.startup().await {
             let error = error.into();

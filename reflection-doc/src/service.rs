@@ -1,29 +1,28 @@
+use std::sync::{Mutex, OnceLock};
+
 use gio::prelude::{FileExt, ListModelExtManual, NetworkMonitorExt};
 use glib::object::ObjectExt;
 use glib::subclass::prelude::*;
 use glib::{Properties, clone};
-use reflection_node::p2panda_core::Hash;
-use std::sync::{Mutex, OnceLock};
+use p2panda_core::Hash;
+use reflection_node::TopicStreamError;
+use reflection_node::{Node, NodeError};
 use thiserror::Error;
 use tracing::error;
 
-use crate::identity::PrivateKey;
-use crate::{
-    document::{Document, DocumentId},
-    documents::Documents,
-};
-use reflection_node::{
-    node,
-    node::{Node, NodeError},
-    topic::TopicError,
-};
+use crate::document::{Document, DocumentId};
+use crate::documents::Documents;
+use crate::identity::SigningKey;
+
+static NETWORK_NAME: &[u8] = b"reflection-v2";
 
 #[derive(Error, Debug)]
 pub enum StartupError {
     #[error(transparent)]
     Node(#[from] NodeError),
+
     #[error(transparent)]
-    Topic(#[from] TopicError),
+    TopicStream(#[from] TopicStreamError),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, glib::Enum, Default)]
@@ -36,12 +35,12 @@ pub enum ConnectionMode {
     Network,
 }
 
-impl From<ConnectionMode> for node::ConnectionMode {
+impl From<ConnectionMode> for reflection_node::ConnectionMode {
     fn from(value: ConnectionMode) -> Self {
         match value {
-            ConnectionMode::None => node::ConnectionMode::None,
-            ConnectionMode::Bluetooth => node::ConnectionMode::Bluetooth,
-            ConnectionMode::Network => node::ConnectionMode::Network,
+            ConnectionMode::None => reflection_node::ConnectionMode::None,
+            ConnectionMode::Bluetooth => reflection_node::ConnectionMode::Bluetooth,
+            ConnectionMode::Network => reflection_node::ConnectionMode::Network,
         }
     }
 }
@@ -53,8 +52,8 @@ mod imp {
     #[properties(wrapper_type = super::Service)]
     pub struct Service {
         pub node: OnceLock<Node>,
-        #[property(get, set, construct_only, type = PrivateKey)]
-        pub private_key: OnceLock<PrivateKey>,
+        #[property(get, set, construct_only, type = SigningKey)]
+        pub signing_key: OnceLock<SigningKey>,
         #[property(get, set, construct_only, nullable, type = Option<gio::File>)]
         pub data_dir: OnceLock<Option<gio::File>>,
         #[property(get)]
@@ -88,9 +87,9 @@ mod imp {
                 monitor.is_network_available()
             };
             let connection_mode = (*self.connection_mode.lock().unwrap()).into();
-            let wants_network = connection_mode == node::ConnectionMode::Network;
+            let wants_network = connection_mode == reflection_node::ConnectionMode::Network;
             let real_connection_mode = if !network_available && wants_network {
-                node::ConnectionMode::None
+                reflection_node::ConnectionMode::None
             } else {
                 connection_mode
             };
@@ -135,9 +134,9 @@ glib::wrapper! {
 }
 
 impl Service {
-    pub fn new(private_key: &PrivateKey, data_dir: Option<&gio::File>) -> Self {
+    pub fn new(signing_key: &SigningKey, data_dir: Option<&gio::File>) -> Self {
         glib::Object::builder()
-            .property("private-key", private_key)
+            .property("signing-key", signing_key)
             .property("data-dir", data_dir)
             .build()
     }
@@ -171,10 +170,10 @@ impl Service {
     }
 
     pub async fn startup(&self) -> Result<(), StartupError> {
-        let private_key = self.private_key().0;
-        let network_id = Hash::new(b"reflection");
+        let signing_key = self.signing_key().0;
+        let network_id = Hash::digest(NETWORK_NAME);
         let path = self.data_dir().and_then(|data_dir| data_dir.path());
-        let node = Node::new(private_key, network_id, path.as_deref()).await?;
+        let node = Node::new(signing_key, network_id, path.as_deref()).await?;
 
         self.imp()
             .node
