@@ -4480,8 +4480,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a025042a236b7c3be5f450694ecc3d49ff506fc7c1627d303c92825da64e5124"
 dependencies = [
  "futures-util",
  "p2panda-core",
@@ -4499,8 +4500,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-auth"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "885df80e133b676447543f126b70d5e80c7299fb28ce4af5c8528ed4737d2f41"
 dependencies = [
  "p2panda-core",
  "petgraph",
@@ -4511,8 +4513,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-core"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd0ba9bb72d4eef6a6d1e835cff545ebadac1f5fea79241e9c47bfdccad17bdf"
 dependencies = [
  "blake3",
  "ciborium",
@@ -4526,8 +4529,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-discovery"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19121d9b24c455e70f9a8dfef067c65cf8086bd17b12085b0827d47c0a5b8ad1"
 dependencies = [
  "blake3",
  "futures-util",
@@ -4541,8 +4545,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-encryption"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3879eb55a2d3c0fa3f7d4ba341c79932d039d9c59921644da74c4134ca66c83"
 dependencies = [
  "chacha20poly1305",
  "curve25519-dalek 4.1.3",
@@ -4564,8 +4569,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-net"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70de3f1376e58a218a7870d81e645632314139a71bb3e52463c3f0953019f251"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -4592,8 +4598,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-spaces"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7d1b17676dbda5efd13649b40ed5f1c59dfde6ec956030ddda4761d4429f2dc"
 dependencies = [
  "p2panda-auth",
  "p2panda-core",
@@ -4607,8 +4614,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-store"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84550e6c28dd5825c06858426d3f0776e21f284ca7844144635bea0ba98118c7"
 dependencies = [
  "p2panda-auth",
  "p2panda-core",
@@ -4621,8 +4629,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-stream"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50eb5e5dbbca85902f37383af06c587cae275fcf5fd43296124897b1118a5748"
 dependencies = [
  "futures-util",
  "p2panda-auth",
@@ -4638,8 +4647,9 @@ dependencies = [
 
 [[package]]
 name = "p2panda-sync"
-version = "0.6.1"
-source = "git+https://github.com/p2panda/p2panda?rev=30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb#30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c42fc6a762ca76d6d669fb0c4b05734bbcd62b3fd702d3474d43c2399c5f5e5"
 dependencies = [
  "futures-channel",
  "futures-util",

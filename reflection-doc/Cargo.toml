@@ -14,7 +14,7 @@ glib = "0.21"
 hex = "0.4.3"
 indexmap = "2.13.0"
 loro = "1.13.6"
-p2panda-core = { git = "https://github.com/p2panda/p2panda", rev = "30b3bcfe0c6940ed17efb39f9d734e6e9b4e9ecb" }
+p2panda-core = "0.7.0"
 rand = "0.10.1"
 reflection-node = { path = "../reflection-node" }
 serde = { version = "1.0.228", features = ["derive"] }
