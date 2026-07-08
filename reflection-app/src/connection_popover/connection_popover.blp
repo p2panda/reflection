@@ -74,6 +74,8 @@ template $ReflectionConnectionPopover: Adw.Bin {
 
           Adw.ToggleGroup connection_mode_switch {
             homogeneous: true;
+            /* Disabled for now since the new node doesn't support it */
+            visible: false;
 
             Adw.Toggle {
               tooltip: _("Disable communication with the outside world");
@@ -168,7 +170,8 @@ template $ReflectionConnectionPopover: Adw.Bin {
             propagate-natural-width: true;
             propagate-natural-height: true;
             max-content-height: 300;
-            margin-top: 12;
+            /* Removed because of hidden connection toggle
+              margin-top: 12; */
             hscrollbar-policy: never;
 
             child: $ReflectionAuthorList author_list {};
