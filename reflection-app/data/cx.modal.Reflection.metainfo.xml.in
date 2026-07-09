@@ -69,6 +69,16 @@
   </recommends>
 
   <releases>
+    <release version="0.4" date="2026-07-09">
+      <description translate="no">
+        <p>Switch to the new high level p2panda API. This makes connections much more stable, but unfortunately also comes with some issues to be aware of:</p>
+        <ul>
+          <li>Old pads will no longer work because of an internal data format change. We do keep them around, so in case you want to get data back after updating you can downgrade the app.</li>
+          <li>We also temporarily disabled the offline toggle, since the high level API does not support this yet.</li>
+        </ul>
+      </description>
+    </release>
+
     <release version="0.3" date="2026-04-16">
       <description translate="no">
         <p>Third preview release.</p>
