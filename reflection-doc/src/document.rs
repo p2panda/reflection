@@ -382,13 +382,13 @@ mod imp {
             self.subscription().is_some()
         }
 
-        fn emit_text_inserted(&self, pos: i32, text: String) {
-            if pos <= DOCUMENT_NAME_LENGTH as i32 {
+        fn emit_text_inserted(&self, offset: i32, text: String) {
+            if offset <= DOCUMENT_NAME_LENGTH as i32 {
                 self.update_name();
             }
 
             self.obj()
-                .emit_by_name::<()>("text-inserted", &[&pos, &text]);
+                .emit_by_name::<()>("text-inserted", &[&offset, &text]);
         }
 
         fn emit_range_deleted(&self, start: i32, end: i32) {
@@ -475,7 +475,7 @@ mod imp {
                                         index += retain;
                                     }
                                     loro::TextDelta::Insert { insert, .. } => {
-                                        let len = insert.len();
+                                        let len = insert.chars().count();
                                         obj.imp().emit_text_inserted(index as i32, insert);
                                         index += len;
                                     }
