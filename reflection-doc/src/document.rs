@@ -538,7 +538,8 @@ mod imp {
                 obj,
                 #[upgrade_or_default]
                 move |stack_type, _, _| {
-                    // The `loro::UndoManager` holds internal locks, so we can't update the `Document.can_undo/can_redo` property inline
+                    // The `loro::UndoManager` holds internal locks, so we can't update the
+                    // `Document.can_undo/can_redo` property inline
                     obj.main_context().spawn(clone!(
                         #[weak]
                         obj,
@@ -589,10 +590,12 @@ mod imp {
                 #[weak]
                 obj,
                 move |_, _, mut meta| {
-                    *obj.imp().final_insert_cursor.write().unwrap() =
+                    // Popping from the Vec is LIFO, so we pop the selection bounds first and then
+                    // the insert cursor (reverse of how they've been added)
+                    *obj.imp().final_selection_bound.write().unwrap() =
                         meta.cursors.pop().map(|cursor| cursor.cursor);
 
-                    *obj.imp().final_selection_bound.write().unwrap() =
+                    *obj.imp().final_insert_cursor.write().unwrap() =
                         meta.cursors.pop().map(|cursor| cursor.cursor);
                 }
             ))));
