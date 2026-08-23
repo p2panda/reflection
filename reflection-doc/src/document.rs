@@ -8,7 +8,6 @@ use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
 pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
-use p2panda_core::cbor::{decode_cbor, encode_cbor};
 use p2panda_core::{self, Topic};
 use reflection_node::{TopicStream, TopicSubscription, TopicSubscriptionError};
 use tracing::error;
@@ -98,14 +97,9 @@ impl DocumentId {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "t", content = "d")]
 enum EphemeralData {
-    #[serde(rename = "cursor")]
     Cursor {
-        #[serde(rename = "i")]
         insert_cursor: Option<loro::cursor::Cursor>,
-
-        #[serde(rename = "s")]
         selection_bound: Option<loro::cursor::Cursor>,
     },
 }
@@ -290,17 +284,17 @@ mod imp {
             *self.insert_cursor.write().unwrap() = insert_cursor;
 
             if send {
-                self.brodcast_ephemeral();
+                self.broadcast_ephemeral();
             }
         }
 
-        pub fn brodcast_ephemeral(&self) {
+        pub fn broadcast_ephemeral(&self) {
             let cursor_data = EphemeralData::Cursor {
                 insert_cursor: self.insert_cursor.read().unwrap().clone(),
                 selection_bound: self.selection_bound.read().unwrap().clone(),
             };
 
-            let cursor_bytes = match encode_cbor(&cursor_data) {
+            let cursor_bytes = match postcard::to_allocvec(&cursor_data) {
                 Ok(data) => data,
                 Err(error) => {
                     error!("Failed to serialize cursor: {}", error);
@@ -943,7 +937,7 @@ impl TopicSubscription for DocumentHandle {
                 let author = document.authors().add(VerifyingKey(author));
                 author.set_online(true);
                 // When a new author joins we need to send ephemeral messages again
-                document.imp().brodcast_ephemeral();
+                document.imp().broadcast_ephemeral();
             });
         }
     }
@@ -967,7 +961,7 @@ impl TopicSubscription for DocumentHandle {
     ) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                if let Ok(data) = decode_cbor(&data[..])
+                if let Ok(data) = postcard::from_bytes(&data[..])
                     && let Some(author) = document.authors().author(&VerifyingKey(author))
                 {
                     document

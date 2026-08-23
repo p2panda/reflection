@@ -5329,6 +5329,7 @@ dependencies = [
  "indexmap",
  "loro",
  "p2panda-core",
+ "postcard",
  "rand 0.10.1",
  "reflection-node",
  "serde",
