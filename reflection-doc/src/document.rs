@@ -258,21 +258,21 @@ mod imp {
             }
         }
 
-        pub fn insert_text(&self, index: usize, chunk: &str) -> Result<()> {
+        pub fn insert_text(&self, offset: usize, chunk: &str) -> Result<()> {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
             let text = doc.get_text(&*TEXT_CONTAINER_ID);
 
-            text.insert(index, chunk)?;
+            text.insert(offset, chunk)?;
             doc.commit();
 
             Ok(())
         }
 
-        pub fn delete_text(&self, index: usize, len: usize) -> Result<()> {
+        pub fn delete_text(&self, offset: usize, len: usize) -> Result<()> {
             let doc = self.crdt_doc.get().expect("crdt_doc to be set");
             let text = doc.get_text(&*TEXT_CONTAINER_ID);
 
-            text.delete(index, len)?;
+            text.delete(offset, len)?;
             doc.commit();
 
             Ok(())
@@ -468,21 +468,24 @@ mod imp {
                         // Loro's text deltas are represented as QuillJS "Deltas"
                         // See: https://quilljs.com/docs/delta/
                         for commit in text_deltas {
-                            let mut index = 0;
+                            // The `retain` and `delete` integers coming from Loro are the number of
+                            // unicode codepoints (_not_ utf8 bytes or "characters"). In GTK this is
+                            // called an "offset".
+                            let mut offset = 0;
                             for delta in commit {
                                 match delta {
                                     loro::TextDelta::Retain { retain, .. } => {
-                                        index += retain;
+                                        offset += retain;
                                     }
                                     loro::TextDelta::Insert { insert, .. } => {
-                                        let len = insert.chars().count();
-                                        obj.imp().emit_text_inserted(index as i32, insert);
-                                        index += len;
+                                        let chars_count = insert.chars().count();
+                                        obj.imp().emit_text_inserted(offset as i32, insert);
+                                        offset += chars_count;
                                     }
                                     loro::TextDelta::Delete { delete } => {
                                         obj.imp().emit_range_deleted(
-                                            index as i32,
-                                            (index + delete) as i32,
+                                            offset as i32,
+                                            (offset + delete) as i32,
                                         );
                                     }
                                 }
@@ -739,8 +742,8 @@ impl Document {
             .build()
     }
 
-    pub fn insert_text(&self, pos: i32, text: &str) -> Result<()> {
-        self.imp().insert_text(pos as usize, text)
+    pub fn insert_text(&self, offset: i32, text: &str) -> Result<()> {
+        self.imp().insert_text(offset as usize, text)
     }
 
     pub fn delete_range(&self, start_pos: i32, end_pos: i32) -> Result<()> {
