@@ -667,6 +667,12 @@ mod imp {
             }
         }
 
+        pub(super) fn handle_author_left(&self, author: Author) {
+            // Negative insert cursor position will delete marker in the text-view.
+            self.obj()
+                .emit_by_name::<()>("remote-insert-cursor", &[&author, &-1i32, &-1i32]);
+        }
+
         pub(super) fn subscription(&self) -> Option<Arc<TopicStream<DocumentHandle>>> {
             self.subscription.read().unwrap().clone()
         }
@@ -947,6 +953,8 @@ impl TopicSubscription for DocumentHandle {
             document.main_context().invoke(move || {
                 let author = document.authors().add(VerifyingKey(author));
                 author.set_online(false);
+
+                document.imp().handle_author_left(author);
             });
         }
     }
