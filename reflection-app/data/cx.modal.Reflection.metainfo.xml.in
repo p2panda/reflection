@@ -69,6 +69,19 @@
   </recommends>
 
   <releases>
+    <release version="0.5" date="2026-08-24">
+      <description translate="no">
+        <p>Fix some minor issues and improve cursor visuals.</p>
+        <ul>
+          <li>Cursor is hidden when people go offline</li>
+          <li>Fix an issue with the undo stack</li>
+          <li>Improve cursor and text selection presentation</li>
+          <li>Use postcard instead of CBOR for encoding ephemeral data</li>
+          <li>Fixed issues where text was being scrambled using UTF-8 characters</li>
+        </ul>
+      </description>
+    </release>
+
     <release version="0.4" date="2026-07-09">
       <description translate="no">
         <p>Switch to the new high level p2panda API. This makes connections much more stable, but unfortunately also comes with some issues to be aware of:</p>
