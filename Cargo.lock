@@ -3594,9 +3594,9 @@ dependencies = [
 
 [[package]]
 name = "loro"
-version = "1.13.6"
+version = "1.13.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "221b567f34e3a7b38d05345b17797a7ca252d28e1fae479b4bb55c1a19616ddc"
+checksum = "09ea00f70c1acad4b7a05aaf72c1d9a671426021a1999ee821c77b56f0a15900"
 dependencies = [
  "enum-as-inner 0.6.1",
  "generic-btree",
@@ -3640,9 +3640,9 @@ dependencies = [
 
 [[package]]
 name = "loro-internal"
-version = "1.13.6"
+version = "1.13.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb15cd83866965b50b4893246699312624808a1f2e2d205432237287d947b822"
+checksum = "6fec47acf8db115b7146da5e1d5b18d0cf58032e6012c0c1ee3ec3442d1e936f"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -3687,9 +3687,9 @@ dependencies = [
 
 [[package]]
 name = "loro-kv-store"
-version = "1.13.1"
+version = "1.13.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "950cc8bcc64dcff536e949fbc56ccc3d0759646fa441c7f76b3cd7c3eafa2096"
+checksum = "937f88e4a3d80d5853f5119753f5e5f68d4375726db7e9b3d6dac9db8167e8bf"
 dependencies = [
  "bytes",
  "ensure-cov",
