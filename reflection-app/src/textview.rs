@@ -189,9 +189,11 @@ mod imp {
                 let selection_iter = buffer.iter_at_mark(selection_mark);
 
                 if iter == selection_iter {
+                    color.set_alpha(1.0);
+
                     let location = self.obj().iter_location(&iter);
                     let aspect_ratio = self.obj().settings().gtk_cursor_aspect_ratio() as f32;
-                    let cursor_width = location.height() as f32 * aspect_ratio + 1f32;
+                    let cursor_width = location.height() as f32 * aspect_ratio + 2f32;
 
                     // FIXME: Handle angled cursors (e.g. for italic)
                     // See draw_insertation_cursor() in gtk/gtkrenderlayout.c for angle calculation
@@ -199,7 +201,7 @@ mod imp {
                     // or rotate the appended color.
 
                     let bounds = graphene::Rect::new(
-                        location.x() as f32,
+                        location.x() as f32 - 1f32,
                         location.y() as f32,
                         cursor_width,
                         location.height() as f32,
