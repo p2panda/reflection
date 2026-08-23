@@ -143,15 +143,15 @@ mod imp {
                     #[upgrade_or]
                     None,
                     move |values| {
-                        let pos: i32 = values.get(1).unwrap().get().unwrap();
+                        let offset: i32 = values.get(1).unwrap().get().unwrap();
                         let text: &str = values.get(2).unwrap().get().unwrap();
                         if buffer.inhibit_text_change() {
                             return None;
                         }
 
-                        let mut pos_iter = buffer.iter_at_offset(pos);
+                        let mut iter = buffer.iter_at_offset(offset);
                         buffer.set_inhibit_text_change(true);
-                        buffer.insert(&mut pos_iter, text);
+                        buffer.insert(&mut iter, text);
                         buffer.set_inhibit_text_change(false);
 
                         None
@@ -311,7 +311,7 @@ mod imp {
             if let Err(error) = result {
                 error!("Failed to submit changes to the document: {error}");
             } else {
-                info!("inserting new text {} at pos {}", new_text, offset);
+                info!("inserting new text {} at offset {}", new_text, offset);
                 self.parent_insert_text(iter, new_text);
             }
         }
