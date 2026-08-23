@@ -535,7 +535,8 @@ mod imp {
                 obj,
                 #[upgrade_or_default]
                 move |stack_type, _, _| {
-                    // The `loro::UndoManager` holds internal locks, so we can't update the `Document.can_undo/can_redo` property inline
+                    // The `loro::UndoManager` holds internal locks, so we can't update the
+                    // `Document.can_undo/can_redo` property inline
                     obj.main_context().spawn(clone!(
                         #[weak]
                         obj,
@@ -659,6 +660,12 @@ mod imp {
                     }
                 }
             }
+        }
+
+        pub(super) fn handle_author_left(&self, author: Author) {
+            // Negative insert cursor position will delete marker in the text-view.
+            self.obj()
+                .emit_by_name::<()>("remote-insert-cursor", &[&author, &-1i32, &-1i32]);
         }
 
         pub(super) fn subscription(&self) -> Option<Arc<TopicStream<DocumentHandle>>> {
@@ -941,6 +948,8 @@ impl TopicSubscription for DocumentHandle {
             document.main_context().invoke(move || {
                 let author = document.authors().add(VerifyingKey(author));
                 author.set_online(false);
+
+                document.imp().handle_author_left(author);
             });
         }
     }
