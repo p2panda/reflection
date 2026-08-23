@@ -171,7 +171,7 @@ mod imp {
 
     impl TextViewImpl for TextView {
         fn snapshot_layer(&self, layer: gtk::TextViewLayer, snapshot: gtk::Snapshot) {
-            if layer != gtk::TextViewLayer::AboveText {
+            if layer != gtk::TextViewLayer::BelowText {
                 return;
             }
 
