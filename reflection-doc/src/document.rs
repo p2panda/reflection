@@ -8,6 +8,7 @@ use glib::subclass::{Signal, prelude::*};
 use glib::{Properties, clone};
 pub use hex::FromHexError;
 use loro::{ExportMode, LoroDoc, LoroText, event::Diff};
+use p2panda_core::cbor::decode_cbor;
 use p2panda_core::{self, Topic};
 use reflection_node::{TopicStream, TopicSubscription, TopicSubscriptionError};
 use tracing::error;
@@ -105,6 +106,8 @@ enum EphemeralData {
 }
 
 mod imp {
+    use p2panda_core::cbor::encode_cbor;
+
     use super::*;
     use std::cell::{Cell, OnceCell};
     use std::sync::{Arc, LazyLock, Mutex, OnceLock, RwLock};
@@ -294,13 +297,15 @@ mod imp {
                 selection_bound: self.selection_bound.read().unwrap().clone(),
             };
 
-            let cursor_bytes = match postcard::to_allocvec(&cursor_data) {
+            let cursor_bytes = match encode_cbor(&cursor_data) {
                 Ok(data) => data,
                 Err(error) => {
                     error!("Failed to serialize cursor: {}", error);
                     return;
                 }
             };
+
+            println!("send: {:?}", cursor_bytes);
 
             if let Some(subscription) = self.subscription() {
                 let handle = self.main_context().spawn(clone!(
@@ -961,7 +966,8 @@ impl TopicSubscription for DocumentHandle {
     ) {
         if let Some(document) = self.0.upgrade() {
             document.main_context().invoke(move || {
-                if let Ok(data) = postcard::from_bytes(&data[..])
+                println!("receive: {:?}", data);
+                if let Ok(data) = decode_cbor(&data[..])
                     && let Some(author) = document.authors().author(&VerifyingKey(author))
                 {
                     document
