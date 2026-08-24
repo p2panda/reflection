@@ -7,8 +7,8 @@ use p2panda::Topic;
 use p2panda::node::CreateStreamError;
 use p2panda::streams::{EphemeralStreamPublisher, StreamEvent, StreamFrom, StreamPublisher};
 use thiserror::Error;
-use tokio::sync::{RwLock, oneshot};
-use tokio::task::{AbortHandle, JoinError};
+use tokio::sync::{RwLock, mpsc, oneshot};
+use tokio::task::{AbortHandle, JoinError, JoinHandle};
 use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
 
@@ -41,10 +41,19 @@ pub enum TopicStreamError {
     Database(#[from] sqlx::Error),
 }
 
+enum Publish {
+    Delta(Vec<u8>),
+    Snapshot(Vec<u8>),
+}
+
+type PublishQueue = mpsc::UnboundedSender<(Publish, oneshot::Sender<Result<(), PublishError>>)>;
+
 pub struct TopicStream<T> {
     inner: Arc<TopicStreamInner<T>>,
     runtime: tokio::runtime::Handle,
     network_monitor_task: AbortHandle,
+    publish_queue: Option<PublishQueue>,
+    publish_task: JoinHandle<()>,
 }
 
 impl<T> Drop for TopicStream<T> {
@@ -73,25 +82,56 @@ where
         // Wait until streams with network have been established.
         let _ = ready_rx.await;
 
+        // Deltas and snapshots are published one after another, in the order they were queued.
+        // Otherwise a snapshot could prune a newer delta which isn't part of it.
+        let (publish_queue, mut publish_rx): (PublishQueue, _) = mpsc::unbounded_channel();
+        let inner_clone = inner.clone();
+        let publish_task = runtime.spawn(async move {
+            while let Some((publish, reply)) = publish_rx.recv().await {
+                let result = match publish {
+                    Publish::Delta(data) => inner_clone.publish_delta(data).await,
+                    Publish::Snapshot(data) => inner_clone.publish_snapshot(data).await,
+                };
+                let _ = reply.send(result);
+            }
+        });
+
         TopicStream {
             inner,
             runtime,
             network_monitor_task,
+            publish_queue: Some(publish_queue),
+            publish_task,
         }
     }
 
-    pub async fn publish_delta(&self, data: Vec<u8>) -> Result<(), PublishError> {
-        let inner = self.inner.clone();
-        self.runtime
-            .spawn(async move { inner.publish_delta(data).await })
-            .await?
+    pub fn publish_delta(
+        &self,
+        data: Vec<u8>,
+    ) -> impl Future<Output = Result<(), PublishError>> + use<T> {
+        self.queue(Publish::Delta(data))
     }
 
-    pub async fn publish_snapshot(&self, data: Vec<u8>) -> Result<(), PublishError> {
-        let inner = self.inner.clone();
-        self.runtime
-            .spawn(async move { inner.publish_snapshot(data).await })
-            .await?
+    pub fn publish_snapshot(
+        &self,
+        data: Vec<u8>,
+    ) -> impl Future<Output = Result<(), PublishError>> + use<T> {
+        self.queue(Publish::Snapshot(data))
+    }
+
+    fn queue(&self, publish: Publish) -> impl Future<Output = Result<(), PublishError>> + use<T> {
+        let (reply_tx, reply_rx) = oneshot::channel();
+        let queued = self
+            .publish_queue
+            .as_ref()
+            .is_some_and(|queue| queue.send((publish, reply_tx)).is_ok());
+
+        async move {
+            if !queued {
+                return Err(PublishError::BrokenStream);
+            }
+            reply_rx.await.unwrap_or(Err(PublishError::BrokenStream))
+        }
     }
 
     pub async fn publish_ephemeral(&self, data: Vec<u8>) -> Result<(), PublishError> {
@@ -101,8 +141,12 @@ where
             .await?
     }
 
-    pub async fn unsubscribe(self) -> Result<(), TopicStreamError> {
+    pub async fn unsubscribe(mut self) -> Result<(), TopicStreamError> {
         self.network_monitor_task.abort();
+
+        // Finish publishing everything queued before tearing down the streams.
+        drop(self.publish_queue.take());
+        let _ = (&mut self.publish_task).await;
 
         let inner = self.inner.clone();
         self.runtime

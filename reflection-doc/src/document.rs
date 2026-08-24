@@ -511,19 +511,17 @@ mod imp {
                     obj.imp().mark_for_snapshot();
 
                     if let Some(subscription) = obj.imp().subscription() {
-                        let handle = obj.imp().main_context().spawn(clone!(
-                            #[weak]
-                            subscription,
-                            async move {
-                                // Broadcast a "text delta" to all peers
-                                if let Err(error) = subscription.publish_delta(delta_bytes).await {
-                                    error!(
-                                        "Failed to send delta of document to the network: {}",
-                                        error
-                                    );
-                                }
+                        // Broadcast a "text delta" to all peers. Queue it right away, so it keeps
+                        // its order with snapshots.
+                        let publishing = subscription.publish_delta(delta_bytes);
+                        let handle = obj.imp().main_context().spawn(async move {
+                            if let Err(error) = publishing.await {
+                                error!(
+                                    "Failed to send delta of document to the network: {}",
+                                    error
+                                );
                             }
-                        ));
+                        });
                         obj.imp().tasks.lock().unwrap().push(handle);
                     }
 
