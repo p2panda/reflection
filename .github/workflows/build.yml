@@ -1,10 +1,16 @@
 name: Build
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  release:
+    # "published" also covers pre-releases, "released" would skip them
+    types: [published]
 
 jobs:
   flatpak:
     name: "Flatpak"
+    # Nothing publishes the flatpak bundles, so don't build them for releases
+    if: github.event_name != 'release'
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-49
       options: --privileged
@@ -42,12 +48,12 @@ jobs:
       fail-fast: false
       matrix:
         variant:
-          - arch: x86_64
-            target: x86_64-apple-darwin
-            runner: macos-15-intel
+          # No x86_64 build, Homebrew doesn't provide Intel bottles for GTK and its dependencies
           - arch: arm64
             target: aarch64-apple-darwin
-            runner: macos-latest
+            # Bundled libraries come from Homebrew bottles and require the macOS version of the
+            # runner. Keep this in sync with LSMinimumSystemVersion in Info.plist.in.
+            runner: macos-15
     steps:
       - uses: actions/checkout@v4
       - uses: moonrepo/setup-rust@v1
@@ -74,7 +80,7 @@ jobs:
           chmod +x build-aux/build_macos.sh
           ./build-aux/build_macos.sh --release --app-bundle --dmg
         env:
-          MACOSX_DEPLOYMENT_TARGET: "10.15"
+          MACOSX_DEPLOYMENT_TARGET: "15.0"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -82,31 +88,29 @@ jobs:
           # Build script creates artifacts in the current directory
           name: reflection-macos-${{ matrix.variant.arch }}
           path: reflection-${{ matrix.variant.arch }}.dmg
-
-      - name: Smoke test the build
-        env:
-          RUST_BACKTRACE: "full"
-          RUST_LOG: "debug"
-          G_MESSAGES_DEBUG: "all"
-        run: |
-          /Applications/Reflection.app/Contents/MacOS/reflection &
-          PID=$!
-          sleep 5
-          echo Killing reflection
-          kill $PID || true
+          if-no-files-found: error
 
       - name: Smoke test the bundle
+        run: ./build-aux/smoke_test_macos.sh reflection-${{ matrix.variant.arch }}.dmg
+
+  # Attach the DMGs to the release once all macOS builds succeeded. This is a
+  # separate job so that only this one gets write access to the repository.
+  publish-macos:
+    name: Publish macOS DMGs
+    if: github.event_name == 'release'
+    needs: macos
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: reflection-macos-*
+          merge-multiple: true
+
+      - name: Upload DMGs to release
         env:
-          RUST_BACKTRACE: "full"
-          RUST_LOG: "debug"
-          G_MESSAGES_DEBUG: "all"
-        run: |
-          hdiutil attach reflection-${{ matrix.variant.arch }}.dmg
-          cp -R /Volumes/Reflection/Reflection.app /Applications
-          hdiutil unmount /Volumes/Reflection
-          ls -R /Applications/Reflection.app
-          /Applications/Reflection.app/Contents/MacOS/reflection &
-          PID=$!
-          sleep 5
-          echo Killing reflection
-          kill $PID || true
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" reflection-*.dmg --clobber

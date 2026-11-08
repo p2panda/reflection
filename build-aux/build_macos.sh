@@ -39,6 +39,7 @@ CREATE_DMG=false
 CREATE_CLEAN=false
 BUILD_TYPE="debug"
 ARCH=$(uname -m)
+APP_BUNDLE="$(pwd)/Reflection.app"
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -148,9 +149,18 @@ fi
 echo -e "${BLUE}🔨 Building Reflection...${NC}"
 meson compile -C builddir
 
-# Install to local directory
-echo -e "${BLUE}📦 Installing to local directory...${NC}"
-meson install -C builddir
+if [ "$CREATE_APP_BUNDLE" = true ]; then
+    # Create the bundle in the source tree, so it doesn't depend on what is in /Applications
+    echo -e "${BLUE}📦 Installing to staging directory...${NC}"
+    STAGING_DIR="$(pwd)/builddir/staging"
+    rm -rf "$STAGING_DIR" "$APP_BUNDLE"
+    meson install -C builddir --destdir "$STAGING_DIR"
+    mv "$STAGING_DIR/Applications/Reflection.app" "$APP_BUNDLE"
+else
+    # Install to local directory
+    echo -e "${BLUE}📦 Installing to local directory...${NC}"
+    meson install -C builddir
+fi
 
 echo -e "${GREEN}✅ Build completed successfully!${NC}"
 
@@ -160,80 +170,102 @@ echo -e "${GREEN}📋 Built for: $ARCH${NC}"
 if [ "$CREATE_APP_BUNDLE" = true ]; then
     echo -e "${BLUE}📱 Creating app bundle...${NC}"
 
-    # Create app bundle structure
-    #mkdir -p Reflection.app/Contents/Frameworks
+    RESOURCES_DIR="$APP_BUNDLE/Contents/Resources"
+    PLUGINS_DIR="$APP_BUNDLE/Contents/PlugIns"
+    BREW_PREFIX=$(brew --prefix)
 
-    # FIXME: We should add the Info.plist file using meson
-    # Create Info.plist
-    cat > /Applications/Reflection.app/Contents/Info.plist << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>reflection</string>
-    <key>CFBundleIdentifier</key>
-    <string>cx.modal.Reflection</string>
-    <key>CFBundleIconFile</key>
-    <string>cx.modal.Reflection.icns</string>
-    <key>CFBundleName</key>
-    <string>Reflection</string>
-    <key>CFBundleDisplayName</key>
-    <string>Reflection</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>10.15</string>
-    <key>CFBundleSupportedPlatforms</key>
-    <array>
-        <string>MacOSX</string>
-    </array>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-</dict>
-</plist>
-EOF
+    # The bundled libraries look for these below the Homebrew prefix by default. They are
+    # redirected to the bundle at runtime, see reflection-app/src/macos_bundle.rs.
+
+    # Staged installs skip meson's post install steps
+    echo -e "${BLUE}⚙️  Compiling schemas...${NC}"
+    SCHEMAS_DIR="$RESOURCES_DIR/glib-2.0/schemas"
+    cp "$(brew --prefix gtk4)"/share/glib-2.0/schemas/org.gtk.gtk4.*.gschema.xml "$SCHEMAS_DIR/"
+    glib-compile-schemas --strict "$SCHEMAS_DIR"
+
+    # Language definitions are compiled in, but need these files to be validated
+    cp -R "$(brew --prefix gtksourceview5)/share/gtksourceview-5" "$RESOURCES_DIR/"
+    chmod -R u+w "$RESOURCES_DIR/gtksourceview-5"
+
+    echo -e "${BLUE}🎨 Copying icon themes...${NC}"
+    ICONS_DIR="$RESOURCES_DIR/icons"
+    ADWAITA_ICONS="$(brew --prefix adwaita-icon-theme)/share/icons/Adwaita"
+    mkdir -p "$ICONS_DIR/Adwaita"
+    # Leave out the cursors, GTK uses the native ones on macOS
+    cp -R "$ADWAITA_ICONS/index.theme" "$ADWAITA_ICONS/16x16" "$ADWAITA_ICONS/scalable" \
+        "$ADWAITA_ICONS/symbolic" "$ICONS_DIR/Adwaita/"
+    cp "$(brew --prefix hicolor-icon-theme)/share/icons/hicolor/index.theme" "$ICONS_DIR/hicolor/"
+    chmod -R u+w "$ICONS_DIR"
+    gtk4-update-icon-cache --quiet --force "$ICONS_DIR/Adwaita"
+    gtk4-update-icon-cache --quiet --force "$ICONS_DIR/hicolor"
+
+    echo -e "${BLUE}🧩 Copying modules...${NC}"
+    # GTK needs this loader to render SVG icons
+    SVG_LOADER_SOURCE="$(brew --prefix librsvg)/lib/gdk-pixbuf-2.0/2.10.0/loaders/libpixbufloader_svg.dylib"
+    SVG_LOADER="$PLUGINS_DIR/gdk-pixbuf/libpixbufloader_svg.dylib"
+    mkdir -p "$(dirname "$SVG_LOADER")" "$RESOURCES_DIR/gdk-pixbuf"
+    cp "$SVG_LOADER_SOURCE" "$SVG_LOADER"
+    # Spell checking through the system dictionaries, so we don't need to ship any
+    SPELL_PROVIDER="$PLUGINS_DIR/enchant/lib/enchant-2/enchant_applespell.so"
+    mkdir -p "$(dirname "$SPELL_PROVIDER")"
+    cp "$(brew --prefix enchant)/lib/enchant-2/enchant_applespell.so" "$SPELL_PROVIDER"
+    chmod u+w "$SVG_LOADER" "$SPELL_PROVIDER"
+    install_name_tool -id "@executable_path/../PlugIns/gdk-pixbuf/libpixbufloader_svg.dylib" "$SVG_LOADER"
+
+    # Query the original loader, the copy can't be loaded until its dependencies are bundled
+    gdk-pixbuf-query-loaders "$SVG_LOADER_SOURCE" \
+        | sed "s|^\"$SVG_LOADER_SOURCE\"|\"@executable_path/../PlugIns/gdk-pixbuf/libpixbufloader_svg.dylib\"|" \
+        > "$RESOURCES_DIR/gdk-pixbuf/loaders.cache"
 
     # Bundle dependencies
     echo -e "${BLUE}🔗 Bundling dependencies...${NC}"
-    dylibbundler -od -b -x /Applications/Reflection.app/Contents/MacOS/reflection \
-        -d /Applications/Reflection.app/Contents/Frameworks/ \
-        -p @executable_path/../Frameworks/ > /dev/null 2>&1 || echo -e "${YELLOW}⚠️  Some libraries may not be bundled${NC}"
+    DYLIBBUNDLER_LOG=$(mktemp)
+    if ! dylibbundler -od -b \
+        -x "$APP_BUNDLE/Contents/MacOS/reflection" \
+        -x "$SVG_LOADER" \
+        -x "$SPELL_PROVIDER" \
+        -d "$APP_BUNDLE/Contents/Frameworks/" \
+        -p @executable_path/../Frameworks/ \
+        -s "$BREW_PREFIX/lib" \
+        -s "$(brew --prefix librsvg)/lib" \
+        < /dev/null > "$DYLIBBUNDLER_LOG" 2>&1; then
+        cat "$DYLIBBUNDLER_LOG"
+        echo -e "${RED}❌ Failed to bundle dependencies${NC}"
+        exit 1
+    fi
 
-    echo -e "${GREEN}✅ App bundle created: Reflection.app${NC}"
+    # Bundling changed the binaries, so the bundle needs a new signature
+    codesign --force --deep --sign - "$APP_BUNDLE"
+
+    echo -e "${GREEN}✅ App bundle created: $APP_BUNDLE${NC}"
 
     # Optional: Create DMG
     if [ "$CREATE_DMG" = true ]; then
-        if command_exists create-dmg; then
-            echo -e "${BLUE}💿 Creating DMG...${NC}"
-            rm -f "reflection-$ARCH.dmg"
-            create-dmg \
-                --volname "Reflection" \
-                --window-pos 200 120 \
-                --window-size 600 400 \
-                --icon-size 100 \
-                --icon "Reflection.app" 175 120 \
-                --hide-extension "Reflection.app" \
-                --app-drop-link 425 120 \
-                "reflection-$ARCH.dmg" \
-                "/Applications/Reflection.app"
-            echo -e "${GREEN}✅ DMG created: reflection-$ARCH.dmg${NC}"
-        else
-            echo -e "${YELLOW}⚠️  create-dmg command not found. Skipping DMG creation.${NC}"
+        if ! command_exists create-dmg; then
+            echo -e "${RED}❌ create-dmg command not found${NC}"
+            exit 1
         fi
+
+        echo -e "${BLUE}💿 Creating DMG...${NC}"
+        rm -f "reflection-$ARCH.dmg"
+        create-dmg \
+            --volname "Reflection" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "Reflection.app" 175 120 \
+            --hide-extension "Reflection.app" \
+            --app-drop-link 425 120 \
+            "reflection-$ARCH.dmg" \
+            "$APP_BUNDLE"
+        echo -e "${GREEN}✅ DMG created: reflection-$ARCH.dmg${NC}"
     fi
 fi
 
-echo -e "  Direct: ${BLUE}/Applications/Reflection.app/bin/reflection${NC}"
-
 if [ "$CREATE_APP_BUNDLE" = true ]; then
-    if [ -d "Reflection.app" ]; then
-        echo -e "  App bundle: ${BLUE}open Reflection.app${NC}"
-    fi
+    echo -e "  App bundle: ${BLUE}open Reflection.app${NC}"
+else
+    echo -e "  Direct: ${BLUE}/Applications/Reflection.app/Contents/MacOS/reflection${NC}"
 fi
 
 if [ "$CREATE_DMG" = true ]; then
