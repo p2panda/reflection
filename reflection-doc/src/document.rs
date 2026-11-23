@@ -275,7 +275,7 @@ mod imp {
                         }
                     }
                 ));
-                self.tasks.lock().unwrap().push(handle);
+                self.push_task(handle);
             }
         }
 
@@ -339,7 +339,7 @@ mod imp {
                         }
                     }
                 ));
-                self.tasks.lock().unwrap().push(handle);
+                self.push_task(handle);
             }
         }
 
@@ -439,7 +439,7 @@ mod imp {
                         }
                     },
                 );
-                self.tasks.lock().unwrap().push(handle);
+                self.push_task(handle);
 
                 self.snapshot_scheduled.set(true);
             }
@@ -523,7 +523,7 @@ mod imp {
                                 );
                             }
                         });
-                        obj.imp().tasks.lock().unwrap().push(handle);
+                        obj.imp().push_task(handle);
                     }
 
                     true
@@ -663,6 +663,12 @@ mod imp {
                     }
                 }
             }
+        }
+
+        pub(super) fn push_task(&self, handle: glib::JoinHandle<()>) {
+            let mut tasks = self.tasks.lock().unwrap();
+            tasks.retain(|task| !task.source().is_destroyed());
+            tasks.push(handle);
         }
 
         pub(super) fn handle_replay_ended(&self) {
@@ -1057,7 +1063,7 @@ mod tests {
     }
 
     #[test_log::test(glib::async_test)]
-    async fn delete_unsubscribes() {
+    async fn finished_tasks_are_forgotten() {
         let service = Service::new(&SigningKey::generate(), None);
         service.startup().await.unwrap();
 
@@ -1067,7 +1073,24 @@ mod tests {
 
         assert!(!document.subscribed());
         assert!(service.documents().document(&document.id()).is_none());
+    }
 
+    #[test_log::test(glib::async_test)]
+    async fn delete_unsubscribes() {
+        let service = Service::new(&SigningKey::generate(), None);
+        service.startup().await.unwrap();
+
+        let document = service.join_document(&DocumentId::new());
+        for _ in 0..100 {
+            let handle = document.main_context().spawn(async {});
+            document.imp().push_task(handle);
+            glib::timeout_future(std::time::Duration::from_millis(1)).await;
+        }
+
+        // Only the most recent task is kept, all earlier ones have finished.
+        assert_eq!(document.imp().tasks.lock().unwrap().len(), 1);
+
+        document.unsubscribe().await;
         service.shutdown().await;
     }
 }
