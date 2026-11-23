@@ -445,24 +445,8 @@ mod imp {
         }
 
         fn setup_loro_document(&self) {
-            let verifying_key = self.obj().service().signing_key().verifying_key();
             let obj = self.obj();
             let doc = LoroDoc::new();
-            // The peer id represents the identity of the author applying local changes (that's
-            // essentially us), it needs be strictly unique.
-            doc.set_peer_id({
-                // Take first 8 bytes of public key (32 bytes) to determine a unique "peer id"
-                // which is used to keep authors apart inside the text crdt.
-                //
-                // TODO(adz): This is strictly speaking not collision-resistant but we're limited
-                // here by the 8 bytes / 64 bit from the u64 `PeerId` type from Loro. In practice
-                // this should not really be a problem, but it would be nice if the Loro API would
-                // change some day.
-                let mut buf = [0u8; 8];
-                buf[..8].copy_from_slice(&verifying_key.0.as_bytes()[..8]);
-                u64::from_be_bytes(buf)
-            })
-            .expect("set peer id for new document");
 
             doc.subscribe(
                 &TEXT_CONTAINER_ID,
@@ -1008,6 +992,9 @@ impl TopicSubscription for DocumentHandle {
 
 #[cfg(test)]
 mod tests {
+    use glib::subclass::types::ObjectSubclassIsExt;
+    use loro::ExportMode;
+
     use crate::identity::SigningKey;
     use crate::service::Service;
 
@@ -1033,5 +1020,30 @@ mod tests {
         assert_eq!(strip_markdown("> - **Hello** `world`"), "Hello world");
         assert_eq!(strip_markdown("## ~~__Done__~~ - yes"), "Done - yes");
         assert_eq!(strip_markdown("# **"), "");
+    }
+
+    #[test]
+    fn local_edits_before_replay_are_kept() {
+        let service = Service::new(&SigningKey::generate(), None);
+        let id = DocumentId::new();
+
+        // Changes from a previous session of the same author.
+        let previous = Document::new(&service, &id, None);
+        previous.insert_text(0, "Hello").unwrap();
+        let history = previous
+            .imp()
+            .crdt_doc
+            .get()
+            .unwrap()
+            .export(ExportMode::all_updates())
+            .unwrap();
+
+        // New session: we type before the history got re-played.
+        let document = Document::new(&service, &id, None);
+        document.insert_text(0, "World").unwrap();
+        document.imp().on_remote_message(history);
+
+        assert!(document.text().contains("Hello"));
+        assert!(document.text().contains("World"));
     }
 }
