@@ -162,29 +162,53 @@ mod imp {
             return None;
         }
 
-        let mut name = String::with_capacity(DOCUMENT_NAME_LENGTH);
+        // Use the first line which isn't empty after removing markdown syntax.
+        let mut line = String::with_capacity(DOCUMENT_NAME_LENGTH);
+        let mut name = String::new();
         crdt_text.iter(|slice| {
             for char in slice.chars() {
-                if name.is_empty() && (char == '#' || char.is_whitespace()) {
-                    // Skip empty lines, leading whitespace and markdown heading markers.
-                    continue;
-                } else if char == '\n' || name.len() >= DOCUMENT_NAME_LENGTH {
-                    // Only use the first non-empty line as name for the document.
-                    return false;
+                if char == '\n' || line.len() >= DOCUMENT_NAME_LENGTH {
+                    name = strip_markdown(&line);
+                    line.clear();
+                    if !name.is_empty() {
+                        return false;
+                    }
+                } else {
+                    line.push(char);
                 }
-
-                name.push(char);
             }
 
             true
         });
 
-        let name = name.trim_end();
-        if !name.is_empty() {
-            Some(name.to_string())
-        } else {
-            None
+        if name.is_empty() {
+            name = strip_markdown(&line);
         }
+
+        if !name.is_empty() { Some(name) } else { None }
+    }
+
+    /// Removes markdown formatting markers from a single line.
+    pub(super) fn strip_markdown(line: &str) -> String {
+        let mut line = line.trim();
+        loop {
+            let stripped = line.trim_start_matches(['#', '>']);
+            let stripped = ["- ", "+ ", "* "]
+                .iter()
+                .find_map(|marker| stripped.strip_prefix(marker))
+                .unwrap_or(stripped)
+                .trim_start();
+            if stripped == line {
+                break;
+            }
+            line = stripped;
+        }
+
+        line.replace(['*', '`'], "")
+            .replace("~~", "")
+            .replace("__", "")
+            .trim()
+            .to_string()
     }
 
     impl Document {
@@ -987,6 +1011,7 @@ mod tests {
     use crate::identity::SigningKey;
     use crate::service::Service;
 
+    use super::imp::strip_markdown;
     use super::{Document, DocumentId};
 
     #[test]
@@ -1001,5 +1026,12 @@ mod tests {
             document.name().as_deref(),
             Some("Meeting 20.09.2026 - Team")
         );
+    }
+
+    #[test]
+    fn name_strips_markdown() {
+        assert_eq!(strip_markdown("> - **Hello** `world`"), "Hello world");
+        assert_eq!(strip_markdown("## ~~__Done__~~ - yes"), "Done - yes");
+        assert_eq!(strip_markdown("# **"), "");
     }
 }
