@@ -189,6 +189,59 @@ mod tests {
     }
 
     #[test_log::test(glib::async_test)]
+    async fn reopen_document_after_crash() {
+        let expected_string = "Hello World";
+
+        let data_dir = {
+            let data_dir =
+                std::env::temp_dir().join(format!("reflection-test-{}", DocumentId::new()));
+            std::fs::create_dir_all(&data_dir).unwrap();
+            gio::File::for_path(&data_dir)
+        };
+        let signing_key = SigningKey::generate();
+
+        // 1. Write a document and close it cleanly.
+        let id = {
+            let service = Service::new(&signing_key, Some(&data_dir));
+            service.startup().await.unwrap();
+
+            let document = service.join_document(&DocumentId::new());
+            document.subscribe().await;
+            document.insert_text(0, expected_string).unwrap();
+
+            service.shutdown().await;
+            document.id()
+        };
+
+        // 2. Re-open the document and "crash" shortly after, without unsubscribing from it.
+        {
+            let service = Service::new(&signing_key, Some(&data_dir));
+            service.startup().await.unwrap();
+
+            let document = service.join_document(&id);
+            document.subscribe().await;
+
+            // Give the replay and the snapshot / prune operation time to be processed.
+            glib::timeout_future(std::time::Duration::from_secs(5)).await;
+            assert_eq!(document.text(), expected_string);
+
+            service.node().shutdown().await.unwrap();
+        }
+
+        // 3. Re-open the document again, the text should still be there.
+        let service = Service::new(&signing_key, Some(&data_dir));
+        service.startup().await.unwrap();
+
+        let document = service.join_document(&id);
+        document.subscribe().await;
+        glib::timeout_future(std::time::Duration::from_secs(1)).await;
+
+        assert_eq!(document.text(), expected_string);
+
+        service.shutdown().await;
+    }
+
+    #[test_log::test(glib::async_test)]
     async fn sync_longer_text() {
         let test_string = "Et aut omnis eos corporis ut. Qui est blanditiis blanditiis. Sit quia
         nam maxime accusantium ut voluptatem. Fuga consequuntur animi et et est. Unde voluptas

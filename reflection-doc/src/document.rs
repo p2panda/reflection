@@ -144,6 +144,7 @@ mod imp {
         authors: Authors,
         pub(super) tasks: Mutex<Vec<glib::JoinHandle<()>>>,
         pub(super) snapshot_scheduled: Cell<bool>,
+        pub(super) replayed: Cell<bool>,
 
         insert_cursor: RwLock<Option<loro::cursor::Cursor>>,
         selection_bound: RwLock<Option<loro::cursor::Cursor>>,
@@ -215,7 +216,7 @@ mod imp {
         fn main_context(&self) -> glib::MainContext {
             self.main_context
                 .get()
-                .unwrap_or(&glib::MainContext::ref_thread_default())
+                .expect("main_context to be set")
                 .clone()
         }
 
@@ -421,22 +422,21 @@ mod imp {
 
         fn mark_for_snapshot(&self) {
             if !self.snapshot_scheduled.get() && self.subscribed() {
-                let obj = self.obj();
+                // Don't keep the document alive while waiting.
+                let obj = self.obj().downgrade();
                 let handle = self.main_context().spawn_with_priority(
                     glib::source::Priority::LOW,
-                    clone!(
-                        #[weak]
-                        obj,
-                        async move {
-                            glib::timeout_future_with_priority(
-                                glib::source::Priority::LOW,
-                                SNAPSHOT_TIMEOUT,
-                            )
-                            .await;
+                    async move {
+                        glib::timeout_future_with_priority(
+                            glib::source::Priority::LOW,
+                            SNAPSHOT_TIMEOUT,
+                        )
+                        .await;
+                        if let Some(obj) = obj.upgrade() {
                             obj.store_snapshot().await;
                             obj.imp().snapshot_scheduled.set(false);
                         }
-                    ),
+                    },
                 );
                 self.tasks.lock().unwrap().push(handle);
 
@@ -670,6 +670,11 @@ mod imp {
             }
         }
 
+        pub(super) fn handle_replay_ended(&self) {
+            self.replayed.set(true);
+            self.mark_for_snapshot();
+        }
+
         pub(super) fn handle_author_left(&self, author: Author) {
             // Negative insert cursor position will delete marker in the text-view.
             self.obj()
@@ -714,6 +719,13 @@ mod imp {
 
         fn constructed(&self) {
             self.parent_constructed();
+
+            // Network callbacks arrive on other threads, so we need to remember our context.
+            if self.main_context.get().is_none() {
+                let _ = self
+                    .main_context
+                    .set(glib::MainContext::ref_thread_default());
+            }
 
             self.setup_loro_document();
 
@@ -843,7 +855,6 @@ impl Document {
 
         *self.imp().last_accessed.lock().unwrap() = None;
 
-        self.store_snapshot().await;
         self.imp().store_name();
 
         self.notify_last_accessed();
@@ -854,19 +865,21 @@ impl Document {
         let subscription = self.imp().subscription.write().unwrap().take();
 
         if let Some(subscription) = subscription {
-            let snapshot_bytes = self
-                .imp()
-                .crdt_doc
-                .get()
-                .expect("crdt_doc to be set")
-                .export(ExportMode::Snapshot)
-                .expect("encoded crdt snapshot");
+            if self.imp().replayed.replace(false) {
+                let snapshot_bytes = self
+                    .imp()
+                    .crdt_doc
+                    .get()
+                    .expect("crdt_doc to be set")
+                    .export(ExportMode::Snapshot)
+                    .expect("encoded crdt snapshot");
 
-            if let Err(error) = subscription.publish_snapshot(snapshot_bytes).await {
-                error!(
-                    "Failed to send snapshot of document to the network: {}",
-                    error
-                );
+                if let Err(error) = subscription.publish_snapshot(snapshot_bytes).await {
+                    error!(
+                        "Failed to send snapshot of document to the network: {}",
+                        error
+                    );
+                }
             }
 
             let tasks = {
@@ -896,7 +909,13 @@ impl Document {
     }
 
     /// Persist the snapshot.
+    ///
+    /// This prunes all previous operations, so it does nothing until the replay has ended.
     pub(crate) async fn store_snapshot(&self) {
+        if !self.imp().replayed.get() {
+            return;
+        }
+
         if let Some(subscription) = self.imp().subscription() {
             // FIXME: only store a new snapshot if it changed since the previous snapshot
             let snapshot_bytes = self
@@ -936,6 +955,14 @@ impl TopicSubscription for DocumentHandle {
             document.main_context().invoke(move || {
                 document.imp().on_remote_message(data);
                 document.authors().add(VerifyingKey(author));
+            });
+        }
+    }
+
+    fn replay_ended(&self) {
+        if let Some(document) = self.0.upgrade() {
+            document.main_context().invoke(move || {
+                document.imp().handle_replay_ended();
             });
         }
     }
