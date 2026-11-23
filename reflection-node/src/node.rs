@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 
 use chrono::{DateTime, Utc};
 use p2panda::node::SpawnError;
-use p2panda::{NetworkId, RelayUrl, SigningKey, VerifyingKey};
+use p2panda::{Credentials, NetworkId, RelayUrl, SigningKey, VerifyingKey};
 use sqlx::Executor;
 use thiserror::Error;
 use tokio::sync::{Notify, RwLock};
@@ -44,7 +44,7 @@ pub enum NodeError {
     DatabaseMigration(#[from] sqlx::migrate::MigrateError),
 
     #[error(transparent)]
-    NodeSpawn(#[from] SpawnError),
+    NodeSpawn(#[from] Box<SpawnError>),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default)]
@@ -106,8 +106,12 @@ impl Node {
             let network_id = network_id.into();
             let db_file = db_location.map(|location| location.join(DATABASE_FILE));
 
+            // We're not using p2panda Spaces (encrypted groups) right now, so it's fine to generate
+            // a new identity key (used for encryption) every time.
+            let credentials = Credentials::from_signing_key(signing_key);
+
             runtime
-                .spawn(NodeInner::new(signing_key, network_id, db_file))
+                .spawn(NodeInner::new(credentials, network_id, db_file))
                 .await??
         };
 
@@ -212,11 +216,11 @@ pub(crate) struct NodeInner {
 
 impl NodeInner {
     pub async fn new(
-        signing_key: SigningKey,
+        credentials: Credentials,
         network_id: impl Into<NetworkId>,
         db_file: Option<PathBuf>,
     ) -> Result<Self, NodeError> {
-        let verifying_key = signing_key.verifying_key();
+        let verifying_key = credentials.verifying_key();
 
         let pool = database_pool(db_file).await?;
         run_migrations(&pool).await?;
@@ -228,7 +232,7 @@ impl NodeInner {
 
         let mut builder = p2panda::Node::builder()
             .network_id(network_id.into())
-            .signing_key(signing_key)
+            .credentials(credentials)
             .database_pool(pool);
 
         // Don't connect to any servers during testing.
@@ -238,7 +242,7 @@ impl NodeInner {
                 .relay_url(RELAY_URL.clone());
         }
 
-        let node = builder.spawn().await?;
+        let node = builder.spawn().await.map_err(Box::new)?;
 
         Ok(Self {
             network: RwLock::new(node),
