@@ -540,36 +540,15 @@ mod imp {
                 #[weak]
                 obj,
                 #[upgrade_or_default]
-                move |stack_type, _, _| {
+                move |_, _, _| {
                     // The `loro::UndoManager` holds internal locks, so we can't update the
-                    // `Document.can_undo/can_redo` property inline
+                    // `Document.can_undo/can_redo` property inline. Both can change on any push,
+                    // since new local changes clear the redo stack.
                     obj.main_context().spawn(clone!(
                         #[weak]
                         obj,
                         async move {
-                            let guard = obj.imp().undo_manager.lock().unwrap();
-                            let undo_manager = guard.as_ref().expect("UndoManager exists always");
-
-                            match stack_type {
-                                loro::UndoOrRedo::Undo => {
-                                    let can_undo = undo_manager.can_undo();
-                                    drop(guard);
-
-                                    if obj.can_undo() != can_undo {
-                                        obj.imp().can_undo.set(can_undo);
-                                        obj.notify_can_undo();
-                                    }
-                                }
-                                loro::UndoOrRedo::Redo => {
-                                    let can_undo = undo_manager.can_undo();
-                                    drop(guard);
-
-                                    if obj.can_undo() != can_undo {
-                                        obj.imp().can_undo.set(can_undo);
-                                        obj.notify_can_undo();
-                                    }
-                                }
-                            }
+                            obj.imp().update_can_undo_redo();
                         }
                     ));
 
@@ -608,6 +587,23 @@ mod imp {
             *self.undo_manager.lock().unwrap() = Some(undo_manager);
 
             self.crdt_doc.set(doc).unwrap();
+        }
+
+        /// Refreshes the `can-undo` and `can-redo` properties from the undo manager.
+        pub(super) fn update_can_undo_redo(&self) {
+            let (can_undo, can_redo) = {
+                let guard = self.undo_manager.lock().unwrap();
+                let undo_manager = guard.as_ref().expect("UndoManager exists always");
+                (undo_manager.can_undo(), undo_manager.can_redo())
+            };
+
+            if self.can_undo.replace(can_undo) != can_undo {
+                self.obj().notify_can_undo();
+            }
+
+            if self.can_redo.replace(can_redo) != can_redo {
+                self.obj().notify_can_redo();
+            }
         }
 
         pub(super) fn handle_ephemeral_data(
@@ -782,19 +778,9 @@ impl Document {
             error!("Failed to undo changes: {error}");
         }
 
-        let can_undo = undo_manager.can_undo();
-        let can_redo = undo_manager.can_redo();
         drop(guard);
 
-        if self.can_undo() != can_undo {
-            self.imp().can_undo.set(can_undo);
-            self.notify_can_undo();
-        }
-
-        if self.can_redo() != can_redo {
-            self.imp().can_redo.set(can_redo);
-            self.notify_can_redo();
-        }
+        self.imp().update_can_undo_redo();
 
         let cursors_pos = self.imp().cursors_pos();
         (cursors_pos.0 as i32, cursors_pos.1.map(|pos| pos as i32))
@@ -807,19 +793,9 @@ impl Document {
             error!("Failed to redo changes: {error}");
         }
 
-        let can_undo = undo_manager.can_undo();
-        let can_redo = undo_manager.can_redo();
         drop(guard);
 
-        if self.can_undo() != can_undo {
-            self.imp().can_undo.set(can_undo);
-            self.notify_can_undo();
-        }
-
-        if self.can_redo() != can_redo {
-            self.imp().can_redo.set(can_redo);
-            self.notify_can_redo();
-        }
+        self.imp().update_can_undo_redo();
 
         let cursors_pos = self.imp().cursors_pos();
         (cursors_pos.0 as i32, cursors_pos.1.map(|pos| pos as i32))

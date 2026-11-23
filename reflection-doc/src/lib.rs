@@ -242,6 +242,22 @@ mod tests {
     }
 
     #[test_log::test(glib::async_test)]
+    async fn new_edit_clears_redo() {
+        let service = Service::new(&SigningKey::generate(), None);
+        let document = service.join_document(&DocumentId::new());
+
+        document.insert_text(0, "Hello").unwrap();
+        document.undo();
+        assert!(document.can_redo());
+
+        document.insert_text(0, "World").unwrap();
+
+        // Undo state is updated asynchronously.
+        glib::timeout_future(std::time::Duration::from_millis(50)).await;
+        assert!(!document.can_redo());
+    }
+
+    #[test_log::test(glib::async_test)]
     async fn sync_longer_text() {
         let test_string = "Et aut omnis eos corporis ut. Qui est blanditiis blanditiis. Sit quia
         nam maxime accusantium ut voluptatem. Fuga consequuntur animi et et est. Unde voluptas
