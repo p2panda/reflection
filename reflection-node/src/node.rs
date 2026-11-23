@@ -4,6 +4,7 @@ use std::sync::{Arc, LazyLock};
 use chrono::{DateTime, Utc};
 use p2panda::node::SpawnError;
 use p2panda::{NetworkId, RelayUrl, SigningKey, VerifyingKey};
+use sqlx::Executor;
 use thiserror::Error;
 use tokio::sync::{Notify, RwLock};
 use tracing::info;
@@ -220,6 +221,9 @@ impl NodeInner {
         let pool = database_pool(db_file).await?;
         run_migrations(&pool).await?;
 
+        // TODO: Remove this as soon this was fixed upstream in p2panda.
+        run_stale_nodes_workaround(&pool).await?;
+
         let topic_store = TrackedTopicStore::from_pool(pool.clone());
 
         let mut builder = p2panda::Node::builder()
@@ -290,4 +294,19 @@ impl NodeInner {
         self.topic_store.delete_topic(&topic).await?;
         Ok(())
     }
+}
+
+// Clear address book in database.
+//
+// This is a temporary workaround removing all node_info entries from the address book since there
+// can be a rare condition where nodes mark each other as stale. If this gets persisted in the
+// database, they'll never reconnect again.
+//
+// There shouldn't be a large disadvantage of doing this workaround for now, nodes usually begin
+// connecting via the bootstrap anyhow.
+//
+// Related issue: <https://github.com/p2panda/p2panda/issues/1520>.
+async fn run_stale_nodes_workaround(pool: &sqlx::Pool<sqlx::Sqlite>) -> Result<(), sqlx::Error> {
+    pool.execute("DELETE FROM node_infos_v1").await?;
+    Ok(())
 }
