@@ -301,7 +301,9 @@ where
     // to process is rather small.
     let stream_from = StreamFrom::Start;
 
-    let (topic_tx, mut topic_rx) = network.stream_from::<Vec<u8>>(id, stream_from).await?;
+    let (topic_tx, mut topic_rx) = network
+        .stream_from::<Vec<u8>>(id, stream_from, None)
+        .await?;
 
     let node_clone = node.clone();
     let subscribable_topic_clone = subscribable_topic.clone();
