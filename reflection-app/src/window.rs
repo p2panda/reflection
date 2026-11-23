@@ -110,7 +110,14 @@ mod imp {
     }
 
     impl WidgetImpl for Window {}
-    impl WindowImpl for Window {}
+
+    impl WindowImpl for Window {
+        fn close_request(&self) -> glib::Propagation {
+            self.document_page.set_document(None::<Document>);
+            self.parent_close_request()
+        }
+    }
+
     impl ApplicationWindowImpl for Window {}
     impl AdwApplicationWindowImpl for Window {}
 }
