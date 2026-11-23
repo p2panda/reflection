@@ -913,7 +913,10 @@ impl Document {
         }
     }
 
+    /// Unsubscribes from the stream and deletes it from the document store.
     pub async fn delete(&self) {
+        self.unsubscribe().await;
+
         if let Err(error) = self.service().node().delete_topic(self.id()).await {
             error!("Failed to delete document from document store: {}", error);
             return;
@@ -1051,5 +1054,20 @@ mod tests {
 
         assert!(document.text().contains("Hello"));
         assert!(document.text().contains("World"));
+    }
+
+    #[test_log::test(glib::async_test)]
+    async fn delete_unsubscribes() {
+        let service = Service::new(&SigningKey::generate(), None);
+        service.startup().await.unwrap();
+
+        let document = service.join_document(&DocumentId::new());
+        document.subscribe().await;
+        document.delete().await;
+
+        assert!(!document.subscribed());
+        assert!(service.documents().document(&document.id()).is_none());
+
+        service.shutdown().await;
     }
 }
