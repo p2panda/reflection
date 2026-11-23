@@ -150,6 +150,7 @@ mod imp {
                     font.size() as f64 / gtk::pango::SCALE as f64
                 });
             self.font_size.set(size);
+            self.set_font_scale(0.0);
 
             let scroll_controller =
                 gtk::EventControllerScroll::new(gtk::EventControllerScrollFlags::VERTICAL);
