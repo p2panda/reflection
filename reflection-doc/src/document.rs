@@ -165,22 +165,23 @@ mod imp {
         let mut name = String::with_capacity(DOCUMENT_NAME_LENGTH);
         crdt_text.iter(|slice| {
             for char in slice.chars() {
-                if char == '\n' && name.is_empty() {
-                    // Skip leading empty lines
+                if name.is_empty() && (char == '#' || char.is_whitespace()) {
+                    // Skip empty lines, leading whitespace and markdown heading markers.
                     continue;
-                } else if char == '\n' || name.len() > DOCUMENT_NAME_LENGTH {
-                    // Only use the first non-empty line as name for the document
+                } else if char == '\n' || name.len() >= DOCUMENT_NAME_LENGTH {
+                    // Only use the first non-empty line as name for the document.
                     return false;
-                } else if (!name.is_empty() && char.is_whitespace()) || char.is_alphanumeric() {
-                    name.push(char);
                 }
+
+                name.push(char);
             }
 
-            name.len() < DOCUMENT_NAME_LENGTH
+            true
         });
 
-        if !name.trim().is_empty() {
-            Some(name)
+        let name = name.trim_end();
+        if !name.is_empty() {
+            Some(name.to_string())
         } else {
             None
         }
@@ -978,5 +979,27 @@ impl TopicSubscription for DocumentHandle {
                 error!("error received for subscribed document: {error}");
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::identity::SigningKey;
+    use crate::service::Service;
+
+    use super::{Document, DocumentId};
+
+    #[test]
+    fn name_keeps_special_characters() {
+        let service = Service::new(&SigningKey::generate(), None);
+        let document = Document::new(&service, &DocumentId::new(), None);
+
+        document
+            .insert_text(0, "\n  \n# Meeting 20.09.2026 - Team  \nBody")
+            .unwrap();
+        assert_eq!(
+            document.name().as_deref(),
+            Some("Meeting 20.09.2026 - Team")
+        );
     }
 }
