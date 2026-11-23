@@ -54,6 +54,7 @@ mod tests {
             self.tx.send(data).unwrap();
         }
 
+        fn replay_ended(&self) {}
         fn author_joined(&self, _author: VerifyingKey) {}
         fn author_left(&self, _author: VerifyingKey) {}
         fn ephemeral_bytes_received(&self, _author: VerifyingKey, _timestamp: u64, _data: Vec<u8>) {

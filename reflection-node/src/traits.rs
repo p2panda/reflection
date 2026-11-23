@@ -37,6 +37,9 @@ pub trait TopicSubscription: Sync + Send {
     /// Received bytes from ephemeral stream (gossip overlay).
     fn ephemeral_bytes_received(&self, author: VerifyingKey, timestamp: u64, data: Vec<u8>);
 
+    /// All locally stored operations have been re-played.
+    fn replay_ended(&self);
+
     /// Author went online.
     fn author_joined(&self, author: VerifyingKey);
 
