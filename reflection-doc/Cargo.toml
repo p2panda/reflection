@@ -9,8 +9,8 @@ authors = [
 
 [dependencies]
 anyhow = "1.0.101"
-gio = "0.21"
-glib = "0.21"
+gio = "0.22"
+glib = "0.22"
 hex = "0.4.3"
 indexmap = "2.13.0"
 loro = "1.13.9"
