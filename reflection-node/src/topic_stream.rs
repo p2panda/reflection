@@ -308,6 +308,8 @@ where
     let node_clone = node.clone();
     let subscribable_topic_clone = subscribable_topic.clone();
     let abort_handle = tokio::spawn(async move {
+        let mut replay_failed = false;
+
         while let Some(event) = topic_rx.next().await {
             match event {
                 StreamEvent::Processed { operation, .. } => {
@@ -373,8 +375,12 @@ where
                     error!("failed decoding incoming operation from stream: {error}");
                     subscribable_topic_clone.error(error.into());
                 }
+                StreamEvent::ReplayEnded  if !replay_failed => {
+                    subscribable_topic_clone.replay_ended();
+                }
                 StreamEvent::ReplayFailed { error, .. } => {
                     error!("error occurred while replaying operation stream: {error}");
+                    replay_failed = true;
                     subscribable_topic_clone.error(crate::traits::TopicSubscriptionError::ReplayStream(error));
                 }
                 StreamEvent::ProcessingFailed { event, error, .. } => {
