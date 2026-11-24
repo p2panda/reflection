@@ -148,7 +148,7 @@ where
     T: TopicSubscription + 'static,
 {
     pub fn new(node: Arc<NodeInner>, topic: Topic, subscription: Arc<T>) -> Self {
-        let author_tracker = AuthorTracker::new(node.clone(), subscription.clone());
+        let author_tracker = AuthorTracker::new(node.clone(), topic, subscription.clone());
 
         TopicStreamInner {
             tx: RwLock::new(None),
