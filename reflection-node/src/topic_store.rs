@@ -114,18 +114,23 @@ impl TrackedTopicStore {
 
     pub async fn set_last_seen_for_author(
         &self,
+        topic: Topic,
         verifying_key: VerifyingKey,
         last_seen: Option<DateTime<Utc>>,
     ) -> sqlx::Result<()> {
         sqlx::query(
             "
             UPDATE authors
-            SET last_seen = ?
-            WHERE verifying_key = ?
+            SET
+                last_seen = ?
+            WHERE
+                verifying_key = ?
+                AND topic_id = ?
             ",
         )
         .bind(last_seen)
         .bind(verifying_key.as_bytes().as_slice())
+        .bind(topic.as_bytes().as_slice())
         .execute(&self.pool)
         .await?;
 
@@ -170,5 +175,42 @@ impl TrackedTopicStore {
         .await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+    use p2panda::{SigningKey, Topic};
+
+    use crate::database::{database_pool, run_migrations};
+
+    use super::TrackedTopicStore;
+
+    #[tokio::test]
+    async fn last_seen_is_per_topic() {
+        let pool = database_pool(None).await.unwrap();
+        run_migrations(&pool).await.unwrap();
+        let store = TrackedTopicStore::from_pool(pool);
+
+        let author = SigningKey::generate().verifying_key();
+        let (topic_a, topic_b) = (Topic::from([1; 32]), Topic::from([2; 32]));
+        for topic in [&topic_a, &topic_b] {
+            store.add_topic(topic).await.unwrap();
+            store.add_author(topic, &author).await.unwrap();
+        }
+
+        store
+            .set_last_seen_for_author(topic_a, author, Some(Utc::now()))
+            .await
+            .unwrap();
+
+        let topics = store.topics().await.unwrap();
+        let last_seen = |topic: &Topic| {
+            let row = topics.iter().find(|row| &row.id == topic).unwrap();
+            row.authors[0].last_seen
+        };
+        assert!(last_seen(&topic_a).is_some());
+        assert!(last_seen(&topic_b).is_none());
     }
 }

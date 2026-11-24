@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
-use p2panda::VerifyingKey;
 use p2panda::streams::EphemeralStreamPublisher;
+use p2panda::{Topic, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{error, warn};
@@ -38,15 +38,17 @@ pub struct AuthorTracker<T> {
     last_ping: Mutex<HashMap<VerifyingKey, Instant>>,
     subscribable_topic: Arc<T>,
     node: Arc<NodeInner>,
+    topic: Topic,
     tx: RwLock<Option<EphemeralStreamPublisher<EphemeralMessage>>>,
 }
 
 impl<T: TopicSubscription> AuthorTracker<T> {
-    pub fn new(node: Arc<NodeInner>, subscribable_topic: Arc<T>) -> Arc<Self> {
+    pub fn new(node: Arc<NodeInner>, topic: Topic, subscribable_topic: Arc<T>) -> Arc<Self> {
         Arc::new(Self {
             last_ping: Mutex::new(HashMap::new()),
             subscribable_topic,
             node,
+            topic,
             tx: RwLock::new(None),
         })
     }
@@ -159,7 +161,7 @@ impl<T: TopicSubscription> AuthorTracker<T> {
         if let Err(error) = self
             .node
             .topic_store
-            .set_last_seen_for_author(author, Some(Utc::now()))
+            .set_last_seen_for_author(self.topic, author, Some(Utc::now()))
             .await
         {
             error!("Failed to set last seen for author {author}: {error}");
