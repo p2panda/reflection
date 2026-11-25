@@ -138,6 +138,7 @@ mod imp {
         id: OnceCell<DocumentId>,
         #[property(name = "subscribed", get = Self::subscribed, type = bool)]
         pub(super) subscription: RwLock<Option<Arc<TopicStream<DocumentHandle>>>>,
+        pub(super) subscription_lock: tokio::sync::Mutex<()>,
         #[property(get = Self::service, set = Self::set_service, construct_only, type = Service)]
         service: glib::WeakRef<Service>,
         #[property(get)]
@@ -811,6 +812,8 @@ impl Document {
     }
 
     pub async fn subscribe(&self) {
+        let _guard = self.imp().subscription_lock.lock().await;
+
         if self.subscribed() {
             return;
         }
@@ -838,6 +841,8 @@ impl Document {
     }
 
     pub async fn unsubscribe(&self) {
+        let _guard = self.imp().subscription_lock.lock().await;
+
         let subscription = self.imp().subscription.write().unwrap().take();
 
         if let Some(subscription) = subscription {
