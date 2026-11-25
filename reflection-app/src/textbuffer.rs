@@ -403,31 +403,15 @@ impl ReflectionTextBuffer {
 
     pub fn custom_undo(&self) {
         if let Some(document) = self.document() {
-            let (insert_cursor, selection_bound) = document.undo();
-
-            let insert_cursor_iter = self.iter_at_offset(insert_cursor);
-            let selection_bound_iter = if let Some(selection_bound) = selection_bound {
-                self.iter_at_offset(selection_bound)
-            } else {
-                insert_cursor_iter
-            };
-
-            self.select_range(&insert_cursor_iter, &selection_bound_iter);
+            let insert_cursor = document.undo();
+            self.place_cursor(&self.iter_at_offset(insert_cursor));
         }
     }
 
     pub fn custom_redo(&self) {
         if let Some(document) = self.document() {
-            let (insert_cursor, selection_bound) = document.redo();
-
-            let insert_cursor_iter = self.iter_at_offset(insert_cursor);
-            let selection_bound_iter = if let Some(selection_bound) = selection_bound {
-                self.iter_at_offset(selection_bound)
-            } else {
-                insert_cursor_iter
-            };
-
-            self.select_range(&insert_cursor_iter, &selection_bound_iter);
+            let insert_cursor = document.redo();
+            self.place_cursor(&self.iter_at_offset(insert_cursor));
         }
     }
 }
