@@ -20,6 +20,7 @@ rand = "0.10.1"
 reflection-node = { path = "../reflection-node" }
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["sync"] }
 tracing = "0.1"
 
 [dev-dependencies]
