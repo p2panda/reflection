@@ -1,35 +1,41 @@
 use std::path::PathBuf;
 use std::pin::Pin;
+use std::str::FromStr;
 
 use p2panda_store::sqlite::migrations as p2panda_migrations;
+use sqlx::ConnectOptions;
 use sqlx::error::BoxDynError;
 use sqlx::migrate::{Migration, MigrationSource, Migrator};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use tracing::info;
 
 /// Establishes a SQLite connection pool.
 ///
 /// If no database path is given the database is created in memory.
 pub async fn database_pool(db_file: Option<PathBuf>) -> Result<SqlitePool, sqlx::Error> {
-    let connection_options = SqliteConnectOptions::new()
-        .shared_cache(true)
-        .create_if_missing(true);
-
     let pool = if let Some(db_file) = db_file {
         info!("database file location: {db_file:?}");
-        let connection_options = connection_options.filename(db_file);
+        let connection_options = SqliteConnectOptions::new()
+            .shared_cache(true)
+            .create_if_missing(true)
+            .filename(db_file);
         SqlitePool::connect_with(connection_options).await?
     } else {
-        let connection_options = connection_options.in_memory(true);
-        // NOTE: We need to set min / max connection to 1 for in memory sqlite DB and the max
-        // lifetime and idle timeout to none ("forever") to avoid dropping the whole database when
-        // the last connection closed. See issue: https://github.com/launchbadge/sqlx/issues/2510
-        let pool_options = SqlitePoolOptions::new()
-            .max_connections(1)
-            .min_connections(1)
-            .max_lifetime(None)
-            .idle_timeout(None);
-        pool_options.connect_with(connection_options).await?
+        // NOTE: An in-memory database is dropped as soon as its last connection got closed. We keep
+        // one extra connection open for as long as the pool exists to prevent this.
+        //
+        // See issue: <https://github.com/launchbadge/sqlx/issues/2510>.
+        let connection_options = SqliteConnectOptions::from_str("sqlite::memory:")?;
+        let keep_alive = connection_options.connect().await?;
+        let pool = SqlitePool::connect_with(connection_options).await?;
+
+        let pool_closed = pool.close_event();
+        tokio::spawn(async move {
+            pool_closed.await;
+            drop(keep_alive);
+        });
+
+        pool
     };
 
     Ok(pool)
