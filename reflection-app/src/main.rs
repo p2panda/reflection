@@ -25,6 +25,8 @@ mod connection_popover;
 mod document_view;
 mod error_page;
 mod landing_view;
+#[cfg(target_os = "macos")]
+mod macos_bundle;
 mod open_dialog;
 mod secret;
 mod system_settings;
@@ -32,6 +34,8 @@ mod textbuffer;
 mod textview;
 mod utils;
 mod window;
+
+use std::path::PathBuf;
 
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
 use gtk::prelude::*;
@@ -49,23 +53,28 @@ use self::textview::TextView;
 pub use self::config::APP_ID;
 
 fn main() -> glib::ExitCode {
+    // This changes the environment, so it needs to run before anything else
+    let (localedir, pkgdatadir) = data_dirs();
+
     setup_logging();
 
     // Set up gettext translations
-    bindtextdomain(GETTEXT_PACKAGE, LOCALEDIR).expect("Unable to bind the text domain");
+    bindtextdomain(GETTEXT_PACKAGE, localedir).expect("Unable to bind the text domain");
     bind_textdomain_codeset(GETTEXT_PACKAGE, "UTF-8")
         .expect("Unable to set the text domain encoding");
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
-    let res = gio::Resource::load(RESOURCES_FILE).expect("Could not load gresource file");
+    let res = gio::Resource::load(pkgdatadir.join("resources.gresource"))
+        .expect("Could not load gresource file");
     gio::resources_register(&res);
-    let ui_res = gio::Resource::load(UI_RESOURCES_FILE).expect("Could not load UI gresource file");
+    let ui_res = gio::Resource::load(pkgdatadir.join("ui-resources.gresource"))
+        .expect("Could not load UI gresource file");
     gio::resources_register(&ui_res);
 
     #[cfg(target_os = "macos")]
     {
-        let mac_res =
-            gio::Resource::load(MAC_RESOURCES_FILE).expect("Could not load MacOS gresource file");
+        let mac_res = gio::Resource::load(pkgdatadir.join("mac-resources.gresource"))
+            .expect("Could not load MacOS gresource file");
         gio::resources_register(&mac_res);
     }
 
@@ -74,10 +83,21 @@ fn main() -> glib::ExitCode {
 
     info!("Reflection ({})", APP_ID);
     info!("Version: {}", VERSION);
-    info!("Datadir: {}", PKGDATADIR);
+    info!("Datadir: {}", pkgdatadir.display());
 
     let app = ReflectionApplication::new();
     app.run()
+}
+
+/// Returns the directories containing the translations and the application data.
+fn data_dirs() -> (PathBuf, PathBuf) {
+    #[cfg(target_os = "macos")]
+    if let Some(bundle) = macos_bundle::Bundle::locate() {
+        bundle.setup_environment();
+        return (bundle.locale_dir(), bundle.pkgdata_dir());
+    }
+
+    (PathBuf::from(LOCALEDIR), PathBuf::from(PKGDATADIR))
 }
 
 fn setup_logging() {

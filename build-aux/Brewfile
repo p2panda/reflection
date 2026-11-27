@@ -20,6 +20,12 @@ brew "graphene"
 brew "libspelling"
 brew "blueprint-compiler"
 
+# Runtime data and modules copied into the app bundle
+brew "adwaita-icon-theme"
+brew "enchant"
+brew "hicolor-icon-theme"
+brew "librsvg"
+
 # Accessibility
 brew "at-spi2-core"
 
@@ -29,5 +35,5 @@ brew "desktop-file-utils"
 # App bundling for macOS
 brew "dylibbundler"
 
-# Optional: For creating DMG files
-brew "create-dmg" 
+# For creating DMG files
+brew "create-dmg"

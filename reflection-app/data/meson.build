@@ -53,5 +53,19 @@ configure_file(
     install_dir: datadir / 'dbus-1/services',
 )
 
+# Only when installing into an app bundle, see build-aux/build_macos.sh
+if host_machine.system() == 'darwin' and get_option('bindir') == 'Contents/MacOS'
+  plist_conf = configuration_data()
+  plist_conf.set('application_id', application_id)
+  plist_conf.set('version', meson.project_version())
+  configure_file(
+      input: 'Info.plist.in',
+      output: 'Info.plist',
+      configuration: plist_conf,
+      install: true,
+      install_dir: prefix / 'Contents',
+  )
+endif
+
 subdir('icons')
 subdir('resources')
