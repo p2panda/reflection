@@ -1035,7 +1035,7 @@ mod tests {
     }
 
     #[test_log::test(glib::async_test)]
-    async fn finished_tasks_are_forgotten() {
+    async fn delete_unsubscribes() {
         let service = Service::new(&SigningKey::generate(), None);
         service.startup().await.unwrap();
 
@@ -1048,7 +1048,7 @@ mod tests {
     }
 
     #[test_log::test(glib::async_test)]
-    async fn delete_unsubscribes() {
+    async fn finished_tasks_are_forgotten() {
         let service = Service::new(&SigningKey::generate(), None);
         service.startup().await.unwrap();
 
