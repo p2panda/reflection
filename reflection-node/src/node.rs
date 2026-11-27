@@ -121,6 +121,9 @@ impl Node {
         })
     }
 
+    pub async fn run_migrations(&self) {
+    }
+
     pub async fn set_connection_mode(
         &self,
         connection_mode: ConnectionMode,
