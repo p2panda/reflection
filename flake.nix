@@ -27,6 +27,7 @@
           openssl,
           blueprint-compiler,
           libspelling,
+          sqlite,
         }:
         stdenv.mkDerivation rec {
           pname = "reflection";
@@ -34,9 +35,8 @@
 
           src = ./.;
 
-          cargoDeps = rustPlatform.fetchCargoVendor {
-            inherit pname version src;
-            hash = "sha256-cbrZJzKIVqrA49Tjd3xR9do04CV8Euhb3UjPs3PtqhI=";
+          cargoDeps = rustPlatform.importCargoLock {
+            lockFile = ./Cargo.lock;
           };
 
           PKG_CONFIG_PATH = "${openssl.dev}/lib/pkgconfig";
@@ -63,6 +63,7 @@
             libpanel
             vte-gtk4
             libspelling
+            sqlite
           ];
 
           meta = {
