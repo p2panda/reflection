@@ -37,6 +37,10 @@
   padding: 3px 0px;
 }
 
+.connection-popover row:first-child {
+  margin-top: 6px;
+}
+
 .connection-popover row:last-child {
   margin-bottom: 6px;
 }
